@@ -58,7 +58,6 @@
             this.skipSplitMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pauseMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.undoPausesMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.hotkeysMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.tcpServerMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.webSocketMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.RightClickMenu.SuspendLayout();
@@ -257,15 +256,7 @@
             this.undoPausesMenuItem.Size = new System.Drawing.Size(152, 22);
             this.undoPausesMenuItem.Text = "Undo All Pauses";
             this.undoPausesMenuItem.Click += new System.EventHandler(this.undoPausesMenuItem_Click);
-            // 
-            // hotkeysMenuItem
-            // 
-            this.hotkeysMenuItem.Enabled = true;
-            this.hotkeysMenuItem.Name = "hotkeysMenuItem";
-            this.hotkeysMenuItem.Size = new System.Drawing.Size(152, 22);
-            this.hotkeysMenuItem.Text = "Global Hotkeys";
-            this.hotkeysMenuItem.Click += new System.EventHandler(this.hotkeysMenuItem_Click);
-            // 
+            //
             // comparisonMenuItem
             // 
             this.comparisonMenuItem.Name = "comparisonMenuItem";
@@ -341,7 +332,6 @@
         private System.Windows.Forms.ToolStripMenuItem skipSplitMenuItem;
         private System.Windows.Forms.ToolStripMenuItem pauseMenuItem;
         private System.Windows.Forms.ToolStripMenuItem undoPausesMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem hotkeysMenuItem;
         private System.Windows.Forms.ToolStripMenuItem comparisonMenuItem;
         private System.Windows.Forms.ToolStripMenuItem tcpServerMenuItem;
         private System.Windows.Forms.ToolStripMenuItem webSocketMenuItem;

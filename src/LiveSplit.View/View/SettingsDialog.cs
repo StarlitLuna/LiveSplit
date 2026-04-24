@@ -18,7 +18,6 @@ public partial class SettingsDialog : Form
     private static string T(string source) => UiLocalizer.Translate(source, LanguageResolver.ResolveCurrentCultureLanguage());
 
     public ISettings Settings { get; set; }
-    public CompositeHook Hook { get; set; }
     public string SelectedHotkeyProfile { get; set; }
 
     public string SplitKey => FormatKey(Settings.HotkeyProfiles[SelectedHotkeyProfile].SplitKey);
@@ -76,11 +75,10 @@ public partial class SettingsDialog : Form
 
     public string RaceViewer { get => Settings.RaceViewer.Name; set => Settings.RaceViewer = Web.SRL.RaceViewer.FromName(value); }
 
-    public SettingsDialog(CompositeHook hook, ISettings settings, string hotkeyProfile)
+    public SettingsDialog(ISettings settings, string hotkeyProfile)
     {
         InitializeComponent();
         Settings = settings;
-        Hook = hook;
 
         InitializeHotkeyProfiles(hotkeyProfile);
         SetClickEvents(this);
@@ -195,104 +193,15 @@ public partial class SettingsDialog : Form
 
         return "None";
     }
-    private void SetHotkeyHandlers(TextBox txtBox, Action<KeyOrButton> keySetCallback)
-    {
-        string oldText = txtBox.Text;
-        txtBox.Text = "Set Hotkey...";
-        txtBox.Select(0, 0);
-        KeyEventHandler handlerDown = null;
-        KeyEventHandler handlerUp = null;
-        EventHandler leaveHandler = null;
-        EventHandlerT<GamepadButton> gamepadButtonPressed = null;
-        void unregisterEvents()
-        {
-            txtBox.KeyDown -= handlerDown;
-            txtBox.KeyUp -= handlerUp;
-            txtBox.Leave -= leaveHandler;
-            Hook.AnyGamepadButtonPressed -= gamepadButtonPressed;
-        }
-
-        handlerDown = (s, x) =>
-        {
-            KeyOrButton key = x.KeyCode == Keys.Escape ? null : new KeyOrButton(x.KeyCode | x.Modifiers);
-            if (x.KeyCode is Keys.ControlKey or Keys.ShiftKey or Keys.Menu)
-            {
-                return;
-            }
-
-            keySetCallback(key);
-            unregisterEvents();
-            txtBox.Select(0, 0);
-            chkGlobalHotkeys.Select();
-            txtBox.Text = FormatKey(key);
-        };
-        handlerUp = (s, x) =>
-        {
-            KeyOrButton key = x.KeyCode == Keys.Escape ? null : new KeyOrButton(x.KeyCode | x.Modifiers);
-            if (x.KeyCode is Keys.ControlKey or Keys.ShiftKey or Keys.Menu)
-            {
-                keySetCallback(key);
-                unregisterEvents();
-                txtBox.Select(0, 0);
-                chkGlobalHotkeys.Select();
-                txtBox.Text = FormatKey(key);
-            }
-        };
-        leaveHandler = (s, x) =>
-        {
-            unregisterEvents();
-            txtBox.Text = oldText;
-        };
-        gamepadButtonPressed = (s, x) =>
-        {
-            var key = new KeyOrButton(x);
-            keySetCallback(key);
-            unregisterEvents();
-
-            this.InvokeIfRequired(() =>
-            {
-                txtBox.Select(0, 0);
-                chkGlobalHotkeys.Select();
-                txtBox.Text = FormatKey(key);
-            });
-        };
-        txtBox.KeyDown += handlerDown;
-        txtBox.KeyUp += handlerUp;
-        txtBox.Leave += leaveHandler;
-        Hook.AnyGamepadButtonPressed += gamepadButtonPressed;
-    }
-    private void Split_Set_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => Settings.HotkeyProfiles[SelectedHotkeyProfile].SplitKey = x);
-    }
-    private void Reset_Set_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => Settings.HotkeyProfiles[SelectedHotkeyProfile].ResetKey = x);
-    }
-    private void Skip_Set_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => Settings.HotkeyProfiles[SelectedHotkeyProfile].SkipKey = x);
-    }
-    private void Undo_Set_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => Settings.HotkeyProfiles[SelectedHotkeyProfile].UndoKey = x);
-    }
-    private void Pause_Set_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => Settings.HotkeyProfiles[SelectedHotkeyProfile].PauseKey = x);
-    }
-    private void Toggle_Set_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => Settings.HotkeyProfiles[SelectedHotkeyProfile].ToggleGlobalHotkeys = x);
-    }
-    private void Switch_Previous_Set_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => Settings.HotkeyProfiles[SelectedHotkeyProfile].SwitchComparisonPrevious = x);
-    }
-    private void Switch_Next_Set_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => Settings.HotkeyProfiles[SelectedHotkeyProfile].SwitchComparisonNext = x);
-    }
+    // Hotkey binding is gone; these stubs remain so the Designer event wires still resolve.
+    private void Split_Set_Enter(object sender, EventArgs e) { }
+    private void Reset_Set_Enter(object sender, EventArgs e) { }
+    private void Skip_Set_Enter(object sender, EventArgs e) { }
+    private void Undo_Set_Enter(object sender, EventArgs e) { }
+    private void Pause_Set_Enter(object sender, EventArgs e) { }
+    private void Toggle_Set_Enter(object sender, EventArgs e) { }
+    private void Switch_Previous_Set_Enter(object sender, EventArgs e) { }
+    private void Switch_Next_Set_Enter(object sender, EventArgs e) { }
 
     private void ClickControl(object sender, EventArgs e)
     {

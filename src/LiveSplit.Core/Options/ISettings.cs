@@ -32,8 +32,6 @@ public interface ISettings : ICloneable
 
     void AddToRecentSplits(string path, IRun run, TimingMethod lastTimingMethod, string lastHotkeyProfile);
     void AddToRecentLayouts(string path);
-    void RegisterHotkeys(CompositeHook hook, string hotkeyProfileName);
-    void UnregisterAllHotkeys(CompositeHook hook);
 
     // Deprecated properties
     KeyOrButton SplitKey { get; set; }

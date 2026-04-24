@@ -48,7 +48,6 @@ public partial class TimerForm : Form
     protected ComponentRenderer ComponentRenderer { get; set; }
     public LiveSplitState CurrentState { get; set; }
     protected ITimerModel Model { get; set; }
-    protected CompositeHook Hook { get; set; }
     protected bool IsInDialogMode { get; set; }
     protected bool ResetMessageShown { get; set; }
     public new ILayout Layout
@@ -318,11 +317,6 @@ public partial class TimerForm : Form
         RefreshTask = Task.Factory.StartNew(RefreshTimerWorker);
 
         InvalidationRequired = false;
-
-        Hook = new CompositeHook(false);
-        Hook.GamepadHookInitialized += Hook_GamepadHookInitialized;
-        Hook.KeyOrButtonPressed += hook_KeyOrButtonPressed;
-        Settings.RegisterHotkeys(Hook, CurrentState.CurrentHotkeyProfile);
 
         SizeChanged += TimerForm_SizeChanged;
 
@@ -783,11 +777,6 @@ public partial class TimerForm : Form
 
             MaintainMinimumSize();
         }
-    }
-
-    private void Hook_GamepadHookInitialized(object sender, EventArgs e)
-    {
-        CheckForUpdates();
     }
 
     private void CheckForUpdates()
@@ -1261,103 +1250,6 @@ public partial class TimerForm : Form
         }
     }
 
-    private void hook_KeyOrButtonPressed(object sender, KeyOrButton e)
-    {
-        Action action = () =>
-        {
-            HotkeyProfile hotkeyProfile = Settings.HotkeyProfiles[CurrentState.CurrentHotkeyProfile];
-
-            if ((ActiveForm == this || hotkeyProfile.GlobalHotkeysEnabled) && !ResetMessageShown && !IsInDialogMode)
-            {
-                if (hotkeyProfile.SplitKey == e)
-                {
-                    if (hotkeyProfile.HotkeyDelay > 0)
-                    {
-                        var splitTimer = new System.Timers.Timer(hotkeyProfile.HotkeyDelay * 1000f)
-                        {
-                            Enabled = true
-                        };
-                        splitTimer.Elapsed += splitTimer_Elapsed;
-                    }
-                    else
-                    {
-                        StartOrSplit();
-                    }
-                }
-
-                else if (hotkeyProfile.UndoKey == e)
-                {
-                    Model.UndoSplit();
-                }
-
-                else if (hotkeyProfile.SkipKey == e)
-                {
-                    Model.SkipSplit();
-                }
-
-                else if (hotkeyProfile.ResetKey == e)
-                {
-                    Reset();
-                }
-
-                else if (hotkeyProfile.PauseKey == e)
-                {
-                    if (hotkeyProfile.HotkeyDelay > 0)
-                    {
-                        var pauseTimer = new System.Timers.Timer(hotkeyProfile.HotkeyDelay * 1000f)
-                        {
-                            Enabled = true
-                        };
-                        pauseTimer.Elapsed += pauseTimer_Elapsed;
-                    }
-                    else
-                    {
-                        Model.Pause();
-                    }
-                }
-
-                else if (hotkeyProfile.SwitchComparisonPrevious == e)
-                {
-                    Model.SwitchComparisonPrevious();
-                }
-                else if (hotkeyProfile.SwitchComparisonNext == e)
-                {
-                    Model.SwitchComparisonNext();
-                }
-            }
-
-            if (hotkeyProfile.ToggleGlobalHotkeys == e)
-            {
-                hotkeyProfile.GlobalHotkeysEnabled = !hotkeyProfile.GlobalHotkeysEnabled;
-                SetProgressBar();
-            }
-        };
-
-        new Task(() =>
-        {
-            try
-            {
-                Invoke(action);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex);
-            }
-        }).Start();
-    }
-
-    private void pauseTimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
-    {
-        ((System.Timers.Timer)sender).Stop();
-        Model.Pause();
-    }
-
-    private void splitTimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
-    {
-        ((System.Timers.Timer)sender).Stop();
-        StartOrSplit();
-    }
-
     private void RefreshTimerWorker()
     {
         while (true)
@@ -1379,8 +1271,6 @@ public partial class TimerForm : Form
             {
                 try
                 {
-                    Hook?.Poll();
-
                     if (CurrentState.Run.IsAutoSplitterActive())
                     {
                         CurrentState.Run.AutoSplitter.Component.Update(null, CurrentState, 0, 0, Layout.Mode);
@@ -2084,11 +1974,6 @@ public partial class TimerForm : Form
             if (Settings.HotkeyProfiles.ContainsKey(recentSplitsFile.LastHotkeyProfile))
             {
                 CurrentState.CurrentHotkeyProfile = recentSplitsFile.LastHotkeyProfile;
-                if (Hook != null)
-                {
-                    Settings.UnregisterAllHotkeys(Hook);
-                    Settings.RegisterHotkeys(Hook, CurrentState.CurrentHotkeyProfile);
-                }
             }
         }
     }
@@ -2861,13 +2746,12 @@ public partial class TimerForm : Form
 
     private void settingsMenuItem_Click(object sender, EventArgs e)
     {
-        using var editor = new SettingsDialog(Hook, Settings, CurrentState.CurrentHotkeyProfile);
+        using var editor = new SettingsDialog(Settings, CurrentState.CurrentHotkeyProfile);
         editor.SumOfBestModeChanged += editor_SumOfBestModeChanged;
         try
         {
             TopMost = false;
             var oldSettings = (ISettings)Settings.Clone();
-            Settings.UnregisterAllHotkeys(Hook);
             UiLocalizer.Apply(editor, CurrentLanguage);
             DialogResult result = editor.ShowDialog(this);
             if (result == DialogResult.Cancel)
@@ -2885,7 +2769,6 @@ public partial class TimerForm : Form
                 CurrentState.CurrentHotkeyProfile = editor.SelectedHotkeyProfile;
             }
 
-            Settings.RegisterHotkeys(Hook, CurrentState.CurrentHotkeyProfile);
             UpdateRaceProviderIntegration();
         }
         finally
@@ -2992,10 +2875,8 @@ public partial class TimerForm : Form
         {
             TopMost = false;
             IsInDialogMode = true;
-            Settings.UnregisterAllHotkeys(Hook);
             UiLocalizer.Apply(dialog, CurrentLanguage);
             dialog.ShowDialog(this);
-            Settings.RegisterHotkeys(Hook, CurrentState.CurrentHotkeyProfile);
         }
         finally
         {
@@ -3089,22 +2970,6 @@ public partial class TimerForm : Form
         Model.UndoAllPauses();
     }
 
-    private void hotkeysMenuItem_Click(object sender, EventArgs e)
-    {
-        HotkeyProfile hotkeyProfile = Settings.HotkeyProfiles[CurrentState.CurrentHotkeyProfile];
-
-        if (hotkeysMenuItem.Checked)
-        {
-            hotkeysMenuItem.Checked = hotkeyProfile.GlobalHotkeysEnabled = false;
-        }
-        else
-        {
-            hotkeysMenuItem.Checked = hotkeyProfile.GlobalHotkeysEnabled = true;
-        }
-
-        SetProgressBar();
-    }
-
     private void splitMenuItem_Click(object sender, EventArgs e)
     {
         StartOrSplit();
@@ -3124,16 +2989,7 @@ public partial class TimerForm : Form
     {
         try
         {
-            HotkeyProfile hotkeyProfile = Settings.HotkeyProfiles[CurrentState.CurrentHotkeyProfile];
-            if (hotkeyProfile.ToggleGlobalHotkeys != null)
-            {
-                TaskbarManager.Instance.SetProgressState(hotkeyProfile.GlobalHotkeysEnabled ? TaskbarProgressBarState.Normal : TaskbarProgressBarState.Error);
-                TaskbarManager.Instance.SetProgressValue(100, 100);
-            }
-            else
-            {
-                TaskbarManager.Instance.SetProgressState(TaskbarProgressBarState.NoProgress);
-            }
+            TaskbarManager.Instance.SetProgressState(TaskbarProgressBarState.NoProgress);
         }
         catch (Exception ex)
         {
@@ -3145,6 +3001,7 @@ public partial class TimerForm : Form
     {
         SetProgressBar();
         UpdateRaceProviderIntegration();
+        CheckForUpdates();
     }
 
     private void RebuildComparisonsMenu()
@@ -3266,11 +3123,6 @@ public partial class TimerForm : Form
         skipSplitMenuItem,
         pauseMenuItem,
         undoPausesMenuItem]);
-
-        controlMenuItem.DropDownItems.Add(new ToolStripSeparator());
-        controlMenuItem.DropDownItems.Add(hotkeysMenuItem);
-
-        hotkeysMenuItem.Checked = Settings.HotkeyProfiles[CurrentState.CurrentHotkeyProfile].GlobalHotkeysEnabled;
 
         controlMenuItem.DropDownItems.Add(new ToolStripSeparator());
         controlMenuItem.DropDownItems.Add(tcpServerMenuItem);

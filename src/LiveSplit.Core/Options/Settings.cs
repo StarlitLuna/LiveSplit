@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Windows.Input;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Input;
@@ -128,121 +127,6 @@ public class Settings : ISettings
         };
     }
 
-    public void RegisterHotkeys(CompositeHook hook, string hotkeyProfileName)
-    {
-        try
-        {
-            UnregisterAllHotkeys(hook);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex);
-        }
-
-        if (HotkeyProfiles.ContainsKey(hotkeyProfileName))
-        {
-            HotkeyProfile hotkeyProfile = HotkeyProfiles[hotkeyProfileName];
-            bool deactivateForOtherPrograms = hotkeyProfile.GlobalHotkeysEnabled && hotkeyProfile.DeactivateHotkeysForOtherPrograms;
-            if (hotkeyProfile.SplitKey != null)
-            {
-                try
-                {
-                    RegisterHotkey(hook, hotkeyProfile.SplitKey, deactivateForOtherPrograms);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e);
-                }
-            }
-
-            if (hotkeyProfile.ResetKey != null)
-            {
-                try
-                {
-                    RegisterHotkey(hook, hotkeyProfile.ResetKey, deactivateForOtherPrograms);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e);
-                }
-            }
-
-            if (hotkeyProfile.SkipKey != null)
-            {
-                try
-                {
-                    RegisterHotkey(hook, hotkeyProfile.SkipKey, deactivateForOtherPrograms);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e);
-                }
-            }
-
-            if (hotkeyProfile.UndoKey != null)
-            {
-                try
-                {
-                    RegisterHotkey(hook, hotkeyProfile.UndoKey, deactivateForOtherPrograms);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e);
-                }
-            }
-
-            if (hotkeyProfile.PauseKey != null)
-            {
-                try
-                {
-                    RegisterHotkey(hook, hotkeyProfile.PauseKey, deactivateForOtherPrograms);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e);
-                }
-            }
-
-            if (hotkeyProfile.ToggleGlobalHotkeys != null)
-            {
-                try
-                {
-                    RegisterHotkey(hook, hotkeyProfile.ToggleGlobalHotkeys, deactivateForOtherPrograms);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e);
-                }
-            }
-
-            if (hotkeyProfile.SwitchComparisonPrevious != null)
-            {
-                try
-                {
-                    RegisterHotkey(hook, hotkeyProfile.SwitchComparisonPrevious, deactivateForOtherPrograms);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e);
-                }
-            }
-
-            if (hotkeyProfile.SwitchComparisonNext != null)
-            {
-                try
-                {
-                    RegisterHotkey(hook, hotkeyProfile.SwitchComparisonNext, deactivateForOtherPrograms);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e);
-                }
-            }
-
-            hook.AllowGamepads = hotkeyProfile.AllowGamepadsAsHotkeys;
-        }
-    }
-
     public void AddToRecentSplits(string path, IRun run, TimingMethod lastTimingMethod, string lastHotkeyProfile)
     {
         RecentSplitsFile foundRecentSplitsFile = RecentSplits.FirstOrDefault(x => x.Path == path);
@@ -275,22 +159,4 @@ public class Settings : ISettings
         }
     }
 
-    private void RegisterHotkey(CompositeHook hook, KeyOrButton key, bool deactivateForOtherPrograms)
-    {
-        hook.RegisterHotKey(key);
-        if (deactivateForOtherPrograms && key.IsKey)
-        {
-            var args = new System.Windows.Forms.KeyEventArgs(key.Key);
-            ModifierKeys modifiers = (args.Alt ? ModifierKeys.Alt : ModifierKeys.None)
-                | (args.Shift ? ModifierKeys.Shift : ModifierKeys.None)
-                | (args.Control ? ModifierKeys.Control : ModifierKeys.None);
-            HotkeyHook.Instance.RegisterHotKey(modifiers, args.KeyCode);
-        }
-    }
-
-    public void UnregisterAllHotkeys(CompositeHook hook)
-    {
-        hook.UnregisterAllHotkeys();
-        HotkeyHook.Instance.UnregisterAllHotkeys();
-    }
 }

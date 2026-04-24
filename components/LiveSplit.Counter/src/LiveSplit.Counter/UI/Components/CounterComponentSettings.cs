@@ -10,11 +10,9 @@ namespace LiveSplit.UI.Components;
 
 public partial class CounterComponentSettings : UserControl
 {
-    public CounterComponentSettings(bool allowGamepads)
+    public CounterComponentSettings()
     {
         InitializeComponent();
-
-        Hook = new CompositeHook(allowGamepads);
 
         // Set default values.
         GlobalHotkeysEnabled = false;
@@ -28,7 +26,7 @@ public partial class CounterComponentSettings : UserControl
         InitialValue = 0;
         Increment = 1;
 
-        // Hotkeys
+        // Hotkey data (preserved for XML round-trip; no longer wired to live hooks).
         IncrementKey = new KeyOrButton(Keys.Add);
         DecrementKey = new KeyOrButton(Keys.Subtract);
         ResetKey = new KeyOrButton(Keys.NumPad0);
@@ -52,10 +50,8 @@ public partial class CounterComponentSettings : UserControl
 
         Load += CounterSettings_Load;
 
-        RegisterHotKeys();
+        UpdateHotkeyDisplayText();
     }
-
-    public CompositeHook Hook { get; set; }
 
     public bool GlobalHotkeysEnabled { get; set; }
 
@@ -110,7 +106,7 @@ public partial class CounterComponentSettings : UserControl
         XmlElement resetElement = element["ResetKey"];
         ResetKey = string.IsNullOrEmpty(resetElement.InnerText) ? null : new KeyOrButton(resetElement.InnerText);
 
-        RegisterHotKeys();
+        UpdateHotkeyDisplayText();
     }
 
     public XmlNode GetSettings(XmlDocument document)
@@ -143,139 +139,11 @@ public partial class CounterComponentSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "ResetKey", ResetKey);
     }
 
-    // Behaviour essentially Lifted from LiveSplit Settings.
-    private void SetHotkeyHandlers(TextBox txtBox, Action<KeyOrButton> keySetCallback)
-    {
-        string oldText = txtBox.Text;
-        txtBox.Text = "Set Hotkey...";
-        txtBox.Select(0, 0);
-
-        KeyEventHandler handlerDown = null;
-        KeyEventHandler handlerUp = null;
-        EventHandler leaveHandler = null;
-        EventHandlerT<GamepadButton> gamepadButtonPressed = null;
-
-        // Remove Input handlers.
-        void unregisterEvents()
-        {
-            txtBox.KeyDown -= handlerDown;
-            txtBox.KeyUp -= handlerUp;
-            txtBox.Leave -= leaveHandler;
-            Hook.AnyGamepadButtonPressed -= gamepadButtonPressed;
-        }
-
-        // Handler for KeyDown
-        handlerDown = (s, x) =>
-        {
-            KeyOrButton keyOrButton = x.KeyCode == Keys.Escape ? null : new KeyOrButton(x.KeyCode | x.Modifiers);
-
-            // No action for special keys.
-            if (x.KeyCode is Keys.ControlKey or Keys.ShiftKey or Keys.Menu)
-            {
-                return;
-            }
-
-            keySetCallback(keyOrButton);
-            unregisterEvents();
-
-            // Remove Focus.
-            txtBox.Select(0, 0);
-            chkGlobalHotKeys.Select();
-
-            txtBox.Text = FormatKey(keyOrButton);
-
-            // Re-Register inputs.
-            RegisterHotKeys();
-        };
-
-        // Handler for KeyUp (allows setting of special keys, shift, ctrl etc.).
-        handlerUp = (s, x) =>
-        {
-            KeyOrButton keyOrButton = x.KeyCode == Keys.Escape ? null : new KeyOrButton(x.KeyCode | x.Modifiers);
-
-            // No action for normal keys.
-            if (x.KeyCode is not Keys.ControlKey and not Keys.ShiftKey and not Keys.Menu)
-            {
-                return;
-            }
-
-            keySetCallback(keyOrButton);
-            unregisterEvents();
-            txtBox.Select(0, 0);
-            chkGlobalHotKeys.Select();
-            txtBox.Text = FormatKey(keyOrButton);
-            RegisterHotKeys();
-        };
-
-        leaveHandler = (s, x) =>
-        {
-            unregisterEvents();
-            txtBox.Text = oldText;
-        };
-
-        // Handler for gamepad/joystick inputs.
-        gamepadButtonPressed = (s, x) =>
-        {
-            var key = new KeyOrButton(x);
-            keySetCallback(key);
-            unregisterEvents();
-
-            Action keyOrButton = () =>
-            {
-                txtBox.Select(0, 0);
-                chkGlobalHotKeys.Select();
-                txtBox.Text = FormatKey(key);
-                RegisterHotKeys();
-            };
-
-            // May not be in the UI thread (likely).
-            if (InvokeRequired)
-            {
-                Invoke(keyOrButton);
-            }
-            else
-            {
-                keyOrButton();
-            }
-        };
-
-        txtBox.KeyDown += handlerDown;
-        txtBox.KeyUp += handlerUp;
-        txtBox.Leave += leaveHandler;
-
-        Hook.AnyGamepadButtonPressed += gamepadButtonPressed;
-    }
-
-    /// <summary>
-    /// Registers the hot keys (unregisters existing Hotkeys).
-    /// </summary>
-    private void RegisterHotKeys()
+    private void UpdateHotkeyDisplayText()
     {
         txtIncrement.Text = FormatKey(IncrementKey);
         txtDecrement.Text = FormatKey(DecrementKey);
         txtReset.Text = FormatKey(ResetKey);
-
-        try
-        {
-            UnregisterAllHotkeys(Hook);
-
-            Hook.RegisterHotKey(IncrementKey);
-            Hook.RegisterHotKey(DecrementKey);
-            Hook.RegisterHotKey(ResetKey);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex);
-        }
-    }
-
-    /// <summary>
-    /// Unregisters all hotkeys.
-    /// </summary>
-    public void UnregisterAllHotkeys(CompositeHook hook)
-    {
-        hook.UnregisterAllHotkeys();
-        HotkeyHook.Instance.UnregisterAllHotkeys();
     }
 
     private string FormatKey(KeyOrButton key)
@@ -326,35 +194,13 @@ public partial class CounterComponentSettings : UserControl
         GradientString = cmbGradientType.SelectedItem.ToString();
     }
 
-    private void txtIncrement_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => IncrementKey = x);
-    }
-
-    private void txtIncrement_KeyDown(object sender, KeyEventArgs e)
-    {
-        e.SuppressKeyPress = true;
-    }
-
-    private void txtDecrement_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => DecrementKey = x);
-    }
-
-    private void txtDecrement_KeyDown(object sender, KeyEventArgs e)
-    {
-        e.SuppressKeyPress = true;
-    }
-
-    private void txtReset_Enter(object sender, EventArgs e)
-    {
-        SetHotkeyHandlers((TextBox)sender, x => ResetKey = x);
-    }
-
-    private void txtReset_KeyDown(object sender, KeyEventArgs e)
-    {
-        e.SuppressKeyPress = true;
-    }
+    // Hotkey binding is gone; these stubs remain so the Designer event wires still resolve.
+    private void txtIncrement_Enter(object sender, EventArgs e) { }
+    private void txtIncrement_KeyDown(object sender, KeyEventArgs e) => e.SuppressKeyPress = true;
+    private void txtDecrement_Enter(object sender, EventArgs e) { }
+    private void txtDecrement_KeyDown(object sender, KeyEventArgs e) => e.SuppressKeyPress = true;
+    private void txtReset_Enter(object sender, EventArgs e) { }
+    private void txtReset_KeyDown(object sender, KeyEventArgs e) => e.SuppressKeyPress = true;
 
     private void numInitialValue_ValueChanged(object sender, EventArgs e)
     {

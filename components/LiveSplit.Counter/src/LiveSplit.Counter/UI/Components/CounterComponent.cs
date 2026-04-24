@@ -16,16 +16,13 @@ public class CounterComponent : IComponent
     public CounterComponent(LiveSplitState state)
     {
         VerticalHeight = 10;
-        Settings = new CounterComponentSettings(state.Settings.HotkeyProfiles.First().Value.AllowGamepadsAsHotkeys);
+        Settings = new CounterComponentSettings();
         Cache = new GraphicsCache();
         CounterNameLabel = new SimpleLabel();
         Counter = new Counter();
         this.state = state;
         Settings.CounterReinitialiseRequired += Settings_CounterReinitialiseRequired;
         Settings.IncrementUpdateRequired += Settings_IncrementUpdateRequired;
-
-        // Subscribe to input hooks.
-        Settings.Hook.KeyOrButtonPressed += hook_KeyOrButtonPressed;
     }
 
     public ICounter Counter { get; set; }
@@ -161,12 +158,6 @@ public class CounterComponent : IComponent
 
     public void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode)
     {
-        try
-        {
-            Settings.Hook?.Poll();
-        }
-        catch { }
-
         this.state = state;
 
         CounterNameLabel.Text = Settings.CounterText;
@@ -184,7 +175,6 @@ public class CounterComponent : IComponent
 
     public void Dispose()
     {
-        Settings.Hook.KeyOrButtonPressed -= hook_KeyOrButtonPressed;
     }
 
     public int GetSettingsHashCode()
@@ -205,26 +195,4 @@ public class CounterComponent : IComponent
         Counter.SetIncrement(Settings.Increment);
     }
 
-    // Basic support for keyboard/button input.
-    private void hook_KeyOrButtonPressed(object sender, KeyOrButton e)
-    {
-        if ((Form.ActiveForm == state.Form && !Settings.GlobalHotkeysEnabled)
-            || Settings.GlobalHotkeysEnabled)
-        {
-            if (e == Settings.IncrementKey)
-            {
-                Counter.Increment();
-            }
-
-            if (e == Settings.DecrementKey)
-            {
-                Counter.Decrement();
-            }
-
-            if (e == Settings.ResetKey)
-            {
-                Counter.Reset();
-            }
-        }
-    }
 }

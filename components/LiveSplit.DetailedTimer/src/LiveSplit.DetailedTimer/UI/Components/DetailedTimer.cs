@@ -11,6 +11,7 @@ using System.Xml;
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
 using LiveSplit.TimeFormatters;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -237,28 +238,30 @@ public class DetailedTimer : IComponent
         }
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawGeneral(g, state, width, VerticalHeight);
         Matrix oldMatrix = g.Transform;
         InternalComponent.Settings.TimerHeight = VerticalHeight * ((100f - Settings.SegmentTimerSizeRatio) / 100f);
-        InternalComponent.DrawVertical(g, state, width, clipRegion);
+        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
         g.Transform = oldMatrix;
         g.TranslateTransform(0, VerticalHeight * ((100f - Settings.SegmentTimerSizeRatio) / 100f));
         SegmentTimer.Settings.TimerHeight = VerticalHeight * (Settings.SegmentTimerSizeRatio / 100f);
-        SegmentTimer.DrawVertical(g, state, width, clipRegion);
+        SegmentTimer.DrawVertical(ctx, state, width, clipRegion);
         g.Transform = oldMatrix;
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawGeneral(g, state, HorizontalWidth, height);
         Matrix oldMatrix = g.Transform;
         InternalComponent.Settings.TimerWidth = HorizontalWidth;
-        InternalComponent.DrawHorizontal(g, state, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f), clipRegion);
+        InternalComponent.DrawHorizontal(ctx, state, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f), clipRegion);
         g.Transform = oldMatrix;
         g.TranslateTransform(0, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f));
-        SegmentTimer.DrawHorizontal(g, state, height * (Settings.SegmentTimerSizeRatio / 100f), clipRegion);
+        SegmentTimer.DrawHorizontal(ctx, state, height * (Settings.SegmentTimerSizeRatio / 100f), clipRegion);
         SegmentTimer.Settings.TimerWidth = HorizontalWidth;
         g.Transform = oldMatrix;
     }

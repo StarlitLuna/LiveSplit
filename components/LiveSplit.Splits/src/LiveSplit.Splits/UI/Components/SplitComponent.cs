@@ -8,6 +8,7 @@ using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.TimeFormatters;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -258,8 +259,9 @@ public class SplitComponent : IComponent
         }
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         if (Settings.Display2Rows)
         {
             VerticalHeight = Settings.SplitHeight + (0.85f * (g.MeasureString("A", state.LayoutSettings.TimesFont).Height + g.MeasureString("A", state.LayoutSettings.TextFont).Height));
@@ -272,8 +274,9 @@ public class SplitComponent : IComponent
         }
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         MinimumHeight = 0.85f * (g.MeasureString("A", state.LayoutSettings.TimesFont).Height + g.MeasureString("A", state.LayoutSettings.TextFont).Height);
         DrawGeneral(g, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }

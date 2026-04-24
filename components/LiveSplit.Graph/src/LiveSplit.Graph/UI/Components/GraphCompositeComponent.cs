@@ -5,6 +5,7 @@ using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -72,18 +73,20 @@ public class GraphCompositeComponent : IComponent
 
     public float MinimumHeight => InternalComponent.MinimumHeight;
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        InternalComponent.DrawHorizontal(g, state, height, clipRegion);
+        Graphics g = ctx.AsGraphics();
+        InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
     }
 
     public float VerticalHeight => InternalComponent.VerticalHeight;
 
     public float MinimumWidth => InternalComponent.MinimumWidth;
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        InternalComponent.DrawVertical(g, state, width, clipRegion);
+        Graphics g = ctx.AsGraphics();
+        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
     }
 
     public void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode)

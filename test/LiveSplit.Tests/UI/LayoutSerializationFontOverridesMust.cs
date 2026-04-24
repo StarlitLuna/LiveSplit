@@ -10,6 +10,7 @@ using LiveSplit.Options;
 using LiveSplit.Options.SettingsFactories;
 using LiveSplit.UI;
 using LiveSplit.UI.Components;
+using LiveSplit.UI.Drawing;
 using LiveSplit.UI.LayoutSavers;
 
 using Xunit;
@@ -128,8 +129,8 @@ public class LayoutSerializationFontOverridesMust
 
         public IDictionary<string, Action> ContextMenuControls => null;
 
-        public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion) { }
-        public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion) { }
+        public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion) { }
+        public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion) { }
         public Control GetSettingsControl(LayoutMode mode) { return null; }
 
         public XmlNode GetSettings(XmlDocument document)

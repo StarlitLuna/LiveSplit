@@ -7,6 +7,7 @@ using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.TimeFormatters;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -264,13 +265,15 @@ public class Timer : IComponent
         }
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawGeneral(g, state, width, VerticalHeight);
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawGeneral(g, state, HorizontalWidth, height);
     }
 

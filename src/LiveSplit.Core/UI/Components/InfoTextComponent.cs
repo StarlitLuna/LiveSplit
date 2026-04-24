@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 
 using LiveSplit.Model;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -74,8 +75,9 @@ public class InfoTextComponent : IComponent
         }
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         if (DisplayTwoRows)
         {
             VerticalHeight = 0.9f * (g.MeasureString("A", ValueLabel.Font).Height + g.MeasureString("A", NameLabel.Font).Height);
@@ -115,8 +117,9 @@ public class InfoTextComponent : IComponent
         }
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawTwoRows(g, state, HorizontalWidth, height);
     }
 

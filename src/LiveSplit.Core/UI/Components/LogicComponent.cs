@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 
+using LiveSplit.UI.Drawing;
+
 namespace LiveSplit.UI.Components;
 
 public abstract class LogicComponent : IComponent
@@ -32,11 +34,11 @@ public abstract class LogicComponent : IComponent
         protected set;
     }
 
-    public void DrawHorizontal(System.Drawing.Graphics g, Model.LiveSplitState state, float height, System.Drawing.Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, Model.LiveSplitState state, float height, System.Drawing.Region clipRegion)
     {
     }
 
-    public void DrawVertical(System.Drawing.Graphics g, Model.LiveSplitState state, float width, System.Drawing.Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, Model.LiveSplitState state, float width, System.Drawing.Region clipRegion)
     {
     }
 

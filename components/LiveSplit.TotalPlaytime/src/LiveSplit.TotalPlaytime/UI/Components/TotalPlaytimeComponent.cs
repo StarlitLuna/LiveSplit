@@ -7,6 +7,7 @@ using System.Xml;
 
 using LiveSplit.Model;
 using LiveSplit.TimeFormatters;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -72,8 +73,9 @@ public class TotalPlaytimeComponent : IComponent
         }
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawBackground(g, state, HorizontalWidth, height);
 
         InternalComponent.NameLabel.HasShadow
@@ -83,11 +85,12 @@ public class TotalPlaytimeComponent : IComponent
         InternalComponent.NameLabel.ForeColor = Settings.OverrideTextColor ? Settings.TextColor : state.LayoutSettings.TextColor;
         InternalComponent.ValueLabel.ForeColor = Settings.OverrideTimeColor ? Settings.TimeColor : state.LayoutSettings.TextColor;
 
-        InternalComponent.DrawHorizontal(g, state, height, clipRegion);
+        InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawBackground(g, state, width, VerticalHeight);
 
         InternalComponent.DisplayTwoRows = Settings.Display2Rows;
@@ -99,7 +102,7 @@ public class TotalPlaytimeComponent : IComponent
         InternalComponent.NameLabel.ForeColor = Settings.OverrideTextColor ? Settings.TextColor : state.LayoutSettings.TextColor;
         InternalComponent.ValueLabel.ForeColor = Settings.OverrideTimeColor ? Settings.TimeColor : state.LayoutSettings.TextColor;
 
-        InternalComponent.DrawVertical(g, state, width, clipRegion);
+        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
     }
 
     public XmlNode GetSettings(XmlDocument document)

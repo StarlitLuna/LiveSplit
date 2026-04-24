@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 
 using LiveSplit.Model;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -97,14 +98,16 @@ public abstract class ControlComponent : IDeactivatableComponent
         }
     }
 
-    public virtual void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public virtual void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         AddControlToForm();
         Reposition(HorizontalWidth, height, g);
     }
 
-    public virtual void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public virtual void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         AddControlToForm();
         Reposition(width, VerticalHeight, g);
     }

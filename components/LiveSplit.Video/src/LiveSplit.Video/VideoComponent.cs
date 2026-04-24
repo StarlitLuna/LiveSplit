@@ -7,6 +7,7 @@ using AxAXVLC;
 
 using LiveSplit.Model;
 using LiveSplit.UI.Components;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.Video;
 
@@ -203,15 +204,17 @@ public class VideoComponent : ControlComponent
         }
     }
 
-    public override void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public override void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        base.DrawVertical(g, state, width, clipRegion);
+        Graphics g = ctx.AsGraphics();
+        base.DrawVertical(ctx, state, width, clipRegion);
         DisposeIfError();
     }
 
-    public override void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public override void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        base.DrawHorizontal(g, state, height, clipRegion);
+        Graphics g = ctx.AsGraphics();
+        base.DrawHorizontal(ctx, state, height, clipRegion);
         DisposeIfError();
     }
 

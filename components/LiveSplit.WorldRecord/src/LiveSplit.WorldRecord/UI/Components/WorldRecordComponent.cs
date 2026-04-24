@@ -15,6 +15,7 @@ using LiveSplit.TimeFormatters;
 using LiveSplit.UI;
 using LiveSplit.UI.Components;
 using LiveSplit.Web.Share;
+using LiveSplit.UI.Drawing;
 
 using SpeedrunComSharp;
 
@@ -442,18 +443,20 @@ public class WorldRecordComponent : IComponent
         InternalComponent.ValueLabel.ForeColor = Settings.OverrideTimeColor ? Settings.TimeColor : state.LayoutSettings.TextColor;
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, System.Drawing.Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, System.Drawing.Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawBackground(g, state, HorizontalWidth, height);
         PrepareDraw(state, LayoutMode.Horizontal);
-        InternalComponent.DrawHorizontal(g, state, height, clipRegion);
+        InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, System.Drawing.Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, System.Drawing.Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawBackground(g, state, width, VerticalHeight);
         PrepareDraw(state, LayoutMode.Vertical);
-        InternalComponent.DrawVertical(g, state, width, clipRegion);
+        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
     }
 
     public Control GetSettingsControl(LayoutMode mode)

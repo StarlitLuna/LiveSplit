@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -53,20 +54,20 @@ public interface IComponent : IDisposable
     /// <summary>
     /// Draws the contents of the component horizontally onto the window.
     /// </summary>
-    /// <param name="g">The graphics object used for drawing</param>
+    /// <param name="ctx">The drawing context used for drawing</param>
     /// <param name="state">Represents the current state of LiveSplit</param>
     /// <param name="height">The height of the window and the component</param>
     /// <param name="clipRegion">The rectangle on the form that is being redrawn for this paint event.</param>
-    void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion);
+    void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion);
 
     /// <summary>
     /// Draws the contents of the component vertically onto the window.
     /// </summary>
-    /// <param name="g">The graphics object used for drawing</param>
+    /// <param name="ctx">The drawing context used for drawing</param>
     /// <param name="state">Represents the current state of LiveSplit</param>
     /// <param name="width">The width of the window and the component</param>
     /// <param name="clipRegion">The rectangle on the form that is being redrawn for this paint event.</param>
-    void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion);
+    void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion);
 
     /// <summary>
     /// Shows a dialog where the user can configure the component.

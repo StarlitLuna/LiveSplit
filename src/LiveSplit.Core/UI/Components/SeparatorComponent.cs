@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 
 using LiveSplit.Model;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -39,8 +40,9 @@ public class SeparatorComponent : IComponent
         Cache = new GraphicsCache();
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         if (DisplayedSize > 0)
         {
             Region oldClip = g.Clip;
@@ -61,15 +63,16 @@ public class SeparatorComponent : IComponent
                 g.TranslateTransform(0, (2f - newHeight) / 2f);
             }
 
-            Line.DrawVertical(g, state, width, clipRegion);
+            Line.DrawVertical(ctx, state, width, clipRegion);
             g.Clip = oldClip;
             g.Transform = oldMatrix;
             g.SmoothingMode = oldMode;
         }
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         if (DisplayedSize > 0)
         {
             Region oldClip = g.Clip;
@@ -90,7 +93,7 @@ public class SeparatorComponent : IComponent
             }
 
             Line.HorizontalWidth = newWidth;
-            Line.DrawHorizontal(g, state, height, clipRegion);
+            Line.DrawHorizontal(ctx, state, height, clipRegion);
             g.Clip = oldClip;
             g.Transform = oldMatrix;
             g.SmoothingMode = oldMode;

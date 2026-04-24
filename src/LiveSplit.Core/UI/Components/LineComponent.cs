@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 
 using LiveSplit.Model;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -25,8 +26,9 @@ public class LineComponent : IComponent
         LineColor = lineColor;
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         using var solidBrush = new SolidBrush(LineColor);
         g.FillRectangle(solidBrush, 0.0f, 0.0f, width, VerticalHeight);
     }
@@ -62,8 +64,9 @@ public class LineComponent : IComponent
 
     public float MinimumHeight => throw new NotImplementedException();
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         using var solidBrush = new SolidBrush(LineColor);
         g.FillRectangle(solidBrush, 0.0f, 0.0f, HorizontalWidth, height);
     }

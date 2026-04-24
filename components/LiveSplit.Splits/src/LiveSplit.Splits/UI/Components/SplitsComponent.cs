@@ -7,6 +7,7 @@ using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.TimeFormatters;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -361,20 +362,22 @@ public class SplitsComponent : IComponent
         MeasureCharLabel.SetActualWidth(g);
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         Prepare(state);
         DrawBackground(g, width, VerticalHeight);
         SetMeasureLabels(g, state);
-        InternalComponent.DrawVertical(g, state, width, clipRegion);
+        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         Prepare(state);
         DrawBackground(g, HorizontalWidth, height);
         SetMeasureLabels(g, state);
-        InternalComponent.DrawHorizontal(g, state, height, clipRegion);
+        InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
     }
 
     public Control GetSettingsControl(LayoutMode mode)

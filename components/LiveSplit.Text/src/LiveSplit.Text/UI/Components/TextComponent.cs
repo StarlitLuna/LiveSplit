@@ -6,6 +6,7 @@ using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.TimeFormatters;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -79,18 +80,20 @@ public class TextComponent : IComponent
         }
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawBackground(g, state, width, VerticalHeight);
         PrepareDraw(state, LayoutMode.Vertical);
-        InternalComponent.DrawVertical(g, state, width, clipRegion);
+        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         DrawBackground(g, state, HorizontalWidth, height);
         PrepareDraw(state, LayoutMode.Horizontal);
-        InternalComponent.DrawHorizontal(g, state, height, clipRegion);
+        InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
     }
 
     public float VerticalHeight => InternalComponent.VerticalHeight;

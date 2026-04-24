@@ -5,6 +5,7 @@ using System.Linq;
 
 using LiveSplit.Model;
 using LiveSplit.Options;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -24,12 +25,13 @@ public class ComponentRenderer
 
     private readonly Dictionary<IComponent, FontOverrides> _overrideLookup = [];
 
-    private void DrawVerticalComponent(int index, Graphics g, LiveSplitState state, float width, float height, Region clipRegion)
+    private void DrawVerticalComponent(int index, IDrawingContext ctx, LiveSplitState state, float width, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         IComponent component = VisibleComponents.ElementAt(index);
         float topPadding = Math.Min(GetPaddingAbove(index), component.PaddingTop) / 2f;
         float bottomPadding = Math.Min(GetPaddingBelow(index), component.PaddingBottom) / 2f;
-        g.IntersectClip(new RectangleF(0, topPadding, width, component.VerticalHeight - topPadding - bottomPadding));
+        ctx.IntersectClip(new RectangleF(0, topPadding, width, component.VerticalHeight - topPadding - bottomPadding));
 
         float scale = g.Transform.Elements.First();
         int separatorOffset = component.VerticalHeight * scale < 3 ? 1 : 0;
@@ -40,18 +42,19 @@ public class ComponentRenderer
             width,
             (separatorOffset * 2f) + (scale * (component.VerticalHeight + bottomPadding)))))
         {
-            component.DrawVertical(g, state, width, clipRegion);
+            component.DrawVertical(ctx, state, width, clipRegion);
         }
 
-        g.TranslateTransform(0.0f, component.VerticalHeight - (bottomPadding * 2f));
+        ctx.TranslateTransform(0.0f, component.VerticalHeight - (bottomPadding * 2f));
     }
 
-    private void DrawHorizontalComponent(int index, Graphics g, LiveSplitState state, float width, float height, Region clipRegion)
+    private void DrawHorizontalComponent(int index, IDrawingContext ctx, LiveSplitState state, float width, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         IComponent component = VisibleComponents.ElementAt(index);
         float leftPadding = Math.Min(GetPaddingToLeft(index), component.PaddingLeft) / 2f;
         float rightPadding = Math.Min(GetPaddingToRight(index), component.PaddingRight) / 2f;
-        g.IntersectClip(new RectangleF(leftPadding, 0, component.HorizontalWidth - leftPadding - rightPadding, height));
+        ctx.IntersectClip(new RectangleF(leftPadding, 0, component.HorizontalWidth - leftPadding - rightPadding, height));
 
         float scale = g.Transform.Elements.First();
         int separatorOffset = component.VerticalHeight * scale < 3 ? 1 : 0;
@@ -62,10 +65,10 @@ public class ComponentRenderer
             (separatorOffset * 2f) + (scale * (component.HorizontalWidth + rightPadding)),
             height)))
         {
-            component.DrawHorizontal(g, state, height, clipRegion);
+            component.DrawHorizontal(ctx, state, height, clipRegion);
         }
 
-        g.TranslateTransform(component.HorizontalWidth - (rightPadding * 2f), 0.0f);
+        ctx.TranslateTransform(component.HorizontalWidth - (rightPadding * 2f), 0.0f);
     }
 
     private float GetPaddingAbove(int index)
@@ -163,12 +166,13 @@ public class ComponentRenderer
         OverallSize = Math.Max(totalSize, 1f);
     }
 
-    public void Render(Graphics g, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
+    public void Render(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
     {
         if (!errorInComponent)
         {
             try
             {
+                Graphics g = ctx.AsGraphics();
                 Region clip = g.Clip;
                 System.Drawing.Drawing2D.Matrix transform = g.Transform;
                 var crashedComponents = new List<IComponent>();
@@ -184,11 +188,11 @@ public class ComponentRenderer
                         {
                             if (mode == LayoutMode.Vertical)
                             {
-                                DrawVerticalComponent(index, g, state, width, height, clipRegion);
+                                DrawVerticalComponent(index, ctx, state, width, height, clipRegion);
                             }
                             else
                             {
-                                DrawHorizontalComponent(index, g, state, width, height, clipRegion);
+                                DrawHorizontalComponent(index, ctx, state, width, height, clipRegion);
                             }
                         }
                         finally

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 
 using LiveSplit.Model;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -32,14 +33,14 @@ public class ComponentRendererComponent : ComponentRenderer, IComponent
     public float PaddingBottom => VisibleComponents.Any() ? VisibleComponents.Last().PaddingBottom : 0;
     public float PaddingRight => VisibleComponents.Any() ? VisibleComponents.Last().PaddingRight : 0;
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Render(g, state, width, 0, LayoutMode.Vertical, clipRegion);
+        Render(ctx, state, width, 0, LayoutMode.Vertical, clipRegion);
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Render(g, state, 0, height, LayoutMode.Horizontal, clipRegion);
+        Render(ctx, state, 0, height, LayoutMode.Horizontal, clipRegion);
     }
 
     public string ComponentName => throw new NotSupportedException();

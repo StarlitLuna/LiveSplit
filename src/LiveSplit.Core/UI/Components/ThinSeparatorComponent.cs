@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 
 using LiveSplit.Model;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
@@ -35,8 +36,9 @@ public class ThinSeparatorComponent : IComponent
         Cache = new GraphicsCache();
     }
 
-    public void DrawVertical(Graphics g, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         Region oldClip = g.Clip;
         System.Drawing.Drawing2D.Matrix oldMatrix = g.Transform;
         System.Drawing.Drawing2D.SmoothingMode oldMode = g.SmoothingMode;
@@ -51,14 +53,15 @@ public class ThinSeparatorComponent : IComponent
             g.TranslateTransform(0, 1f - newHeight);
         }
 
-        Line.DrawVertical(g, state, width, clipRegion);
+        Line.DrawVertical(ctx, state, width, clipRegion);
         g.Clip = oldClip;
         g.Transform = oldMatrix;
         g.SmoothingMode = oldMode;
     }
 
-    public void DrawHorizontal(Graphics g, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         Region oldClip = g.Clip;
         System.Drawing.Drawing2D.Matrix oldMatrix = g.Transform;
         System.Drawing.Drawing2D.SmoothingMode oldMode = g.SmoothingMode;
@@ -73,7 +76,7 @@ public class ThinSeparatorComponent : IComponent
         }
 
         Line.HorizontalWidth = newWidth;
-        Line.DrawHorizontal(g, state, height, clipRegion);
+        Line.DrawHorizontal(ctx, state, height, clipRegion);
         g.Clip = oldClip;
         g.Transform = oldMatrix;
         g.SmoothingMode = oldMode;

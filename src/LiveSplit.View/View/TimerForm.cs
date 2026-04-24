@@ -29,6 +29,8 @@ using LiveSplit.Server;
 using LiveSplit.TimeFormatters;
 using LiveSplit.UI;
 using LiveSplit.UI.Components;
+using LiveSplit.UI.Drawing;
+using LiveSplit.UI.Drawing.GdiPlus;
 using LiveSplit.UI.LayoutFactories;
 using LiveSplit.UI.LayoutSavers;
 using LiveSplit.Updates;
@@ -1471,7 +1473,7 @@ public partial class TimerForm : Form
             transformedHeight /= scaleFactor;
         }
 
-        ComponentRenderer.Render(g, CurrentState, transformedWidth, transformedHeight, Layout.Mode, UpdateRegion);
+        ComponentRenderer.Render(new GdiPlusDrawingContext(g), CurrentState, transformedWidth, transformedHeight, Layout.Mode, UpdateRegion);
 
         FixSize();
         KeepLayoutSize();

@@ -77,12 +77,11 @@ public class InfoTextComponent : IComponent
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         if (DisplayTwoRows)
         {
-            VerticalHeight = 0.9f * (g.MeasureString("A", ValueLabel.Font).Height + g.MeasureString("A", NameLabel.Font).Height);
+            VerticalHeight = 0.9f * (MeasureCapLetterHeight(ctx, ValueLabel.Font) + MeasureCapLetterHeight(ctx, NameLabel.Font));
             PaddingTop = PaddingBottom = 0;
-            DrawTwoRows(g, state, width, VerticalHeight);
+            DrawTwoRows(ctx, state, width, VerticalHeight);
         }
         else
         {
@@ -92,13 +91,13 @@ public class InfoTextComponent : IComponent
             ValueLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
             ValueLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
 
-            float textHeight = 0.75f * Math.Max(g.MeasureString("A", ValueLabel.Font).Height, g.MeasureString("A", NameLabel.Font).Height);
+            float textHeight = 0.75f * Math.Max(MeasureCapLetterHeight(ctx, ValueLabel.Font), MeasureCapLetterHeight(ctx, NameLabel.Font));
             PaddingTop = Math.Max(0, (VerticalHeight - textHeight) / 2f);
             PaddingBottom = PaddingTop;
 
             NameMeasureLabel.Text = LongestString;
-            NameMeasureLabel.SetActualWidth(g);
-            ValueLabel.SetActualWidth(g);
+            NameMeasureLabel.SetActualWidth(ctx);
+            ValueLabel.SetActualWidth(ctx);
 
             NameLabel.Width = width - ValueLabel.ActualWidth - 10;
             NameLabel.Height = VerticalHeight;
@@ -112,18 +111,17 @@ public class InfoTextComponent : IComponent
 
             PrepareDraw(state, LayoutMode.Vertical);
 
-            NameLabel.Draw(g);
-            ValueLabel.Draw(g);
+            NameLabel.Draw(ctx);
+            ValueLabel.Draw(ctx);
         }
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        DrawTwoRows(g, state, HorizontalWidth, height);
+        DrawTwoRows(ctx, state, HorizontalWidth, height);
     }
 
-    protected void DrawTwoRows(Graphics g, LiveSplitState state, float width, float height)
+    protected void DrawTwoRows(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
         NameLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         NameLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
@@ -138,9 +136,9 @@ public class InfoTextComponent : IComponent
 
         NameMeasureLabel.Text = LongestString;
         NameMeasureLabel.Font = state.LayoutSettings.TextFont;
-        NameMeasureLabel.SetActualWidth(g);
+        NameMeasureLabel.SetActualWidth(ctx);
 
-        MinimumHeight = 0.85f * (g.MeasureString("A", ValueLabel.Font).Height + g.MeasureString("A", NameLabel.Font).Height);
+        MinimumHeight = 0.85f * (MeasureCapLetterHeight(ctx, ValueLabel.Font) + MeasureCapLetterHeight(ctx, NameLabel.Font));
         NameLabel.Width = width - 10;
         NameLabel.Height = height;
         NameLabel.X = 5;
@@ -153,8 +151,19 @@ public class InfoTextComponent : IComponent
 
         PrepareDraw(state, LayoutMode.Horizontal);
 
-        NameLabel.Draw(g);
-        ValueLabel.Draw(g);
+        NameLabel.Draw(ctx);
+        ValueLabel.Draw(ctx);
+    }
+
+    // Measure the visual height of a single capital letter in <paramref name="font"/>, used for
+    // the row-height heuristics above. Replaces the old `g.MeasureString("A", font).Height`
+    // now that InfoTextComponent routes through IDrawingContext.
+    private static float MeasureCapLetterHeight(IDrawingContext ctx, Font font)
+    {
+        using IFont iFont = DrawingApi.Factory.CreateFont(
+            font.FontFamily.Name, font.Size, font.Style, font.Unit);
+        ITextFormat iFormat = DrawingApi.Factory.CreateTextFormat();
+        return ctx.MeasureString("A", iFont, 9999, iFormat).Height;
     }
 
     public string ComponentName => throw new NotSupportedException();

@@ -136,8 +136,9 @@ public class SplitComponent : IComponent
         HeaderMeasureDeltaLabel.SetActualWidth(g);
     }
 
-    private void DrawGeneral(Graphics g, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
+    private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         if (NeedUpdateAll)
         {
             UpdateAll(state);
@@ -350,8 +351,9 @@ public class SplitComponent : IComponent
         }
     }
 
-    private void DrawHeader(Graphics g, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
+    private void DrawHeader(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
     {
+        Graphics g = ctx.AsGraphics();
         if (Settings.BackgroundGradient == ExtendedGradientType.Alternating)
         {
             g.FillRectangle(new SolidBrush(
@@ -544,11 +546,11 @@ public class SplitComponent : IComponent
             VerticalHeight = Settings.SplitHeight + (0.85f * (g.MeasureString("A", state.LayoutSettings.TimesFont).Height + g.MeasureString("A", state.LayoutSettings.TextFont).Height));
             if (Header)
             {
-                DrawHeader(g, state, width, VerticalHeight, LayoutMode.Horizontal, clipRegion);
+                DrawHeader(ctx, state, width, VerticalHeight, LayoutMode.Horizontal, clipRegion);
             }
             else
             {
-                DrawGeneral(g, state, width, VerticalHeight, LayoutMode.Horizontal, clipRegion);
+                DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Horizontal, clipRegion);
             }
         }
         else
@@ -556,11 +558,11 @@ public class SplitComponent : IComponent
             VerticalHeight = Settings.SplitHeight + 25;
             if (Header)
             {
-                DrawHeader(g, state, width, VerticalHeight, LayoutMode.Vertical, clipRegion);
+                DrawHeader(ctx, state, width, VerticalHeight, LayoutMode.Vertical, clipRegion);
             }
             else
             {
-                DrawGeneral(g, state, width, VerticalHeight, LayoutMode.Vertical, clipRegion);
+                DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical, clipRegion);
             }
         }
     }
@@ -571,11 +573,11 @@ public class SplitComponent : IComponent
         MinimumHeight = 0.85f * (g.MeasureString("A", state.LayoutSettings.TimesFont).Height + g.MeasureString("A", state.LayoutSettings.TextFont).Height);
         if (Header)
         {
-            DrawHeader(g, state, HorizontalWidth, height, LayoutMode.Horizontal, clipRegion);
+            DrawHeader(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal, clipRegion);
         }
         else
         {
-            DrawGeneral(g, state, HorizontalWidth, height, LayoutMode.Horizontal, clipRegion);
+            DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal, clipRegion);
         }
     }
 

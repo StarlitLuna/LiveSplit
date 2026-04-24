@@ -83,8 +83,9 @@ public class SplitComponent : IComponent
         LabelsList = [];
     }
 
-    private void DrawGeneral(Graphics g, LiveSplitState state, float width, float height, LayoutMode mode)
+    private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
+        Graphics g = ctx.AsGraphics();
         if (NeedUpdateAll)
         {
             UpdateAll(state);
@@ -250,7 +251,7 @@ public class SplitComponent : IComponent
                 }
 
                 NameLabel.Width = (mode == LayoutMode.Horizontal ? width - 10 : nameX) - IconWidth;
-                NameLabel.Draw(g);
+                NameLabel.Draw(ctx);
             }
         }
         else
@@ -265,12 +266,12 @@ public class SplitComponent : IComponent
         if (Settings.Display2Rows)
         {
             VerticalHeight = Settings.SplitHeight + (0.85f * (g.MeasureString("A", state.LayoutSettings.TimesFont).Height + g.MeasureString("A", state.LayoutSettings.TextFont).Height));
-            DrawGeneral(g, state, width, VerticalHeight, LayoutMode.Horizontal);
+            DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Horizontal);
         }
         else
         {
             VerticalHeight = Settings.SplitHeight + 25;
-            DrawGeneral(g, state, width, VerticalHeight, LayoutMode.Vertical);
+            DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
         }
     }
 
@@ -278,7 +279,7 @@ public class SplitComponent : IComponent
     {
         Graphics g = ctx.AsGraphics();
         MinimumHeight = 0.85f * (g.MeasureString("A", state.LayoutSettings.TimesFont).Height + g.MeasureString("A", state.LayoutSettings.TextFont).Height);
-        DrawGeneral(g, state, HorizontalWidth, height, LayoutMode.Horizontal);
+        DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }
 
     public string ComponentName => "Split";

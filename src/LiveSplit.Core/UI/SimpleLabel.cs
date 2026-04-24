@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -7,6 +7,8 @@ using System.Linq;
 using System.Windows.Forms;
 
 using LiveSplit.Options;
+using LiveSplit.UI.Drawing;
+using LiveSplit.UI.Drawing.GdiPlus;
 
 using static System.Windows.Forms.TextRenderer;
 
@@ -89,31 +91,44 @@ public class SimpleLabel
         };
     }
 
-    public void Draw(Graphics g)
+    // Graphics-taking overloads for callers that haven't been migrated off the direct
+    // System.Drawing.Graphics surface yet — they wrap `g` in a GdiPlusDrawingContext and
+    // forward. Phase 5.3 migrates each consumer to the IDrawingContext overloads; once that
+    // lands these three can be deleted.
+    public void Draw(Graphics g) => Draw(new GdiPlusDrawingContext(g));
+    public void SetActualWidth(Graphics g) => SetActualWidth(new GdiPlusDrawingContext(g));
+    public string CalculateAlternateText(Graphics g, float width)
+        => CalculateAlternateText(new GdiPlusDrawingContext(g), width);
+
+    public void Draw(IDrawingContext ctx)
     {
         Format.Alignment = HorizontalAlignment;
         Format.LineAlignment = VerticalAlignment;
 
+        using IFont iFont = WrapFont();
+        using IBrush iBrush = WrapBrush();
+        ITextFormat iFormat = WrapFormat(Format);
+
         if (!IsMonospaced)
         {
-            string actualText = CalculateAlternateText(g, Width);
-            DrawText(actualText, g, X, Y, Width, Height, Format);
+            string actualText = CalculateAlternateText(ctx, Width, iFont, iFormat);
+            DrawText(actualText, ctx, X, Y, Width, Height, iFont, iBrush, iFormat);
         }
         else
         {
-            var monoFormat = new StringFormat
+            ITextFormat monoFormat = WrapFormat(new StringFormat
             {
                 Alignment = StringAlignment.Center,
-                LineAlignment = VerticalAlignment
-            };
+                LineAlignment = VerticalAlignment,
+            });
 
-            int measurement = MeasureText(g, "0", Font, new Size((int)(Width + 0.5f), (int)(Height + 0.5f)), TextFormatFlags.NoPadding).Width;
-            float offset = Width;
+            int measurement = (int)(ctx.MeasureString("0", iFont, 9999, iFormat).Width + 0.5f);
+            float offset;
             int charIndex = 0;
-            SetActualWidth(g);
-            string cutOffText = CutOff(g);
+            SetActualWidth(ctx);
+            string cutOffText = CutOff(ctx);
 
-            offset = Width - MeasureActualWidth(cutOffText, g);
+            offset = Width - MeasureActualWidth(cutOffText, ctx);
             if (HorizontalAlignment != StringAlignment.Far)
             {
                 offset = 0f;
@@ -121,7 +136,7 @@ public class SimpleLabel
 
             while (charIndex < cutOffText.Length)
             {
-                float curOffset = 0f;
+                float curOffset;
                 char curChar = cutOffText[charIndex];
 
                 if (char.IsDigit(curChar))
@@ -130,10 +145,10 @@ public class SimpleLabel
                 }
                 else
                 {
-                    curOffset = MeasureText(g, curChar.ToString(), Font, new Size((int)(Width + 0.5f), (int)(Height + 0.5f)), TextFormatFlags.NoPadding).Width;
+                    curOffset = (int)(ctx.MeasureString(curChar.ToString(), iFont, 9999, iFormat).Width + 0.5f);
                 }
 
-                DrawText(curChar.ToString(), g, X + offset - (curOffset / 2f), Y, curOffset * 2f, Height, monoFormat);
+                DrawText(curChar.ToString(), ctx, X + offset - (curOffset / 2f), Y, curOffset * 2f, Height, iFont, iBrush, monoFormat);
 
                 charIndex++;
                 offset += curOffset;
@@ -141,84 +156,102 @@ public class SimpleLabel
         }
     }
 
-    private void DrawText(string text, Graphics g, float x, float y, float width, float height, StringFormat format)
+    private void DrawText(string text, IDrawingContext ctx, float x, float y, float width, float height,
+        IFont iFont, IBrush iBrush, ITextFormat iFormat)
     {
-        if (text != null)
+        if (text == null)
         {
-            if (g.TextRenderingHint == TextRenderingHint.AntiAlias && OutlineColor.A > 0)
-            {
-                float fontSize = GetFontSize(g);
-                using var shadowBrush = new SolidBrush(ShadowColor);
-                using var gp = new GraphicsPath();
-                using var outline = new Pen(OutlineColor, GetOutlineSize(fontSize)) { LineJoin = LineJoin.Round };
-                if (HasShadow)
-                {
-                    gp.AddString(text, Font.FontFamily, (int)Font.Style, fontSize, new RectangleF(x + 1f, y + 1f, width, height), format);
-                    g.FillPath(shadowBrush, gp);
-                    gp.Reset();
-                    gp.AddString(text, Font.FontFamily, (int)Font.Style, fontSize, new RectangleF(x + 2f, y + 2f, width, height), format);
-                    g.FillPath(shadowBrush, gp);
-                    gp.Reset();
-                }
+            return;
+        }
 
-                gp.AddString(text, Font.FontFamily, (int)Font.Style, fontSize, new RectangleF(x, y, width, height), format);
-                g.DrawPath(outline, gp);
-                g.FillPath(Brush, gp);
-            }
-            else
-            {
-                if (HasShadow)
-                {
-                    using var shadowBrush = new SolidBrush(ShadowColor);
-                    g.DrawString(text, Font, shadowBrush, new RectangleF(x + 1f, y + 1f, width, height), format);
-                    g.DrawString(text, Font, shadowBrush, new RectangleF(x + 2f, y + 2f, width, height), format);
-                }
+        if (ctx.TextRenderingHint == TextRenderingHint.AntiAlias && OutlineColor.A > 0)
+        {
+            float fontSize = GetFontSize(ctx);
+            using IBrush shadowBrush = DrawingApi.Factory.CreateSolidBrush(ShadowColor);
+            using IGraphicsPath gp = DrawingApi.Factory.CreateGraphicsPath();
+            using IPen outline = DrawingApi.Factory.CreatePen(OutlineColor, GetOutlineSize(fontSize));
+            outline.LineJoin = LineJoin.Round;
 
-                g.DrawString(text, Font, Brush, new RectangleF(x, y, width, height), format);
+            // AddString on our IGraphicsPath uses the IFont's pixel size internally; GetFontSize()
+            // returns the font's apparent pixel size so the outline thickness stays in sync.
+            if (HasShadow)
+            {
+                gp.AddString(text, iFont, new RectangleF(x + 1f, y + 1f, width, height), iFormat);
+                ctx.FillPath(shadowBrush, gp);
+                gp.Reset();
+                gp.AddString(text, iFont, new RectangleF(x + 2f, y + 2f, width, height), iFormat);
+                ctx.FillPath(shadowBrush, gp);
+                gp.Reset();
             }
+
+            gp.AddString(text, iFont, new RectangleF(x, y, width, height), iFormat);
+            ctx.DrawPath(outline, gp);
+            ctx.FillPath(iBrush, gp);
+        }
+        else
+        {
+            if (HasShadow)
+            {
+                using IBrush shadowBrush = DrawingApi.Factory.CreateSolidBrush(ShadowColor);
+                ctx.DrawString(text, iFont, shadowBrush, new RectangleF(x + 1f, y + 1f, width, height), iFormat);
+                ctx.DrawString(text, iFont, shadowBrush, new RectangleF(x + 2f, y + 2f, width, height), iFormat);
+            }
+
+            ctx.DrawString(text, iFont, iBrush, new RectangleF(x, y, width, height), iFormat);
         }
     }
 
-    private float GetOutlineSize(float fontSize)
+    private static float GetOutlineSize(float fontSize)
     {
         return 2.1f + (fontSize * 0.055f);
     }
 
-    private float GetFontSize(Graphics g)
+    private float GetFontSize(IDrawingContext ctx)
     {
         if (Font.Unit == GraphicsUnit.Point)
         {
-            return Font.Size * g.DpiY / 72;
+            return Font.Size * ctx.DpiY / 72;
         }
 
         return Font.Size;
     }
 
-    public void SetActualWidth(Graphics g)
+    public void SetActualWidth(IDrawingContext ctx)
     {
         Format.Alignment = HorizontalAlignment;
         Format.LineAlignment = VerticalAlignment;
 
+        using IFont iFont = WrapFont();
+        ITextFormat iFormat = WrapFormat(Format);
+
         if (!IsMonospaced)
         {
-            ActualWidth = g.MeasureString(Text, Font, 9999, Format).Width;
+            ActualWidth = ctx.MeasureString(Text, iFont, 9999, iFormat).Width;
         }
         else
         {
-            ActualWidth = MeasureActualWidth(Text, g);
+            ActualWidth = MeasureActualWidth(Text, ctx);
         }
     }
 
-    public string CalculateAlternateText(Graphics g, float width)
+    public string CalculateAlternateText(IDrawingContext ctx, float width)
+    {
+        using IFont iFont = WrapFont();
+        ITextFormat iFormat = WrapFormat(Format);
+        return CalculateAlternateText(ctx, width, iFont, iFormat);
+    }
+
+    // Internal overload that reuses already-built IFont / ITextFormat across a Draw tick.
+    private string CalculateAlternateText(IDrawingContext ctx, float width, IFont iFont, ITextFormat iFormat)
     {
         string actualText = Text;
-        ActualWidth = g.MeasureString(Text, Font, 9999, Format).Width;
+        ActualWidth = ctx.MeasureString(Text, iFont, 9999, iFormat).Width;
         foreach (string curText in AlternateText.OrderByDescending(x => x.Length))
         {
             if (width < ActualWidth)
             {
                 actualText = curText;
-                ActualWidth = g.MeasureString(actualText, Font, 9999, Format).Width;
+                ActualWidth = ctx.MeasureString(actualText, iFont, 9999, iFormat).Width;
             }
             else
             {
@@ -229,10 +262,13 @@ public class SimpleLabel
         return actualText;
     }
 
-    private float MeasureActualWidth(string text, Graphics g)
+    private float MeasureActualWidth(string text, IDrawingContext ctx)
     {
+        using IFont iFont = WrapFont();
+        ITextFormat iFormat = WrapFormat(Format);
+
         int charIndex = 0;
-        int measurement = MeasureText(g, "0", Font, new Size((int)(Width + 0.5f), (int)(Height + 0.5f)), TextFormatFlags.NoPadding).Width;
+        int measurement = (int)(ctx.MeasureString("0", iFont, 9999, iFormat).Width + 0.5f);
         int offset = 0;
 
         while (charIndex < text.Length)
@@ -245,7 +281,7 @@ public class SimpleLabel
             }
             else
             {
-                offset += MeasureText(g, curChar.ToString(), Font, new Size((int)(Width + 0.5f), (int)(Height + 0.5f)), TextFormatFlags.NoPadding).Width;
+                offset += (int)(ctx.MeasureString(curChar.ToString(), iFont, 9999, iFormat).Width + 0.5f);
             }
 
             charIndex++;
@@ -254,7 +290,7 @@ public class SimpleLabel
         return offset;
     }
 
-    private string CutOff(Graphics g)
+    private string CutOff(IDrawingContext ctx)
     {
         if (ActualWidth < Width)
         {
@@ -265,7 +301,7 @@ public class SimpleLabel
         while (ActualWidth >= Width && !string.IsNullOrEmpty(cutOffText))
         {
             cutOffText = cutOffText.Remove(cutOffText.Length - 1, 1);
-            ActualWidth = MeasureActualWidth(cutOffText + "...", g);
+            ActualWidth = MeasureActualWidth(cutOffText + "...", ctx);
         }
 
         if (ActualWidth >= Width)
@@ -274,5 +310,31 @@ public class SimpleLabel
         }
 
         return cutOffText + "...";
+    }
+
+    // --- Factory bridges between the System.Drawing public API of SimpleLabel and the
+    //     abstract IDrawingContext resource types. Each call allocates a fresh wrapper;
+    //     Phase 5.4 (optimization) can introduce caching keyed on font family+size+style
+    //     and color if this shows up in profiles.
+
+    private IFont WrapFont()
+    {
+        return DrawingApi.Factory.CreateFont(
+            Font.FontFamily.Name, Font.Size, Font.Style, Font.Unit);
+    }
+
+    private IBrush WrapBrush()
+    {
+        return DrawingApi.Factory.CreateSolidBrush(ForeColor);
+    }
+
+    private static ITextFormat WrapFormat(StringFormat src)
+    {
+        ITextFormat f = DrawingApi.Factory.CreateTextFormat();
+        f.Alignment = src.Alignment;
+        f.LineAlignment = src.LineAlignment;
+        f.FormatFlags = src.FormatFlags;
+        f.Trimming = src.Trimming;
+        return f;
     }
 }

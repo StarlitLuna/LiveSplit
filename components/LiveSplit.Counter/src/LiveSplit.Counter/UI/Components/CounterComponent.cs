@@ -53,8 +53,9 @@ public class CounterComponent : IComponent
 
     private LiveSplitState state;
 
-    private void DrawGeneral(Graphics g, LiveSplitState state, float width, float height, LayoutMode mode)
+    private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
+        Graphics g = ctx.AsGraphics();
         // Set Background colour.
         if (Settings.BackgroundColor.A > 0
             || (Settings.BackgroundGradient != GradientType.Plain
@@ -100,7 +101,7 @@ public class CounterComponent : IComponent
         CounterNameLabel.HasShadow = state.LayoutSettings.DropShadows;
         CounterNameLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         CounterNameLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
-        CounterNameLabel.Draw(g);
+        CounterNameLabel.Draw(ctx);
 
         // Set Counter Value Label.
         CounterValueLabel.HorizontalAlignment = mode == LayoutMode.Horizontal ? StringAlignment.Far : StringAlignment.Far;
@@ -114,19 +115,19 @@ public class CounterComponent : IComponent
         CounterValueLabel.HasShadow = state.LayoutSettings.DropShadows;
         CounterValueLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         CounterValueLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
-        CounterValueLabel.Draw(g);
+        CounterValueLabel.Draw(ctx);
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, HorizontalWidth, height, LayoutMode.Horizontal);
+        DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, width, VerticalHeight, LayoutMode.Vertical);
+        DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
     }
 
     public string ComponentName => "Counter";

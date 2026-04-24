@@ -90,8 +90,9 @@ public class DetailedTimer : IComponent
         }
     }
 
-    public void DrawGeneral(Graphics g, LiveSplitState state, float width, float height)
+    public void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
+        Graphics g = ctx.AsGraphics();
         Timer.DrawBackground(g, InternalComponent.TimerColor, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
 
         int lastSplitOffset = state.CurrentSplitIndex == state.Run.Count ? -1 : 0;
@@ -241,7 +242,7 @@ public class DetailedTimer : IComponent
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, width, VerticalHeight);
+        DrawGeneral(ctx, state, width, VerticalHeight);
         Matrix oldMatrix = g.Transform;
         InternalComponent.Settings.TimerHeight = VerticalHeight * ((100f - Settings.SegmentTimerSizeRatio) / 100f);
         InternalComponent.DrawVertical(ctx, state, width, clipRegion);
@@ -255,7 +256,7 @@ public class DetailedTimer : IComponent
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, HorizontalWidth, height);
+        DrawGeneral(ctx, state, HorizontalWidth, height);
         Matrix oldMatrix = g.Transform;
         InternalComponent.Settings.TimerWidth = HorizontalWidth;
         InternalComponent.DrawHorizontal(ctx, state, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f), clipRegion);

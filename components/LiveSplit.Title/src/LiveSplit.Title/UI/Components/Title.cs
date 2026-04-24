@@ -77,8 +77,9 @@ public class Title : IComponent
         AttemptCountLabel = new SimpleLabel();
     }
 
-    private void DrawGeneral(Graphics g, LiveSplitState state, float width, float height, LayoutMode mode)
+    private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
+        Graphics g = ctx.AsGraphics();
         DrawBackground(g, width, height);
 
         TitleFont = Settings.OverrideTitleFont ? Settings.TitleFont : state.LayoutSettings.TextFont;
@@ -291,13 +292,13 @@ public class Title : IComponent
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, HorizontalWidth, height, LayoutMode.Horizontal);
+        DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, width, VerticalHeight, LayoutMode.Vertical);
+        DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
     }
 
     public string ComponentName => "Title";

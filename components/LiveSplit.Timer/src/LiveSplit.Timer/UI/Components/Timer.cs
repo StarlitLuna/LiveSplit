@@ -125,8 +125,9 @@ public class Timer : IComponent
         }
     }
 
-    private void DrawGeneral(Graphics g, LiveSplitState state, float width, float height)
+    private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
+        Graphics g = ctx.AsGraphics();
         DrawBackground(g, TimerColor, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
 
         if (state.LayoutSettings.TimerFont != TimerFont || Settings.DecimalsSize != PreviousDecimalsSize)
@@ -139,8 +140,8 @@ public class Timer : IComponent
         BigTextLabel.Font = BigMeasureLabel.Font = TimerFont;
         SmallTextLabel.Font = TimerDecimalPlacesFont;
 
-        BigMeasureLabel.SetActualWidth(g);
-        SmallTextLabel.SetActualWidth(g);
+        BigMeasureLabel.SetActualWidth(ctx);
+        SmallTextLabel.SetActualWidth(ctx);
 
         Matrix oldMatrix = g.Transform;
         float unscaledWidth = Math.Max(10, BigMeasureLabel.ActualWidth + SmallTextLabel.ActualWidth + 11);
@@ -157,13 +158,14 @@ public class Timer : IComponent
             g.TranslateTransform(-(width - (unscaledWidth * scale)) / 2f / scale, 0);
         }
 
-        DrawUnscaled(g, state, unscaledWidth, unscaledHeight);
+        DrawUnscaled(ctx, state, unscaledWidth, unscaledHeight);
         ActualWidth = scale * (SmallTextLabel.ActualWidth + BigTextLabel.ActualWidth);
         g.Transform = oldMatrix;
     }
 
-    public void DrawUnscaled(Graphics g, LiveSplitState state, float width, float height)
+    public void DrawUnscaled(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
+        Graphics g = ctx.AsGraphics();
         BigTextLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         BigTextLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
         BigTextLabel.HasShadow = state.LayoutSettings.DropShadows;
@@ -212,8 +214,8 @@ public class Timer : IComponent
             SmallTextLabel.Brush = smallTimerGradiantBrush;
         }
 
-        BigTextLabel.Draw(g);
-        SmallTextLabel.Draw(g);
+        BigTextLabel.Draw(ctx);
+        SmallTextLabel.Draw(ctx);
     }
 
     protected void UpdateTimeFormat()
@@ -268,13 +270,13 @@ public class Timer : IComponent
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, width, VerticalHeight);
+        DrawGeneral(ctx, state, width, VerticalHeight);
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, HorizontalWidth, height);
+        DrawGeneral(ctx, state, HorizontalWidth, height);
     }
 
     public Control GetSettingsControl(LayoutMode mode)

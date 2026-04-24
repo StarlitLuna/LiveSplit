@@ -48,8 +48,9 @@ public class LabelsComponent : IComponent
         ColumnWidths = columnWidths;
     }
 
-    private void DrawGeneral(Graphics g, LiveSplitState state, float width, float height, LayoutMode mode)
+    private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
+        Graphics g = ctx.AsGraphics();
         if (Settings.BackgroundGradient == ExtendedGradientType.Alternating)
         {
             g.FillRectangle(new SolidBrush(
@@ -93,13 +94,13 @@ public class LabelsComponent : IComponent
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, width, VerticalHeight, LayoutMode.Vertical);
+        DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, HorizontalWidth, height, LayoutMode.Horizontal);
+        DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }
 
     public string ComponentName => "Labels";

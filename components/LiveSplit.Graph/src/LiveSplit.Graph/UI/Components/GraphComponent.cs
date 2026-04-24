@@ -52,8 +52,9 @@ public class GraphComponent : IComponent
         MinDelta = TimeSpan.Zero;
     }
 
-    private void DrawGeneral(Graphics g, LiveSplitState state, float width, float height)
+    private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
+        Graphics g = ctx.AsGraphics();
         System.Drawing.Drawing2D.Matrix oldMatrix = g.Transform;
         if (Settings.FlipGraph)
         {
@@ -431,13 +432,13 @@ public class GraphComponent : IComponent
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, width, VerticalHeight);
+        DrawGeneral(ctx, state, width, VerticalHeight);
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, HorizontalWidth, height);
+        DrawGeneral(ctx, state, HorizontalWidth, height);
     }
 
     private void DrawLineShadowed(Graphics g, Pen pen, float x1, float y1, float x2, float y2, bool flipShadow)

@@ -35,41 +35,43 @@ public class BlankSpace : IComponent
         Settings = new BlankSpaceSettings();
     }
 
-    public static void DrawBackground(Graphics g, Color settingsColor1, Color settingsColor2,
+    public static void DrawBackground(IDrawingContext ctx, Color settingsColor1, Color settingsColor2,
         float width, float height, GradientType gradientType)
     {
         if (settingsColor1.A > 0
         || (gradientType != GradientType.Plain
         && settingsColor2.A > 0))
         {
-            var gradientBrush = new LinearGradientBrush(
-                        new PointF(0, 0),
-                        gradientType == GradientType.Horizontal
-                        ? new PointF(width, 0)
-                        : new PointF(0, height),
-                        settingsColor1,
-                        gradientType == GradientType.Plain
-                        ? settingsColor1
-                        : settingsColor2);
-            g.FillRectangle(gradientBrush, 0, 0, width, height);
+            if (gradientType == GradientType.Plain)
+            {
+                using ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(settingsColor1);
+                ctx.FillRectangle(brush, 0, 0, width, height);
+            }
+            else
+            {
+                var endPoint = gradientType == GradientType.Horizontal
+                    ? new PointF(width, 0)
+                    : new PointF(0, height);
+                using ILinearGradientBrush brush = DrawingApi.Factory.CreateLinearGradientBrush(
+                    new PointF(0, 0), endPoint, settingsColor1, settingsColor2);
+                ctx.FillRectangle(brush, 0, 0, width, height);
+            }
         }
     }
 
-    private void DrawGeneral(Graphics g, LiveSplitState state, float width, float height)
+    private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
-        DrawBackground(g, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
+        DrawBackground(ctx, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
     }
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, width, VerticalHeight);
+        DrawGeneral(ctx, state, width, VerticalHeight);
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        DrawGeneral(g, state, HorizontalWidth, height);
+        DrawGeneral(ctx, state, HorizontalWidth, height);
     }
 
     public Control GetSettingsControl(LayoutMode mode)

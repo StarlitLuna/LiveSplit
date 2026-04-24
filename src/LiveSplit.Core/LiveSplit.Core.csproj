@@ -34,21 +34,65 @@
     <PackageReference Include="WebSocketSharp" Version="1.0.3-rc11" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <PreBuildEvent>
-      mkdir "$(MSBuildProjectDirectory)\Updates\GitInfo\."
-      where git
-      if %25ERRORLEVEL%25 == 0 (
-        git describe --dirty --always --long --tags &gt; "$(MSBuildProjectDirectory)\Updates\GitInfo\version.txt"
-        git rev-parse --abbrev-ref HEAD &gt; "$(MSBuildProjectDirectory)\Updates\GitInfo\branch.txt"
-        git rev-parse HEAD &gt; "$(MSBuildProjectDirectory)\Updates\GitInfo\revision.txt"
-      ) else (
-        touch "$(MSBuildProjectDirectory)\Updates\GitInfo\version.txt"
-        touch "$(MSBuildProjectDirectory)\Updates\GitInfo\branch.txt"
-        touch "$(MSBuildProjectDirectory)\Updates\GitInfo\revision.txt"
-      )
-      EXIT 0
-    </PreBuildEvent>
-  </PropertyGroup>
+  <!-- Capture current git revision/branch/version into Updates/GitInfo/*.txt so the
+       auto-generated GitInfo.Designer.cs resource class can embed them at build time.
+       If git isn't available (or this is a non-git build drop), write empty files so
+       the embedded resources still exist and runtime readers see empty strings. -->
+  <Target Name="CaptureGitInfo" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <_GitInfoDir>$(MSBuildProjectDirectory)\Updates\GitInfo</_GitInfoDir>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(_GitInfoDir)" />
+
+    <Exec Command="git describe --dirty --always --long --tags"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitVersion" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitVersionExit" />
+    </Exec>
+    <Exec Command="git rev-parse --abbrev-ref HEAD"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitBranch" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitBranchExit" />
+    </Exec>
+    <Exec Command="git rev-parse HEAD"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitRevision" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitRevisionExit" />
+    </Exec>
+
+    <WriteLinesToFile File="$(_GitInfoDir)\version.txt"
+                      Lines="$(_GitVersion)"
+                      Overwrite="true"
+                      Condition="'$(_GitVersionExit)' == '0'" />
+    <WriteLinesToFile File="$(_GitInfoDir)\version.txt" Lines="" Overwrite="true"
+                      Condition="'$(_GitVersionExit)' != '0'" />
+
+    <WriteLinesToFile File="$(_GitInfoDir)\branch.txt"
+                      Lines="$(_GitBranch)"
+                      Overwrite="true"
+                      Condition="'$(_GitBranchExit)' == '0'" />
+    <WriteLinesToFile File="$(_GitInfoDir)\branch.txt" Lines="" Overwrite="true"
+                      Condition="'$(_GitBranchExit)' != '0'" />
+
+    <WriteLinesToFile File="$(_GitInfoDir)\revision.txt"
+                      Lines="$(_GitRevision)"
+                      Overwrite="true"
+                      Condition="'$(_GitRevisionExit)' == '0'" />
+    <WriteLinesToFile File="$(_GitInfoDir)\revision.txt" Lines="" Overwrite="true"
+                      Condition="'$(_GitRevisionExit)' != '0'" />
+  </Target>
 
 </Project>

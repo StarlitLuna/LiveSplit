@@ -25,27 +25,42 @@
   <ItemGroup>
   </ItemGroup>
 
-  <PropertyGroup>
-    <PostBuildEvent>
-      mkdir "$(OutputPath)\Resources"
-      copy "$(ResourcesPath)\SplitsFile.ico" "$(OutputPath)\Resources"
-      copy "$(ResourcesPath)\LayoutFile.ico" "$(OutputPath)\Resources"
-      rd /s /q "$(OutputPath)\runtimes"
-      del "$(OutputPath)\Microsoft.WindowsAPICodePack.ExtendedLinguisticServices.dll"
-      del "$(OutputPath)\Microsoft.WindowsAPICodePack.Sensors.dll"
-      del "$(OutputPath)\Microsoft.WindowsAPICodePack.ShellExtensions.dll"
-      del "$(OutputPath)\x64\asr_capi.dll"
-      del "$(OutputPath)\x86\asr_capi.dll"
-      del "$(OutputPath)\Components\SpeedrunComSharp.dll"
-      del "$(OutputPath)\Components\CustomFontDialog.dll"
-      del "$(OutputPath)\Components\CustomFontDialog.dll.config"
-      del "$(OutputPath)\Components\WinFormsColor.dll"
-      del "$(OutputPath)\Components\System.Buffers.dll"
-      del "$(OutputPath)\Components\System.Memory.dll"
-      del "$(OutputPath)\Components\System.Numerics.Vectors.dll"
-      del "$(OutputPath)\Components\System.Resources.Extensions.dll"
-      del "$(OutputPath)\Components\System.Runtime.CompilerServices.Unsafe.dll"
-    </PostBuildEvent>
-  </PropertyGroup>
+  <!-- Copy Splits/Layout file-association icons next to the binary, and prune transitive
+       dependencies that get mirrored into Components/ by the dynamic component build but
+       aren't needed there (they're resolved from the main app's directory at load time). -->
+  <Target Name="PostBuildCopyAndPrune" AfterTargets="Build">
+    <PropertyGroup>
+      <_ComponentsPath>$(OutputPath)\Components</_ComponentsPath>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(OutputPath)\Resources" />
+    <Copy SourceFiles="$(ResourcesPath)\SplitsFile.ico"
+          DestinationFolder="$(OutputPath)\Resources"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ResourcesPath)\LayoutFile.ico"
+          DestinationFolder="$(OutputPath)\Resources"
+          SkipUnchangedFiles="true" />
+
+    <RemoveDir Directories="$(OutputPath)\runtimes" />
+
+    <ItemGroup>
+      <_FilesToPrune Include="$(OutputPath)\Microsoft.WindowsAPICodePack.ExtendedLinguisticServices.dll" />
+      <_FilesToPrune Include="$(OutputPath)\Microsoft.WindowsAPICodePack.Sensors.dll" />
+      <_FilesToPrune Include="$(OutputPath)\Microsoft.WindowsAPICodePack.ShellExtensions.dll" />
+      <_FilesToPrune Include="$(OutputPath)\x64\asr_capi.dll" />
+      <_FilesToPrune Include="$(OutputPath)\x86\asr_capi.dll" />
+      <_FilesToPrune Include="$(_ComponentsPath)\SpeedrunComSharp.dll" />
+      <_FilesToPrune Include="$(_ComponentsPath)\CustomFontDialog.dll" />
+      <_FilesToPrune Include="$(_ComponentsPath)\CustomFontDialog.dll.config" />
+      <_FilesToPrune Include="$(_ComponentsPath)\WinFormsColor.dll" />
+      <_FilesToPrune Include="$(_ComponentsPath)\System.Buffers.dll" />
+      <_FilesToPrune Include="$(_ComponentsPath)\System.Memory.dll" />
+      <_FilesToPrune Include="$(_ComponentsPath)\System.Numerics.Vectors.dll" />
+      <_FilesToPrune Include="$(_ComponentsPath)\System.Resources.Extensions.dll" />
+      <_FilesToPrune Include="$(_ComponentsPath)\System.Runtime.CompilerServices.Unsafe.dll" />
+    </ItemGroup>
+
+    <Delete Files="@(_FilesToPrune)" />
+  </Target>
 
 </Project>

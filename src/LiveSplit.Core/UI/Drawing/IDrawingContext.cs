@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Numerics;
 
 namespace LiveSplit.UI.Drawing;
 
@@ -34,6 +35,14 @@ public interface IDrawingContext
     void TranslateTransform(float dx, float dy);
     void ScaleTransform(float sx, float sy);
     void ResetTransform();
+
+    /// <summary>
+    /// Current transform as a 2D affine matrix. <c>M11</c> and <c>M22</c> carry the scale on
+    /// X/Y, <c>M31</c> and <c>M32</c> the translation. Used by the layout renderer to compute
+    /// per-component bounds for culling without reaching through to the backend's Graphics/
+    /// SKCanvas directly.
+    /// </summary>
+    Matrix3x2 GetTransform();
 
     // --- Clip ---
     /// <summary>Set the clip region to the whole surface (no clipping).</summary>

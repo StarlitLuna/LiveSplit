@@ -174,6 +174,17 @@ public sealed class SkiaDrawingContext : IDrawingContext
 
     public void ResetTransform() => _canvas.ResetMatrix();
 
+    public System.Numerics.Matrix3x2 GetTransform()
+    {
+        SKMatrix m = _canvas.TotalMatrix;
+        // SKMatrix is 3x3 but the bottom row (perspective) is (0, 0, 1) for affine transforms.
+        // SKMatrix.Values layout: [ ScaleX, SkewX, TransX, SkewY, ScaleY, TransY, Persp0, Persp1, Persp2 ].
+        return new System.Numerics.Matrix3x2(
+            m11: m.ScaleX, m12: m.SkewY,
+            m21: m.SkewX, m22: m.ScaleY,
+            m31: m.TransX, m32: m.TransY);
+    }
+
     // --- Clip ---
 
     public void ClearClip()

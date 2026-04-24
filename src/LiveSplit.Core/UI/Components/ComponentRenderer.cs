@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 
+using System.Numerics;
+
 using LiveSplit.Model;
 using LiveSplit.Options;
 using LiveSplit.UI.Drawing;
@@ -25,50 +27,50 @@ public class ComponentRenderer
 
     private readonly Dictionary<IComponent, FontOverrides> _overrideLookup = [];
 
+    // Per-component draw helpers. The cursor-advancing TranslateTransform is applied at the
+    // CALLER's scope (outside the per-component Save in Render) so inter-component translation
+    // stacks across iterations, matching the GDI+ behavior. The inner clip+draw happens inside
+    // the caller's Save so each component's IntersectClip doesn't leak into the next.
     private void DrawVerticalComponent(int index, IDrawingContext ctx, LiveSplitState state, float width, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         IComponent component = VisibleComponents.ElementAt(index);
         float topPadding = Math.Min(GetPaddingAbove(index), component.PaddingTop) / 2f;
         float bottomPadding = Math.Min(GetPaddingBelow(index), component.PaddingBottom) / 2f;
         ctx.IntersectClip(new RectangleF(0, topPadding, width, component.VerticalHeight - topPadding - bottomPadding));
 
-        float scale = g.Transform.Elements.First();
+        Matrix3x2 t = ctx.GetTransform();
+        float scale = t.M11;
         int separatorOffset = component.VerticalHeight * scale < 3 ? 1 : 0;
 
-        if (clipRegion.IsVisible(new RectangleF(
-            g.Transform.OffsetX,
-            -separatorOffset + g.Transform.OffsetY - (topPadding * scale),
+        if (ctx.IsVisible(new RectangleF(
+            t.M31,
+            -separatorOffset + t.M32 - (topPadding * scale),
             width,
             (separatorOffset * 2f) + (scale * (component.VerticalHeight + bottomPadding)))))
         {
             component.DrawVertical(ctx, state, width, clipRegion);
         }
-
-        ctx.TranslateTransform(0.0f, component.VerticalHeight - (bottomPadding * 2f));
     }
 
     private void DrawHorizontalComponent(int index, IDrawingContext ctx, LiveSplitState state, float width, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         IComponent component = VisibleComponents.ElementAt(index);
         float leftPadding = Math.Min(GetPaddingToLeft(index), component.PaddingLeft) / 2f;
         float rightPadding = Math.Min(GetPaddingToRight(index), component.PaddingRight) / 2f;
         ctx.IntersectClip(new RectangleF(leftPadding, 0, component.HorizontalWidth - leftPadding - rightPadding, height));
 
-        float scale = g.Transform.Elements.First();
+        Matrix3x2 t = ctx.GetTransform();
+        float scale = t.M11;
         int separatorOffset = component.VerticalHeight * scale < 3 ? 1 : 0;
 
-        if (clipRegion.IsVisible(new RectangleF(
-            -separatorOffset + g.Transform.OffsetX - (leftPadding * scale),
-            g.Transform.OffsetY,
+        if (ctx.IsVisible(new RectangleF(
+            -separatorOffset + t.M31 - (leftPadding * scale),
+            t.M32,
             (separatorOffset * 2f) + (scale * (component.HorizontalWidth + rightPadding)),
             height)))
         {
             component.DrawHorizontal(ctx, state, height, clipRegion);
         }
-
-        ctx.TranslateTransform(component.HorizontalWidth - (rightPadding * 2f), 0.0f);
     }
 
     private float GetPaddingAbove(int index)
@@ -172,9 +174,11 @@ public class ComponentRenderer
         {
             try
             {
-                Graphics g = ctx.AsGraphics();
-                Region clip = g.Clip;
-                System.Drawing.Drawing2D.Matrix transform = g.Transform;
+                // Wrap the whole render in a Save so the outer transform/clip snap back after the
+                // per-component TranslateTransform stacking finishes, even on Skia where the
+                // state is not directly assignable.
+                using IDrawingState outerState = ctx.Save();
+
                 var crashedComponents = new List<IComponent>();
                 Dictionary<IComponent, FontOverrides> overrideLookup = BuildOverrideLookup(state);
                 int index = 0;
@@ -182,17 +186,37 @@ public class ComponentRenderer
                 {
                     try
                     {
-                        g.Clip = clip;
                         ApplyFontOverrides(overrideLookup, component, state.LayoutSettings, out Font origTimer, out Font origTimes, out Font origText);
                         try
                         {
+                            // Per-component Save so each component's local IntersectClip is
+                            // isolated from its neighbors, matching the old behavior of
+                            // resetting `g.Clip = clip;` before each component.
+                            using (IDrawingState componentState = ctx.Save())
+                            {
+                                if (mode == LayoutMode.Vertical)
+                                {
+                                    DrawVerticalComponent(index, ctx, state, width, height, clipRegion);
+                                }
+                                else
+                                {
+                                    DrawHorizontalComponent(index, ctx, state, width, height, clipRegion);
+                                }
+                            }
+
+                            // The stacking translate is applied OUTSIDE the per-component Save
+                            // so cursor advances persist across components, matching the
+                            // original GDI+ behavior (transform accumulates, clip resets).
+                            IComponent drawn = VisibleComponents.ElementAt(index);
                             if (mode == LayoutMode.Vertical)
                             {
-                                DrawVerticalComponent(index, ctx, state, width, height, clipRegion);
+                                float bottomPadding = Math.Min(GetPaddingBelow(index), drawn.PaddingBottom) / 2f;
+                                ctx.TranslateTransform(0.0f, drawn.VerticalHeight - (bottomPadding * 2f));
                             }
                             else
                             {
-                                DrawHorizontalComponent(index, ctx, state, width, height, clipRegion);
+                                float rightPadding = Math.Min(GetPaddingToRight(index), drawn.PaddingRight) / 2f;
+                                ctx.TranslateTransform(drawn.HorizontalWidth - (rightPadding * 2f), 0.0f);
                             }
                         }
                         finally
@@ -220,9 +244,6 @@ public class ComponentRenderer
                     });
                     VisibleComponents = remainingComponents;
                 }
-
-                g.Transform = transform;
-                g.Clip = clip;
             }
             finally
             {

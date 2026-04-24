@@ -75,6 +75,14 @@ public sealed class GdiPlusDrawingContext : IDrawingContext
     public void ScaleTransform(float sx, float sy) => _g.ScaleTransform(sx, sy);
     public void ResetTransform() => _g.ResetTransform();
 
+    public System.Numerics.Matrix3x2 GetTransform()
+    {
+        float[] e = _g.Transform.Elements;
+        // GDI+ Matrix.Elements lays out { m11, m12, m21, m22, dx, dy } — same order as
+        // System.Numerics.Matrix3x2's M11..M32 constructor args.
+        return new System.Numerics.Matrix3x2(e[0], e[1], e[2], e[3], e[4], e[5]);
+    }
+
     // --- Clip ---
 
     public void ClearClip() => _g.Clip = new Region();

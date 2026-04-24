@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
-using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using System.Xml;
 
@@ -177,11 +177,10 @@ public partial class CollectorSettings : UserControl
 
             if (result.IsSuccessStatusCode)
             {
-                var serializer = new JavaScriptSerializer();
-                var json = serializer.Deserialize<Dictionary<string, object>>(body);
-                var data = (Dictionary<string, object>)((Dictionary<string, object>)json["result"])["data"];
+                JsonNode json = JsonNode.Parse(body);
+                JsonNode data = json["result"]["data"];
                 string username = (string)data["username"];
-                string picture = data.ContainsKey("picture") ? (string)data["picture"] : null;
+                string picture = data["picture"] is JsonNode pic ? (string)pic : null;
 
                 ValidatedUsername = username;
                 SetStatus(ConnectionStatus.Connected);

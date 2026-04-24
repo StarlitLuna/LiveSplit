@@ -1,16 +1,16 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Dynamic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Web;
-using System.Web.Script.Serialization;
 
 namespace SpeedrunComSharp;
 
@@ -37,13 +37,76 @@ internal static class JSON
 
     public static dynamic FromString(string value)
     {
-        var serializer = new JavaScriptSerializer()
+        if (string.IsNullOrEmpty(value))
         {
-            MaxJsonLength = int.MaxValue
-        };
-        serializer.RegisterConverters(new[] { new DynamicJsonConverter() });
+            return null;
+        }
 
-        return serializer.Deserialize<object>(value);
+        JsonNode node = JsonNode.Parse(value);
+        return NodeToPoco(node);
+    }
+
+    // Convert a System.Text.Json node into the (Dictionary<string, object> / List<object> /
+    // primitive / null) shape that the legacy JavaScriptSerializer produced, wrapping
+    // object-nodes in DynamicJsonObject so existing `dynamic` consumers keep working.
+    private static object NodeToPoco(JsonNode node)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        if (node is JsonObject obj)
+        {
+            var dict = new Dictionary<string, object>();
+            foreach (KeyValuePair<string, JsonNode> kvp in obj)
+            {
+                dict[kvp.Key] = NodeToPoco(kvp.Value);
+            }
+
+            return new DynamicJsonObject(dict);
+        }
+
+        if (node is JsonArray arr)
+        {
+            var list = new List<object>(arr.Count);
+            foreach (JsonNode item in arr)
+            {
+                list.Add(NodeToPoco(item));
+            }
+
+            return list;
+        }
+
+        if (node is JsonValue val)
+        {
+            JsonElement element = val.GetValue<JsonElement>();
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.String:
+                    return element.GetString();
+                case JsonValueKind.True:
+                    return true;
+                case JsonValueKind.False:
+                    return false;
+                case JsonValueKind.Number:
+                    if (element.TryGetInt64(out long l))
+                    {
+                        return l;
+                    }
+
+                    if (element.TryGetDecimal(out decimal m))
+                    {
+                        return m;
+                    }
+
+                    return element.GetDouble();
+                case JsonValueKind.Null:
+                    return null;
+            }
+        }
+
+        return null;
     }
 
     public static dynamic FromUri(Uri uri, string userAgent, string accessToken, TimeSpan timeout)
@@ -87,26 +150,6 @@ internal static class JSON
 
         return FromResponse(response);
     }
-}
-
-public sealed class DynamicJsonConverter : JavaScriptConverter
-{
-    public override object Deserialize(IDictionary<string, object> dictionary, Type type, JavaScriptSerializer serializer)
-    {
-        if (dictionary == null)
-        {
-            throw new ArgumentNullException("dictionary");
-        }
-
-        return type == typeof(object) ? new DynamicJsonObject(dictionary) : null;
-    }
-
-    public override IDictionary<string, object> Serialize(object obj, JavaScriptSerializer serializer)
-    {
-        throw new NotImplementedException();
-    }
-
-    public override IEnumerable<Type> SupportedTypes => new ReadOnlyCollection<Type>(new List<Type>(new[] { typeof(object) }));
 }
 
 public sealed class DynamicJsonObject : DynamicObject
@@ -327,11 +370,11 @@ public sealed class DynamicJsonObject : DynamicObject
             return new DynamicJsonObject(dictionary);
         }
 
-        if (result is ArrayList arrayList && arrayList.Count > 0)
+        if (result is IList<object> list && list.Count > 0)
         {
-            return arrayList[0] is IDictionary<string, object>
-                ? new List<object>(arrayList.Cast<IDictionary<string, object>>().Select(x => new DynamicJsonObject(x)))
-                : new List<object>(arrayList.Cast<object>());
+            return list[0] is IDictionary<string, object>
+                ? new List<object>(list.Cast<IDictionary<string, object>>().Select(x => new DynamicJsonObject(x)))
+                : new List<object>(list);
         }
 
         return result;

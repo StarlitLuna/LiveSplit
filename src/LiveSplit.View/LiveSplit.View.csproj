@@ -3,7 +3,6 @@
   <PropertyGroup>
     <RootNamespace>LiveSplit</RootNamespace>
     <UseWindowsForms>true</UseWindowsForms>
-    <TargetFramework>net4.8.1</TargetFramework>
 
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
   </PropertyGroup>
@@ -16,13 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all" />
     <PackageReference Include="System.Resources.Extensions" Version="6.0.0" />
     <PackageReference Include="WindowsAPICodePack" Version="8.0.6" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
 
 </Project>

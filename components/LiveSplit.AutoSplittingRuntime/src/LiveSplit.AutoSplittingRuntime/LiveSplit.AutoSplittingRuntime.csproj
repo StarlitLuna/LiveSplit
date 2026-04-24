@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <UseWindowsForms>true</UseWindowsForms>
-    <TargetFramework>net4.8.1</TargetFramework>
 
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableDynamicLoading>true</EnableDynamicLoading>
@@ -19,11 +18,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
 
 </Project>

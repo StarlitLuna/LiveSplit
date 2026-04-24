@@ -60,7 +60,11 @@ public class AutoSplitterXML
             "WebAssembly Script is downloaded even though Type \"Component\" is specified");
         Assert.True(!autoSplitters.Values.Any(x => x.URLs.Any(y => y.EndsWith(".wasm")) && x.Type == AutoSplitterType.Script),
             "WebAssembly Script is downloaded even though ScriptType \"AutoSplittingRuntime\" is not specified");
-        Assert.True(!autoSplitters.Values.Any(x => x.URLs.Any(y => !Uri.IsWellFormedUriString(y, UriKind.Absolute))),
+        // Uri.TryCreate (vs. Uri.IsWellFormedUriString) so we accept URLs that contain
+        // percent-encoded non-ASCII chars like `%E2%80%93` (en-dash). These are technically
+        // ambiguous under strict RFC 3986 and rejected by IsWellFormedUriString on .NET 8+,
+        // but work fine in practice when fetched over HTTP.
+        Assert.True(!autoSplitters.Values.Any(x => x.URLs.Any(y => !Uri.TryCreate(y, UriKind.Absolute, out _))),
             "Auto Splitters need to have valid URLs");
         Assert.True(!autoSplitters.Values.Any(x => x.URLs.Any(y => Regex.IsMatch(y, "https://github.com/[^/]*/[^/]*/blob/"))),
             "URLs leading to GitHub should use the raw file link");

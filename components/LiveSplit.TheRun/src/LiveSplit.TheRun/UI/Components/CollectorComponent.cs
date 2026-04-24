@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
-using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using System.Xml;
 
@@ -72,8 +72,7 @@ public class CollectorComponent : LogicComponent
 
         object returnData = buildLiveRunData();
 
-        var serializer = new JavaScriptSerializer();
-        var content = new StringContent(serializer.Serialize(returnData));
+        var content = new StringContent(JsonSerializer.Serialize(returnData));
 
         await httpClient.PostAsync(SplitWebhookUrl, content, token);
     }
@@ -255,8 +254,7 @@ public class CollectorComponent : LogicComponent
         result.EnsureSuccessStatusCode();
         string responseBody = await result.Content.ReadAsStringAsync();
 
-        var ser = new JavaScriptSerializer();
-        Dictionary<string, string> jsonObj = ser.Deserialize<Dictionary<string, string>>(responseBody);
+        Dictionary<string, string> jsonObj = JsonSerializer.Deserialize<Dictionary<string, string>>(responseBody);
 
         string url = HttpUtility.UrlDecode(jsonObj["url"]);
         string correctlyEncodedUrl = EncodeUrl(url);

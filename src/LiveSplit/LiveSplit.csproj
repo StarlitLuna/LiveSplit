@@ -5,7 +5,6 @@
 
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
-    <TargetFramework>net4.8.1</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,7 +23,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all" />
   </ItemGroup>
 
   <PropertyGroup>

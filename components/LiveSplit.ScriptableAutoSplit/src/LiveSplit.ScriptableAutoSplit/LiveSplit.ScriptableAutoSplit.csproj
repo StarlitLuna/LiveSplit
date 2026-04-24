@@ -3,7 +3,6 @@
   <PropertyGroup>
     <RootNamespace>LiveSplit</RootNamespace>
     <UseWindowsForms>true</UseWindowsForms>
-    <TargetFramework>net4.8.1</TargetFramework>
 
     <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
@@ -15,11 +14,9 @@
 
   <ItemGroup>
     <PackageReference Include="Irony" Version="1.1.0" />
-    <PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
 
 </Project>

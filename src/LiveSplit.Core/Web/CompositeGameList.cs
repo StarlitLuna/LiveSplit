@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Web.Script.Serialization;
+using System.Text.Json;
 
 using LiveSplit.Options;
 using LiveSplit.Web.Share;
@@ -89,14 +89,14 @@ public class CompositeGameList
 
     private void SaveToCache()
     {
-        string jsonString = new JavaScriptSerializer().Serialize(gameIDs);
+        string jsonString = JsonSerializer.Serialize(gameIDs);
         File.WriteAllText(CacheFilename, jsonString);
     }
 
     private void LoadFromCache()
     {
         string jsonString = File.ReadAllText(CacheFilename);
-        gameIDs = new JavaScriptSerializer().Deserialize<Dictionary<string, string>>(jsonString);
+        gameIDs = JsonSerializer.Deserialize<Dictionary<string, string>>(jsonString);
         gameNames = gameIDs.Keys.ToArray();
     }
 }

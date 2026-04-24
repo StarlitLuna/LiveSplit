@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <UseWindowsForms>true</UseWindowsForms>
-    <TargetFramework>net4.8.1</TargetFramework>
 
     <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
@@ -14,7 +13,6 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="1.7.3" />
-    <PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

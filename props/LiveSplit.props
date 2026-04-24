@@ -2,10 +2,17 @@
 
   <!-- Project properties. -->
   <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <LangVersion>12</LangVersion>
 
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <Nullable>disable</Nullable>
+
+    <!-- BinaryFormatter is disabled by default on .NET 8+; LiveSplit still uses it to (de)serialize
+         Font/Image/ISegment blobs for .lss / .lsl round-trip. Opt back in at the app level; format
+         migration is deferred. BinaryFormatter is removed entirely on .NET 9+, so this must be
+         addressed before a .NET 9 upgrade. -->
+    <EnableUnsafeBinaryFormatterSerialization>true</EnableUnsafeBinaryFormatterSerialization>
   </PropertyGroup>
 
   <!-- Output properties. -->

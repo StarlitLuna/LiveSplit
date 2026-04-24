@@ -4,7 +4,6 @@
     <ApplicationIcon>Update.ico</ApplicationIcon>
 
     <UseWindowsForms>true</UseWindowsForms>
-    <TargetFramework>net4.8.1</TargetFramework>
 
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
     <Configurations>$(Configurations);UpdateManagerExe</Configurations>
@@ -16,7 +15,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

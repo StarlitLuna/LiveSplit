@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 
+using LiveSplit.Avalonia;
 using LiveSplit.Localization;
 using LiveSplit.UI.Drawing;
 using LiveSplit.UI.Drawing.GdiPlus;
@@ -17,6 +19,15 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // Phase 5.2b opt-in flag: launch the Avalonia vertical slice instead of WinForms.
+        // Removed in Phase 5.3+ once Avalonia becomes the only UI.
+        if (args.Contains("--avalonia"))
+        {
+            InitializeLocalization();
+            AvaloniaProgram.Run(args);
+            return;
+        }
+
         try
         {
             InitializeLocalization();

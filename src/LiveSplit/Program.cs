@@ -3,6 +3,8 @@ using System.IO;
 using System.Windows.Forms;
 
 using LiveSplit.Localization;
+using LiveSplit.UI.Drawing;
+using LiveSplit.UI.Drawing.GdiPlus;
 using LiveSplit.View;
 
 namespace LiveSplit;
@@ -18,6 +20,7 @@ internal static class Program
         try
         {
             InitializeLocalization();
+            DrawingApi.Register(new GdiPlusDrawingFactory());
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Environment.CurrentDirectory = Path.GetDirectoryName(Application.ExecutablePath);

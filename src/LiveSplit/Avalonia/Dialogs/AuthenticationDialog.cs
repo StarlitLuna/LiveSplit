@@ -6,7 +6,6 @@ using global::Avalonia.Layout;
 
 namespace LiveSplit.Avalonia.Dialogs;
 
-/// <summary>Avalonia counterpart of <c>LiveSplit.View.AuthenticationDialog</c>.</summary>
 public sealed class AuthenticationDialog : Window
 {
     public string Username { get; set; }

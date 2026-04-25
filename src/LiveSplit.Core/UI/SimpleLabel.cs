@@ -302,10 +302,9 @@ public class SimpleLabel
         return cutOffText + "...";
     }
 
-    // --- Factory bridges between the System.Drawing public API of SimpleLabel and the
-    //     abstract IDrawingContext resource types. Each call allocates a fresh wrapper;
-    //     Phase 5.4 (optimization) can introduce caching keyed on font family+size+style
-    //     and color if this shows up in profiles.
+    // Factory bridges between the System.Drawing public API of SimpleLabel and the abstract
+    // IDrawingContext resource types. Each call allocates a fresh wrapper; if profiling shows
+    // this dominates, a font-family+size+style+color cache could be added here.
 
     private IFont WrapFont()
     {

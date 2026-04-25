@@ -12,18 +12,14 @@ using global::Avalonia.Media;
 namespace LiveSplit.UI;
 
 /// <summary>
-/// Auto-generates an Avalonia settings panel from an arbitrary settings object's public read/write
-/// properties. The panel pairs each property with a widget appropriate for its type
-/// (bool → <see cref="CheckBox"/>, enum → <see cref="ComboBox"/>, numeric/string →
-/// <see cref="TextBox"/>, <see cref="System.Drawing.Color"/> → button-with-swatch).
+/// Auto-generates an Avalonia settings panel from an arbitrary object's public read/write
+/// properties. Each property maps to a widget appropriate for its type: bool →
+/// <see cref="CheckBox"/>, enum → <see cref="ComboBox"/>, numeric/string → <see cref="TextBox"/>,
+/// <see cref="System.Drawing.Color"/> → swatch + hex textbox. Properties of unsupported types
+/// (Font, list-of-complex-objects, …) are skipped silently.
 ///
-/// Phase 5.3d uses this so the 31+ component <c>ComponentSettings</c> classes don't each need a
-/// hand-written XAML; a "good enough" Linux UI ships immediately, and per-component XAML rewrites
-/// can replace the generated panel one at a time afterward without breaking compatibility.
-///
-/// Settings round-trip through XML is handled by the existing <c>SetSettings</c> /
-/// <c>GetSettings</c> methods on the WinForms UserControl side — this helper only reads/writes
-/// the same public properties that the WinForms data bindings already touch.
+/// XML round-trip of the underlying settings object is the caller's responsibility — this
+/// builder only reads / writes the same public properties any other consumer would touch.
 /// </summary>
 public static class AvaloniaSettingsBuilder
 {
@@ -137,10 +133,8 @@ public static class AvaloniaSettingsBuilder
             return BuildTextRow(target, prop, isNumeric: true);
         }
 
-        // Other property types (System.Drawing.Font, lists of complex objects, etc.) aren't
-        // supported by the auto-generator. The WinForms dialog still handles them; on Avalonia
-        // those settings round-trip through XML but aren't user-editable until a hand-written
-        // XAML lands.
+        // Unsupported property type (System.Drawing.Font, lists of complex objects, etc.) —
+        // skip; the value still round-trips through XML, just isn't editable in this panel.
         return null;
     }
 

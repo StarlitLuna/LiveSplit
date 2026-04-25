@@ -17,7 +17,7 @@
 # asr_capi.so is not built here: upstream livesplit-core doesn't ship a C API for the
 # auto-splitting crate. That wrapper lives in a separate repo; package the resulting .so
 # into components/LiveSplit.AutoSplittingRuntime/src/LiveSplit.AutoSplittingRuntime/runtimes/
-# manually once available. See the Phase 6 note in the linux-port plan.
+# manually once available.
 
 set -euo pipefail
 

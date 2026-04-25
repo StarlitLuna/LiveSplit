@@ -7,8 +7,7 @@ using global::Avalonia.Layout;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Minimal text-input dialog used by the Avalonia front-end where the WinForms version uses
-/// inline grid editing or InputBox-style prompts.
+/// Minimal modal text-input prompt — title, message, single-line editor, OK/Cancel.
 /// </summary>
 public sealed class TextInputDialog : Window
 {

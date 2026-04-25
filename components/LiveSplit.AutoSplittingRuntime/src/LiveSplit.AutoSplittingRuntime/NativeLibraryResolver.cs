@@ -7,15 +7,11 @@ using System.Runtime.InteropServices;
 namespace LiveSplit.AutoSplittingRuntime;
 
 /// <summary>
-/// Replaces the old <c>ASRLoader</c> <c>kernel32.LoadLibrary</c> trick for the
-/// AutoSplittingRuntime's <c>asr_capi</c> native dependency. Same pattern as
-/// <c>src/LiveSplit.Core/NativeLibraryResolver.cs</c>: a module initializer installs a
-/// <see cref="NativeLibrary.SetDllImportResolver"/> hook that resolves out of the standard
-/// <c>runtimes/{rid}/native/</c> layout.
-///
-/// Duplicated between the two assemblies because <c>SetDllImportResolver</c> is registered
-/// per-assembly — LiveSplit.Core and LiveSplit.AutoSplittingRuntime each need their own
-/// module initializer to intercept the DllImports declared on their own types.
+/// Resolves the <c>asr_capi</c> native dependency out of the standard
+/// <c>runtimes/{rid}/native/</c> layout. Duplicated from
+/// <c>src/LiveSplit.Core/NativeLibraryResolver.cs</c> because
+/// <see cref="NativeLibrary.SetDllImportResolver"/> is per-assembly: each assembly's
+/// own DllImport declarations need their own module initializer to be intercepted.
 /// </summary>
 internal static class NativeLibraryResolver
 {
@@ -38,8 +34,6 @@ internal static class NativeLibraryResolver
             return IntPtr.Zero;
         }
 
-        // The AutoSplittingRuntime component ships under <host>/Components/; its runtimes/
-        // folder shadows the main runtimes/ by RID/arch.
         foreach (string rid in CandidateRids())
         {
             string nativeDir = Path.Combine(baseDir, "runtimes", rid, "native");
@@ -55,7 +49,7 @@ internal static class NativeLibraryResolver
             }
         }
 
-        // Legacy layout: Components/x64/asr_capi.dll, Components/x86/asr_capi.dll (pre-Phase 6).
+        // Legacy flat layout: Components/x64/asr_capi.dll or Components/x86/asr_capi.dll.
         string archDir = RuntimeInformation.ProcessArchitecture == Architecture.X86 ? "x86" : "x64";
         string legacy = Path.Combine(baseDir, archDir, PlatformFileName(libraryName));
         if (File.Exists(legacy) && NativeLibrary.TryLoad(legacy, out IntPtr legacyHandle))

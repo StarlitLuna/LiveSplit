@@ -13,14 +13,10 @@ using LiveSplit.Avalonia.Dialogs;
 namespace LiveSplit.Avalonia;
 
 /// <summary>
-/// Avalonia replacement for <c>TimerForm</c>. Hosts a <see cref="SkiaRenderControl"/> backed by
-/// an <see cref="AvaloniaTimerHost"/>, plus window-focused split/reset/skip/undo/pause keys
-/// (global hotkeys + gamepad were dropped as part of Phase 1 — see plan). Window dragging is
-/// wired through Avalonia's <see cref="Window.BeginMoveDrag"/>; transparency is left at the
-/// solid-background "good enough" default per the linux-port plan's fallback.
-///
-/// Right-click brings up a context menu with the dialog surface migrated in Phase 5.3d:
-/// Edit Splits / Edit Layout / Settings / Set Size / About / Close.
+/// Hosts a <see cref="SkiaRenderControl"/> backed by an <see cref="AvaloniaTimerHost"/>, plus
+/// window-focused split/reset/skip/undo/pause keys. Window dragging is wired through
+/// <see cref="Window.BeginMoveDrag"/>; right-click opens a context menu for editing splits /
+/// layout / settings / size / about / close.
 /// </summary>
 public sealed partial class TimerWindow : Window
 {
@@ -67,8 +63,8 @@ public sealed partial class TimerWindow : Window
             canvas.Host = Host;
         }
 
-        // Left-click on the window background drags. Match TimerForm's WM_NCLBUTTONDOWN trick.
-        // Right-click opens the context menu (wired via XAML) — Avalonia handles that itself.
+        // Tunnel-phase so the handler runs even when child controls swallow the bubble; the
+        // right-click ContextMenu wired via XAML still surfaces normally.
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
         Closed += OnClosed;
     }

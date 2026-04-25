@@ -9,10 +9,9 @@ using LiveSplit.UI;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Avalonia replacement for the WinForms <c>LayoutSettingsDialog</c>. Edits the
-/// <c>LayoutSettings</c> object (background, fonts, shadow color, text color, etc.).
-/// Uses the auto-generated panel — works for everything but Font fields, which the
-/// reflection builder skips (Phase 5.4 will add a font picker).
+/// Edits the <c>LayoutSettings</c> object (background, fonts, shadow color, text color, etc.)
+/// via the reflection-driven <see cref="AvaloniaSettingsBuilder"/>. Font fields are not
+/// editable here — the auto-generated panel skips them.
 /// </summary>
 public sealed class LayoutSettingsDialog : Window
 {

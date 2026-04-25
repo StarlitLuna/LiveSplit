@@ -8,8 +8,8 @@ using global::Avalonia.Layout;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Avalonia counterpart of <c>LiveSplit.View.SetSizeForm</c>. Lets the user set explicit
-/// width/height on the timer window and optionally lock the aspect ratio.
+/// Lets the user set explicit width/height on the timer window and optionally lock the
+/// aspect ratio.
 /// </summary>
 public sealed class SetSizeForm : Window
 {
@@ -47,9 +47,6 @@ public sealed class SetSizeForm : Window
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
             Margin = new Thickness(20),
         };
-        // Avalonia 11 doesn't expose Row/ColumnSpacing on Grid directly — leave default and
-        // use per-control margins below if needed.
-
         Add(grid, new TextBlock { Text = "Width:", VerticalAlignment = VerticalAlignment.Center }, 0, 0);
         Add(grid, _widthBox, 0, 1);
         Add(grid, new TextBlock { Text = "Height:", VerticalAlignment = VerticalAlignment.Center }, 1, 0);

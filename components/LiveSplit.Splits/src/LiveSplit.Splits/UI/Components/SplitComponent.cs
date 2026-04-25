@@ -188,8 +188,8 @@ public class SplitComponent : IComponent
                 }
 
                 ImageAnimator.UpdateFrames(shadow);
-                // Split icons + shadow are System.Drawing.Image from the XML loader; Phase 7
-                // migrates the image pipeline. Until then this branch gates Skia compatibility.
+                // Split icons + shadow are System.Drawing.Image from the XML loader, so these
+                // draw calls require a GDI+ backing.
                 Graphics g = ctx.AsGraphics();
                 if (Settings.IconShadows && shadow != null)
                 {

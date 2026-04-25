@@ -9,11 +9,9 @@ using LiveSplit.UI;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Avalonia replacement for the WinForms <c>SettingsDialog</c> (general LiveSplit settings —
-/// display options, comparison generators, race providers, language, etc.). Uses the reflection-
-/// based <see cref="AvaloniaSettingsBuilder"/> to expose the boolean / numeric / enum / color
-/// settings on <c>ISettings</c> automatically. The Hotkeys tab is gone by design (Phase 1
-/// removed global hotkeys + gamepad). Race providers and updater settings use sub-dialogs.
+/// General LiveSplit settings (display options, comparison generators, race providers,
+/// language, etc.). Uses <see cref="AvaloniaSettingsBuilder"/> to surface the boolean / numeric
+/// / enum / color settings on <c>ISettings</c> via reflection.
 /// </summary>
 public sealed class SettingsDialog : Window
 {

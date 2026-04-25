@@ -12,15 +12,10 @@ using LiveSplit.UI.Components;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Avalonia replacement for the WinForms <c>RunEditorDialog</c>. The full WinForms version is
-/// ~2000 lines: per-segment Best Segment time editing across multiple comparisons + timing
-/// methods, run history viewer, splits.io / Speedrun.com submit/import, custom variables,
-/// game icon picker, and inline category/game autocomplete from speedrun.com.
-///
-/// This Avalonia v1 covers the core flows that block users on Linux: edit game/category/offset/
-/// attempt count, edit per-segment names, add/remove/reorder segments. Time editing across
-/// comparisons + Best Segment maintenance is deferred — the Speedrun.com submit/import flow is
-/// gated to Windows for now.
+/// Edits the run's game/category/offset/attempt count and the per-segment list (add /
+/// remove / rename / reorder). Per-segment Best Segment time editing across comparisons +
+/// timing methods, run history, custom variables, game icon picker, and Speedrun.com
+/// submit/import are not implemented here.
 /// </summary>
 public sealed class RunEditorDialog : Window
 {

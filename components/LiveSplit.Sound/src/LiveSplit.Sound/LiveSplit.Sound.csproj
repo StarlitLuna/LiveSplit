@@ -5,8 +5,8 @@
 
     <EnableDynamicLoading>true</EnableDynamicLoading>
 
-    <!-- Excluded from non-Windows builds: NAudio is Windows-only. Linux audio playback would
-         need a different backend (PulseAudio / PipeWire / ALSA), out of scope for the port. -->
+    <!-- Windows-only: NAudio is a Windows-only audio library. The non-Windows configuration
+         below compiles an empty Library so the solution still builds. -->
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">

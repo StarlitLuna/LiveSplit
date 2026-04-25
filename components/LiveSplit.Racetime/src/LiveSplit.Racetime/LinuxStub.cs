@@ -1,8 +1,7 @@
-// Stub source used when LiveSplit.Racetime is built on non-Windows hosts. The real Racetime
-// integration is excluded by the OS-conditional ItemGroup in LiveSplit.Racetime.csproj
-// (Microsoft.Web.WebView2 + DarkUI + Ookii.Dialogs.WinForms are all Windows-only). Linux
-// users who want racetime.gg integration would need a WebView2 alternative, out of scope
-// for the current Linux port.
+// Placeholder so the project compiles on non-Windows hosts where Microsoft.Web.WebView2,
+// DarkUI, and Ookii.Dialogs.WinForms (and therefore the real Racetime sources) are
+// unavailable. The OS-conditional ItemGroup in the .csproj excludes the real sources on
+// those platforms.
 namespace LiveSplit.Racetime
 {
     internal static class LinuxStub

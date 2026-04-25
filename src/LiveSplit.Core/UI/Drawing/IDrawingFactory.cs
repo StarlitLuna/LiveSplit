@@ -6,9 +6,9 @@ using System.Runtime.InteropServices;
 namespace LiveSplit.UI.Drawing;
 
 /// <summary>
-/// Creates backend-specific drawing resources (brushes, pens, fonts, images, paths, text formats).
-/// Components use <see cref="DrawingApi.Factory"/> rather than constructing System.Drawing types
-/// directly, so the whole stack can be swapped in Phase 5 when we replace GDI+ with SkiaSharp.
+/// Creates backend-specific drawing resources (brushes, pens, fonts, images, paths, text
+/// formats). Consumers go through <see cref="DrawingApi.Factory"/> instead of constructing
+/// System.Drawing types directly so the rendering backend can be swapped at runtime.
 /// </summary>
 public interface IDrawingFactory
 {
@@ -30,17 +30,15 @@ public interface IDrawingFactory
 }
 
 /// <summary>
-/// Selects the drawing backend for the current OS. Today: GDI+ on Windows only (Phase 4a has
-/// no Linux backend yet — that lands with the Avalonia/SkiaSharp swap in Phase 5).
+/// Process-wide registry for the active <see cref="IDrawingFactory"/>. The application
+/// entry point registers a factory before any drawing work happens.
 /// </summary>
 public static class DrawingApi
 {
     private static IDrawingFactory _factory;
 
     /// <summary>
-    /// The active drawing factory. Lazily initializes to <c>GdiPlusDrawingFactory</c> on Windows
-    /// via the registered default resolver; other platforms must explicitly register a factory
-    /// before any drawing work happens (Phase 5 does this at app startup).
+    /// The active drawing factory. Throws if no factory has been registered yet.
     /// </summary>
     public static IDrawingFactory Factory
     {
@@ -49,19 +47,15 @@ public static class DrawingApi
             if (_factory is null)
             {
                 throw new InvalidOperationException(
-                    $"No IDrawingFactory has been registered. On Windows this is wired up by " +
-                    $"{nameof(LiveSplit.UI.Drawing.GdiPlus)}.GdiPlusDrawingFactory; on Linux the " +
-                    $"Phase 5 Avalonia/SkiaSharp bootstrap must register one at startup.");
+                    "No IDrawingFactory has been registered. The application entry point must " +
+                    "call DrawingApi.Register(...) before any rendering occurs.");
             }
 
             return _factory;
         }
     }
 
-    /// <summary>
-    /// Register the drawing factory for this process. Called once at app startup — on Windows
-    /// by the WinForms entry point, on Linux by the Avalonia entry point (Phase 5).
-    /// </summary>
+    /// <summary>Register the drawing factory for this process. Called once at app startup.</summary>
     public static void Register(IDrawingFactory factory)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));

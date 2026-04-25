@@ -3,13 +3,9 @@ using System.Drawing;
 namespace LiveSplit.UI.Drawing;
 
 /// <summary>
-/// Shared component-background painter. The core `Settings.BackgroundColor /
-/// BackgroundColor2 / BackgroundGradient` triple is duplicated across ~15 components (ComparisonTime,
-/// CurrentComparison, Delta, PossibleTimeSave, PreviousSegment, RunPrediction, SumOfBest,
-/// TotalPlaytime, WorldRecord, Timer, Title, Counter, DetailedTimer, SumOfBest, plus BlankSpace
-/// itself). They each ship a private `DrawBackground(Graphics, …)` helper with an identical body.
-/// This helper replaces all of them with a single IDrawingContext-based call that both GDI+
-/// and Skia backends support.
+/// Shared component-background painter. Many components configure their background as a
+/// <c>BackgroundColor / BackgroundColor2 / BackgroundGradient</c> triple; this helper paints
+/// that triple into a <c>(0, 0, width, height)</c> rect through either drawing backend.
 /// </summary>
 public static class BackgroundHelper
 {

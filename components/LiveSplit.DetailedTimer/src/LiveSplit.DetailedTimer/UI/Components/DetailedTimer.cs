@@ -121,8 +121,8 @@ public class DetailedTimer : IComponent
 
             ImageAnimator.UpdateFrames(icon);
 
-            // Split icon is a System.Drawing.Image from the XML loader; Phase 7 migrates
-            // the image pipeline. Until then, this branch gates Skia compatibility.
+            // Split icon is a System.Drawing.Image from the XML loader, so this draw call
+            // requires a GDI+ backing.
             ctx.AsGraphics().DrawImage(
                 icon,
                 7 + ((originalDrawSize - drawWidth) / 2),

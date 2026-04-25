@@ -10,20 +10,11 @@ namespace LiveSplit.UI;
 
 public class SettingsHelper
 {
-    // GetFontDialog and ColorButtonClick wrapped the third-party CustomFontDialog /
-    // Fetze.WinFormsColor libraries deleted at the end of Phase 5. The component
-    // ComponentSettings.cs classes still reference ColorButtonClick from their WinForms
-    // Designer-generated click handlers, so we keep a signature-compatible no-op here:
-    // the Avalonia front-end never calls these paths (settings UI goes through
-    // AvaloniaSettingsBuilder instead), and the WinForms UserControl code path is dead
-    // at runtime since TimerForm was retired.
-
+    // No-op kept only to satisfy designer-generated click handlers in component
+    // ComponentSettings.cs classes that reference it. The Avalonia settings UI does
+    // not invoke this path; the WinForms UserControl code path is dead at runtime.
     public static void ColorButtonClick(Button button, Control control)
     {
-        // No-op: the WinForms color picker library was deleted along with TimerForm.
-        // Left as a stub so the existing designer-generated handlers on component
-        // ComponentSettings.cs classes still compile — those handlers are unreachable
-        // from the Avalonia runtime.
     }
 
     public static string FormatFont(Font font)

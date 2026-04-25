@@ -74,8 +74,9 @@ internal sealed class SkiaPen : IPen
         _ => SKStrokeJoin.Miter,
     };
 
-    // Skia only has one stroke cap per paint; Graph rendering sets StartCap == EndCap so we
-    // collapse to a single value — prefer round/square if either endpoint requests it.
+    // Skia only has one stroke cap per paint, so we collapse Start/End to a single value —
+    // preferring round/square if either endpoint requests it. GDI+ callers that set both ends
+    // to the same cap (the common case) get the expected result.
     public SKStrokeCap SkStrokeCap
     {
         get
@@ -178,10 +179,9 @@ internal sealed class SkiaGraphicsPath : IGraphicsPath
 
     public void AddString(string text, IFont font, RectangleF layoutRect, ITextFormat format)
     {
-        // TODO(phase-5.2): honor layoutRect width/height + ITextFormat alignment the way GDI+'s
-        // GraphicsPath.AddString does. For now, lay out the text as a single line starting at the
-        // rect's top-left (sufficient for SimpleLabel's shadow/outline rendering once we add
-        // proper alignment on top of MeasureString in Phase 5.2).
+        // TODO: honor layoutRect width/height + ITextFormat alignment the way GDI+'s
+        // GraphicsPath.AddString does. Currently lays out text as a single line starting at the
+        // rect's top-left, which is sufficient for SimpleLabel's shadow/outline rendering.
         var skFont = (SkiaFont)font;
         using SKTextBlob blob = SKTextBlob.Create(text, skFont.Font);
         if (blob is null)

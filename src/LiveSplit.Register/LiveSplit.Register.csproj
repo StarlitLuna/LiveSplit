@@ -5,14 +5,9 @@
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
 
-    <!-- Windows-only file-association registry utility. The project's contents (file-type
-         associations + IE compatibility-view registry tweaks) only make sense on Windows.
-         On non-Windows hosts MSBuild won't be able to reference System.Windows.Forms /
-         Microsoft.Win32, so the project is excluded from the build entirely on those hosts:
-         - All source files are dropped (see ItemGroup below)
-         - Output type relaxes to Library so the empty assembly compiles cleanly
-         Linux file associations are handled via .desktop + xdg-mime in the AppImage /
-         tarball packaging from Phase 8. -->
+    <!-- Windows-only utility — registers .lss/.lsl file associations and IE compat-view
+         registry tweaks. On non-Windows hosts the project compiles to an empty Library so
+         the solution still builds; the real source files are excluded below. -->
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">

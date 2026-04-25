@@ -7,12 +7,9 @@ using System.Runtime.InteropServices;
 namespace LiveSplit;
 
 /// <summary>
-/// Replaces the old <c>LiveSplitCoreFactory</c> <c>kernel32.LoadLibrary</c> trick with a cross-
-/// platform <see cref="NativeLibrary.SetDllImportResolver"/> hook. Resolves the
-/// <c>livesplit_core</c> native dependency out of the standard .NET
-/// <c>runtimes/{rid}/native/</c> layout that <c>dotnet publish</c> produces.
-///
-/// Registered from a <see cref="ModuleInitializerAttribute"/> so it's in place before any
+/// Resolves the <c>livesplit_core</c> native dependency out of the standard .NET
+/// <c>runtimes/{rid}/native/</c> layout. Registered from a
+/// <see cref="ModuleInitializerAttribute"/> so it's in place before any
 /// <c>[DllImport("livesplit_core")]</c> attribute is resolved for the first time.
 /// </summary>
 internal static class NativeLibraryResolver
@@ -34,11 +31,9 @@ internal static class NativeLibraryResolver
     }
 
     /// <summary>
-    /// Shared resolver used by both LiveSplit.Core (this file) and the AutoSplittingRuntime
-    /// component's NativeLibraryResolver. Walks <c>runtimes/{rid}/native/{prefix}{name}{ext}</c>
-    /// for the current platform + architecture, falling back to the library's default search
-    /// behavior if no file is found (which lets <c>dotnet publish -r <rid></c> single-file
-    /// layouts keep working).
+    /// Walks <c>runtimes/{rid}/native/{prefix}{name}{ext}</c> for the current platform +
+    /// architecture, falling back to the library's default search behavior if no file is found
+    /// (which lets <c>dotnet publish -r <rid></c> single-file layouts keep working).
     /// </summary>
     internal static IntPtr ResolveFromRuntimes(string libraryName, Assembly assembly)
     {
@@ -64,7 +59,7 @@ internal static class NativeLibraryResolver
             }
         }
 
-        // Legacy layout: bare x64/ and x86/ folders (pre-Phase 6 Windows builds).
+        // Legacy flat layout: bare x64/ and x86/ folders next to the assembly.
         string archDir = RuntimeInformation.ProcessArchitecture == Architecture.X86 ? "x86" : "x64";
         string legacy = Path.Combine(baseDir, archDir, PlatformFileName(libraryName));
         if (File.Exists(legacy) && NativeLibrary.TryLoad(legacy, out IntPtr legacyHandle))
@@ -72,8 +67,8 @@ internal static class NativeLibraryResolver
             return legacyHandle;
         }
 
-        // Fall through to the default DllImport resolver — it will try the OS library-search path,
-        // which is what we want on Linux installs where the user has the .so on LD_LIBRARY_PATH.
+        // Fall through to the default DllImport resolver — it tries the OS library-search path,
+        // which lets a system-installed .so on LD_LIBRARY_PATH satisfy the import.
         return IntPtr.Zero;
     }
 

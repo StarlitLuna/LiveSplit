@@ -23,8 +23,9 @@ public sealed class GdiPlusDrawingContext : IDrawingContext
     }
 
     /// <summary>
-    /// Escape hatch: exposes the underlying Graphics for call sites that haven't been migrated to
-    /// IDrawingContext yet. Once Phase 4b completes this should be unused.
+    /// Escape hatch exposing the underlying <see cref="Graphics"/> for call sites that still
+    /// require System.Drawing-specific APIs (e.g. <c>Graphics.DrawImage</c> with a
+    /// <see cref="System.Drawing.Image"/>).
     /// </summary>
     public Graphics UnwrapGraphics() => _g;
 

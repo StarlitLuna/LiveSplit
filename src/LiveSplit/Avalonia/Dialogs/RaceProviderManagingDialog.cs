@@ -7,11 +7,8 @@ using global::Avalonia.Layout;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Placeholder Avalonia replacement for <c>RaceProviderManagingDialog</c>. The WinForms
-/// version lets users enable / configure race providers (SRL, Racetime, …). Racetime was
-/// dropped from the Linux build (Phase 1 plan — WebView2 dependency), and SRL's web-socket
-/// authentication flow hasn't been ported. Users who need racing configuration should open
-/// LiveSplit on Windows.
+/// Placeholder dialog explaining that race-provider configuration is not currently
+/// implemented in this UI.
 /// </summary>
 public sealed class RaceProviderManagingDialog : Window
 {
@@ -26,9 +23,7 @@ public sealed class RaceProviderManagingDialog : Window
 
         var msg = new TextBlock
         {
-            Text = "Race provider configuration isn't available in the Avalonia build yet. " +
-                   "Racetime (WebView2-based) is excluded on Linux by design; SpeedRunsLive " +
-                   "configuration is still Windows-only. Use the Windows build to manage these.",
+            Text = "Race provider configuration is not implemented in this build.",
             TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
             Margin = new Thickness(20),
         };

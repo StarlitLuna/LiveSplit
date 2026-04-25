@@ -174,9 +174,9 @@ public class ComponentRenderer
         {
             try
             {
-                // Wrap the whole render in a Save so the outer transform/clip snap back after the
-                // per-component TranslateTransform stacking finishes, even on Skia where the
-                // state is not directly assignable.
+                // Outer Save scope so the caller's transform/clip snap back after the per-component
+                // TranslateTransform stacking finishes (Skia state isn't directly assignable, so
+                // restore-via-Save is the only way back).
                 using IDrawingState outerState = ctx.Save();
 
                 var crashedComponents = new List<IComponent>();
@@ -189,9 +189,8 @@ public class ComponentRenderer
                         ApplyFontOverrides(overrideLookup, component, state.LayoutSettings, out Font origTimer, out Font origTimes, out Font origText);
                         try
                         {
-                            // Per-component Save so each component's local IntersectClip is
-                            // isolated from its neighbors, matching the old behavior of
-                            // resetting `g.Clip = clip;` before each component.
+                            // Per-component Save so each component's IntersectClip is isolated
+                            // from its neighbors — clip resets between components.
                             using (IDrawingState componentState = ctx.Save())
                             {
                                 if (mode == LayoutMode.Vertical)
@@ -204,9 +203,9 @@ public class ComponentRenderer
                                 }
                             }
 
-                            // The stacking translate is applied OUTSIDE the per-component Save
-                            // so cursor advances persist across components, matching the
-                            // original GDI+ behavior (transform accumulates, clip resets).
+                            // Stacking translate applied OUTSIDE the per-component Save so
+                            // cursor advances persist across components — transform accumulates,
+                            // clip resets.
                             IComponent drawn = VisibleComponents.ElementAt(index);
                             if (mode == LayoutMode.Vertical)
                             {

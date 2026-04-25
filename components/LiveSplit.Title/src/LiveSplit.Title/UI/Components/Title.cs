@@ -93,9 +93,8 @@ public class Title : IComponent
         bool showGameIcon = state.Run.GameIcon != null && Settings.DisplayGameIcon;
         if (showGameIcon)
         {
-            // DrawGameIcon still uses Graphics.DrawImage with System.Drawing.Image because
-            // run icons are loaded as System.Drawing.Image by the XML layout loader. Phase 7
-            // will migrate the image pipeline; until then, this branch gates Skia support.
+            // Game icon is a System.Drawing.Image from the XML loader, so DrawGameIcon
+            // requires a GDI+ backing.
             DrawGameIcon(ctx.AsGraphics(), state, height);
         }
 

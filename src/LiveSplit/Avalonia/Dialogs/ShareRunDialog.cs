@@ -11,11 +11,9 @@ using LiveSplit.Options;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Avalonia replacement for <c>ShareRunDialog</c>. The WinForms version posts to
-/// Twitter / Twitch / Imgur / Speedrun.com / Excel via <c>LiveSplit.Web.Share</c>. The
-/// Avalonia v1 keeps only the on-disk "save a screenshot" flow because the social
-/// platforms' OAuth bits aren't wired through the Avalonia credential manager yet
-/// (Phase 7 ports CredentialManager to Linux).
+/// Saves a screenshot of the current layout to disk. Posting to social platforms
+/// (Twitter / Twitch / Imgur / Speedrun.com / Excel) is not implemented here; the
+/// underlying <c>LiveSplit.Web.Share</c> code paths are not wired up.
 /// </summary>
 public sealed class ShareRunDialog : Window
 {

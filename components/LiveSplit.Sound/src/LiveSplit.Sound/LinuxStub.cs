@@ -1,8 +1,6 @@
-// Stub source used when LiveSplit.Sound is built on non-Windows hosts. The real
-// SoundComponent + SoundFactory + SoundSettings are excluded by the OS-conditional
-// ItemGroup in LiveSplit.Sound.csproj (NAudio is Windows-only). Phase 9 (post-MVP) can
-// add a Linux audio backend if there's demand; until then, audio cues are a Windows-only
-// feature.
+// Placeholder so the project compiles on non-Windows hosts where NAudio (and therefore the
+// real SoundComponent / SoundFactory / SoundSettings sources) is unavailable. The
+// OS-conditional ItemGroup in the .csproj excludes the real sources on those platforms.
 namespace LiveSplit.Sound
 {
     internal static class LinuxStub

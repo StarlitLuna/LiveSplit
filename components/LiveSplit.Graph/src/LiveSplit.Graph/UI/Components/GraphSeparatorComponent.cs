@@ -39,12 +39,9 @@ public class GraphSeparatorComponent : IComponent
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        // ctx.Save() captures the current clip + transform; ctx.SmoothingMode is part of the
-        // state (Graphics.Save preserves it; Skia treats it as per-paint and also restores).
-        // The old code did `g.Clip = new Region();` to widen the clip so a 1-pixel separator
-        // can overdraw a sub-pixel boundary; dropping that here. Skia can't widen a clip at all
-        // and in practice the containing component's bounds are already wider than the 1-pixel
-        // line — if a regression shows up visually it can come back as a specialized API.
+        // No explicit clip-widen: Skia can't express GDI+'s `g.Clip = new Region();` idiom,
+        // and the 1-pixel separator already fits inside the parent component's bounds. Save()
+        // captures SmoothingMode along with transform + clip on both backends.
         using IDrawingState state_ = ctx.Save();
         ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
         Line.LineColor = Settings.GraphLinesColor;

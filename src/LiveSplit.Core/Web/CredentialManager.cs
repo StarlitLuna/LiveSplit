@@ -47,8 +47,8 @@ public static class CredentialManager
             return new WindowsCredentialStore();
         }
 
-        // Default to the file-backed store for any non-Windows OS — works on Linux today and is
-        // a reasonable fallback on macOS until a proper Keychain backing is added.
+        // Default to the file-backed store for any non-Windows OS. macOS could in principle
+        // route through the Keychain instead, but that backing isn't implemented yet.
         return new LinuxCredentialStore();
     }
 

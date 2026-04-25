@@ -12,7 +12,6 @@ using LiveSplit.Updates;
 
 namespace LiveSplit.Avalonia.Dialogs;
 
-/// <summary>Avalonia counterpart of <c>LiveSplit.View.AboutBox</c>.</summary>
 public sealed class AboutBox : Window
 {
     public AboutBox()

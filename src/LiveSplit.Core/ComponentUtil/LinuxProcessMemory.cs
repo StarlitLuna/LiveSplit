@@ -10,22 +10,17 @@ namespace LiveSplit.ComponentUtil;
 /// <summary>
 /// Linux <see cref="IProcessMemory"/> implementation. Uses <c>process_vm_readv</c> /
 /// <c>process_vm_writev</c> for fast cross-process memory I/O, with a <c>/proc/{pid}/mem</c>
-/// fallback for the EPERM-on-hardened-kernels case. Module enumeration parses
-/// <c>/proc/{pid}/maps</c>; <see cref="Suspend"/> / <see cref="Resume"/> use SIGSTOP / SIGCONT.
+/// fallback when those return EPERM on hardened kernels (yama/ptrace_scope >= 2). Module
+/// enumeration parses <c>/proc/{pid}/maps</c>; <see cref="Suspend"/> / <see cref="Resume"/>
+/// use SIGSTOP / SIGCONT.
 ///
 /// Code-injection methods (<see cref="AllocateMemory"/>, <see cref="CreateThread"/>,
 /// <see cref="VirtualProtect"/> on a foreign process) throw — those map to Windows-specific
-/// remote-thread tricks the auto-splitter scripts can't portably reproduce on Linux. ASR scripts
-/// using injection are the script author's problem per the linux-port plan.
+/// remote-thread tricks that don't portably reproduce on Linux.
 /// </summary>
 [SupportedOSPlatform("linux")]
 internal sealed class LinuxProcessMemory : IProcessMemory
 {
-    // process_vm_readv / process_vm_writev — Linux-specific syscalls for cross-process memory
-    // I/O without ptrace_attach. Available since kernel 3.2 (2012). Some hardened distros set
-    // /proc/sys/kernel/yama/ptrace_scope to 2 or 3, which makes them return EPERM; we fall back
-    // to /proc/{pid}/mem in that case.
-
     [StructLayout(LayoutKind.Sequential)]
     private struct iovec
     {

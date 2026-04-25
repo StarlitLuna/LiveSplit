@@ -43,10 +43,7 @@
           SkipUnchangedFiles="true" />
 
     <!-- Mirror the LiveSplit.Core runtimes/ tree into the main app output so the native
-         libs (livesplit_core + future asr_capi) sit where NativeLibraryResolver expects.
-         Previously this target RemoveDir'd runtimes/, but Phase 6 needs that tree to live.
-         Avalonia's own runtimes/ (cross-platform native deps it pulls transitively) is
-         harmless to keep — .NET's runtime-selection already picks the right subfolder. -->
+         libs (livesplit_core, asr_capi) sit where NativeLibraryResolver expects them. -->
     <ItemGroup>
       <_CoreNativeFiles Include="$(SrcPath)\LiveSplit.Core\runtimes\**\*" />
     </ItemGroup>

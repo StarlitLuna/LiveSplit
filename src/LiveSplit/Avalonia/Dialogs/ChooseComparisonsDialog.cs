@@ -10,7 +10,6 @@ using LiveSplit.Model.Comparisons;
 
 namespace LiveSplit.Avalonia.Dialogs;
 
-/// <summary>Avalonia counterpart of <c>LiveSplit.View.ChooseComparisonsDialog</c>.</summary>
 public sealed class ChooseComparisonsDialog : Window
 {
     public IDictionary<string, bool> ComparisonGeneratorStates { get; set; }

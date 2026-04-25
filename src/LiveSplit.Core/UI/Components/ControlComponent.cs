@@ -100,8 +100,7 @@ public abstract class ControlComponent : IDeactivatableComponent
 
     // ControlComponent hosts a System.Windows.Forms.Control inside the layout; the whole design
     // only makes sense under a WinForms host. AsGraphics() throws on non-GDI+ backings, which is
-    // the correct semantic here — subclasses (currently just VideoComponent) are excluded from
-    // the Linux build via platform-conditional component loading in Phase 7.
+    // the correct semantic here — subclasses (currently just VideoComponent) are Windows-only.
     public virtual void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
         Graphics g = ctx.AsGraphics();

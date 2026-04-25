@@ -7,11 +7,6 @@ namespace LiveSplit;
 
 internal static class Program
 {
-    /// <summary>
-    /// Main entry point. Delegates to the Avalonia bootstrap. The WinForms TimerForm +
-    /// supporting dialogs were retired at the end of Phase 5 — see
-    /// <c>src/LiveSplit/Avalonia/</c> for the runtime UI.
-    /// </summary>
     [STAThread]
     private static int Main(string[] args)
     {

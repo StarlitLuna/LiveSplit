@@ -7,10 +7,7 @@ using global::Avalonia.Layout;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Avalonia counterpart of <c>NewRaceInputBox</c>. Asks the user for a game name + category
-/// when starting a new race. The WinForms version autocompletes from the SpeedRunsLive game
-/// list — the Avalonia version ships without autocomplete because the web APIs aren't wired
-/// through the Avalonia credential store yet.
+/// Asks the user for a game name + category when starting a new race.
 /// </summary>
 public sealed class NewRaceInputBox : Window
 {

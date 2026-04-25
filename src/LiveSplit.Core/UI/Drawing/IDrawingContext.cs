@@ -7,10 +7,9 @@ using System.Numerics;
 namespace LiveSplit.UI.Drawing;
 
 /// <summary>
-/// Abstraction over the per-frame paint surface used by LiveSplit's rendering code. Mirrors
-/// the subset of <see cref="System.Drawing.Graphics"/> that components and the layout renderer
-/// actually consume. Today the only implementation is GDI+ backed; Phase 5 replaces the backend
-/// with SkiaSharp to run on Linux.
+/// Abstraction over the per-frame paint surface. Mirrors the subset of
+/// <see cref="System.Drawing.Graphics"/> that components and the layout renderer actually
+/// consume; backends include GDI+ and SkiaSharp.
 /// </summary>
 public interface IDrawingContext
 {
@@ -20,9 +19,9 @@ public interface IDrawingContext
     void DrawRectangle(IPen pen, RectangleF rect);
     void DrawLine(IPen pen, PointF p1, PointF p2);
 
-    /// <summary>Fill a closed polygon. Used by the Graph component to paint delta fill regions.</summary>
+    /// <summary>Fill a closed polygon defined by the given vertices.</summary>
     void FillPolygon(IBrush brush, PointF[] points);
-    /// <summary>Fill an axis-aligned ellipse. Used by the Graph component to paint split circles.</summary>
+    /// <summary>Fill an axis-aligned ellipse inscribed in the given rectangle.</summary>
     void FillEllipse(IBrush brush, float x, float y, float width, float height);
 
     void DrawImage(IImage image, RectangleF destRect);

@@ -5,10 +5,9 @@
 
     <EnableDynamicLoading>true</EnableDynamicLoading>
 
-    <!-- Excluded from non-Windows builds: Microsoft.Web.WebView2 + DarkUI +
-         Ookii.Dialogs.WinForms are all Windows-only. The Racetime racing provider
-         relies on a hosted browser for OAuth, which would need a different rendering
-         backend on Linux. Out of scope for the current Linux port. -->
+    <!-- Windows-only: depends on Microsoft.Web.WebView2 + DarkUI + Ookii.Dialogs.WinForms,
+         which are Windows-only packages. The non-Windows configuration below compiles an
+         empty Library so the solution still builds. -->
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">

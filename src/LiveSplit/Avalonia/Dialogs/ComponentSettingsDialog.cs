@@ -11,11 +11,10 @@ using LiveSplit.UI.Components;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Avalonia counterpart of <c>LiveSplit.View.ComponentSettingsDialog</c>. Hosts a single
-/// component's settings UI (<see cref="IComponent.GetSettingsControlAvalonia"/>) inside a
-/// dialog window with OK / Cancel buttons. Cancel reapplies the snapshotted XML so changes
-/// roll back. Components that haven't been ported yet (Avalonia control is null) get the
-/// auto-generated panel from <see cref="AvaloniaSettingsBuilder"/>.
+/// Hosts a single component's settings UI inside a dialog window with OK / Cancel
+/// buttons. Cancel reapplies the snapshotted XML so changes roll back. Components that
+/// don't supply their own Avalonia control fall back to the reflection-driven
+/// <see cref="AvaloniaSettingsBuilder"/> panel.
 /// </summary>
 public sealed class ComponentSettingsDialog : Window
 {

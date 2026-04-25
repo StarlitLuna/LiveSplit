@@ -13,11 +13,8 @@ using LiveSplit.UI.Components;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Avalonia replacement for the WinForms <c>LayoutEditorDialog</c>. The full WinForms version
-/// supports drag-and-drop reordering, per-component settings dialogs, add/remove from a
-/// component plugin browser, layout-mode flipping, and font/color settings. The Avalonia v1
-/// implementation supports the most-used flows: list the components, reorder up/down, remove,
-/// open per-component settings, and open layout-level settings.
+/// Lists the layout's components, reorders them up/down, removes, opens per-component
+/// settings, and opens layout-level settings.
 /// </summary>
 public sealed class LayoutEditorDialog : Window
 {
@@ -143,9 +140,7 @@ public sealed class LayoutEditorDialog : Window
 
     private async Task AddComponent()
     {
-        // Component-add via plugin discovery is deferred — Phase 7 wires up the
-        // ComponentManager-driven picker. For now, link to the docs path.
-        var dlg = new MessageDialog("Add Component", "Adding components from the plugin manager isn't wired up in the Avalonia front-end yet. Open this layout in the Windows version to add new components.");
+        var dlg = new MessageDialog("Add Component", "Adding components from the plugin manager is not implemented in this UI.");
         await dlg.ShowDialogAsync(this);
     }
 

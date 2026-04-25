@@ -8,7 +8,6 @@ using global::Avalonia.Layout;
 
 namespace LiveSplit.Avalonia.Dialogs;
 
-/// <summary>Avalonia counterpart of <c>LiveSplit.View.EditHistoryDialog</c>.</summary>
 public sealed class EditHistoryDialog : Window
 {
     public IList<string> History { get; private set; }

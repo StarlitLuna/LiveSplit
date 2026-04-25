@@ -9,9 +9,8 @@ namespace LiveSplit.UI.Drawing.GdiPlus;
 /// <summary>
 /// GDI+ (System.Drawing) implementations of the <see cref="LiveSplit.UI.Drawing"/> resource
 /// abstractions. Each type is a thin owning wrapper around its System.Drawing counterpart
-/// and forwards Dispose through. These wrappers are cross-platform-compilable (the enum and
-/// Color types are in the BCL) but System.Drawing.Common's Brush/Pen/Font/etc. only work on
-/// Windows; Phase 5 introduces parallel SkiaSharp-backed versions for Linux.
+/// and forwards Dispose through. Windows-only because System.Drawing.Common's Brush/Pen/Font
+/// types are Windows-only; the SkiaSharp resources cover other platforms.
 /// </summary>
 
 [SupportedOSPlatform("windows")]

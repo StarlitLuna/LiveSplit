@@ -38,10 +38,9 @@ public class ThinSeparatorComponent : IComponent
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        // See GraphSeparatorComponent: the old `g.Clip = new Region();` clip-widen is dropped —
-        // Skia can't express it, and in practice a 1-pixel separator fits inside the clip set
-        // by ComponentRenderer. The Save()/Restore scope below captures SmoothingMode as well as
-        // transform + clip (Graphics.Save includes it; the Skia state also tracks it).
+        // No explicit clip-widen here: Skia can't express GDI+'s `g.Clip = new Region();`
+        // idiom, and a 1-pixel separator fits inside the clip ComponentRenderer already sets.
+        // Save() captures SmoothingMode along with transform + clip on both backends.
         using IDrawingState state_ = ctx.Save();
         ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
         Line.LineColor = state.LayoutSettings.ThinSeparatorsColor;

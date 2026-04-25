@@ -456,9 +456,9 @@ public partial class DetailedTimerSettings : UserControl
         }
     }
 
-    // CustomFontDialog was deleted with the WinForms TimerForm rip in Phase 5. The three
-    // font buttons are preserved as dead click handlers so the designer-generated resx still
-    // binds; the Avalonia settings panel picks up Font* properties via reflection instead.
+    // No-ops kept to satisfy the designer-generated resx wiring. The Avalonia settings panel
+    // exposes the Font* properties via reflection instead, so these handlers are unreachable
+    // at runtime.
     private void btnSegmentLabelsFont_Click(object sender, EventArgs e) { }
     private void btnSegmentTimesFont_Click(object sender, EventArgs e) { }
     private void btnSplitNameFont_Click(object sender, EventArgs e) { }

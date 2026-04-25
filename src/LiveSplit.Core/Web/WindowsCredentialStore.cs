@@ -10,8 +10,8 @@ namespace LiveSplit.Web;
 
 /// <summary>
 /// Windows credential store backed by the Win32 Credential Manager API
-/// (<c>CredReadW</c> / <c>CredWriteW</c> / <c>CredDeleteW</c>). DPAPI-encrypted by the OS; per
-/// user, persistence == LocalMachine matches LiveSplit's pre-Phase 7 behavior.
+/// (<c>CredReadW</c> / <c>CredWriteW</c> / <c>CredDeleteW</c>). DPAPI-encrypted by the OS,
+/// per user, persistence == LocalMachine.
 /// </summary>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsCredentialStore : ICredentialStore

@@ -7,10 +7,8 @@ using global::Avalonia.Layout;
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Placeholder Avalonia replacement for <c>SpeedrunComSubmitDialog</c>. Submitting runs to
-/// speedrun.com requires OAuth-backed credentials; that path still runs through the Windows
-/// CredentialManager (DPAPI). Phase 7 migrates the credential store to Linux and this dialog
-/// becomes fully functional; today it points users at the Windows build.
+/// Placeholder dialog explaining that Speedrun.com submission is not currently
+/// implemented in this UI.
 /// </summary>
 public sealed class SpeedrunComSubmitDialog : Window
 {
@@ -25,9 +23,7 @@ public sealed class SpeedrunComSubmitDialog : Window
 
         var msg = new TextBlock
         {
-            Text = "Submitting runs to speedrun.com isn't wired up in the Avalonia build yet — " +
-                   "the OAuth credential flow is tied to the Windows DPAPI CredentialManager " +
-                   "(Phase 7 migrates this to Linux). Use the Windows build to submit runs.",
+            Text = "Submitting runs to speedrun.com is not implemented in this build.",
             TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
             Margin = new Thickness(20),
         };

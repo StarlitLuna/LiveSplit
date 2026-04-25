@@ -6,16 +6,14 @@ using System.Text;
 namespace LiveSplit.Web;
 
 /// <summary>
-/// File-backed credential store used on non-Windows platforms (Linux today; macOS as a fallback
-/// until a Keychain backing is added). Each credential is written to
-/// <c>~/.config/LiveSplit/credentials/{sha-of-name}.cred</c> as an AES-encrypted blob, with a
-/// key derived from the host's <c>/etc/machine-id</c> + a fixed salt.
+/// File-backed credential store used on non-Windows platforms. Each credential is written to
+/// <c>~/.config/LiveSplit/credentials/{sha-of-name}.cred</c> as an AES-GCM-encrypted blob, with
+/// a key derived from the host's <c>/etc/machine-id</c> + a fixed salt.
 ///
-/// This is "secure enough for parity with the Windows DPAPI store on a single-user machine":
-/// on Linux, DPAPI's per-user encryption isn't available; using <c>/etc/machine-id</c> ties the
-/// blob to this physical machine, so a credential file copied to another box won't decrypt.
-/// We do NOT bind to the user's password — that would require GNOME Keyring or KWallet
-/// integration, which the linux-port plan defers per the "no new system deps" rule.
+/// Uses <c>/etc/machine-id</c> to bind blobs to this physical machine, so a credential file
+/// copied to another box won't decrypt. We do NOT bind to the user's password — that would
+/// require GNOME Keyring or KWallet integration and a hard system dependency on those
+/// services.
 /// </summary>
 internal sealed class LinuxCredentialStore : ICredentialStore
 {

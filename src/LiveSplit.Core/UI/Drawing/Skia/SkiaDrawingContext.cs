@@ -137,10 +137,10 @@ public sealed class SkiaDrawingContext : IDrawingContext
         var skFont = (SkiaFont)font;
         using SKPaint paint = CreateFillPaint(brush);
 
-        // TODO(phase-5.2): honor ITextFormat.Trimming (EllipsisCharacter) and FormatFlags (NoWrap).
+        // TODO: honor ITextFormat.Trimming (EllipsisCharacter) and FormatFlags (NoWrap).
         // GDI+ handles ellipsis trimming automatically when the string exceeds the layout rect;
-        // Skia requires us to measure + manually trim. SimpleLabel does its own cutoff logic,
-        // so for the timer vertical slice we can get away without it.
+        // Skia requires manual measure + trim. SimpleLabel does its own cutoff logic, so most
+        // call sites are unaffected.
         var skFormat = (SkiaTextFormat)format;
         SKFontMetrics metrics = skFont.Font.Metrics;
 
@@ -214,23 +214,22 @@ public sealed class SkiaDrawingContext : IDrawingContext
 
     public void ClearClip()
     {
-        // TODO(phase-5.2): confirm this is the semantic callers expect. The GDI+ idiom is
-        // `g.Clip = new Region();`, which widens the clip to the full surface. Skia can't widen
-        // a clip without unwinding saves; we restore to the save-count the context was created
-        // with, which corresponds to "no per-frame clipping applied yet".
+        // Skia can't widen a clip in place; restore to the save-count captured at construction
+        // (which represents "no per-frame clipping applied yet"), then re-save so subsequent
+        // Save/Restore calls don't underflow our base count.
         while (_canvas.SaveCount > _baseSaveCount)
         {
             _canvas.Restore();
         }
-        // Re-save so subsequent Save/Restore calls don't underflow our base count.
+
         _canvas.Save();
     }
 
     public void SetClip(RectangleF rect)
     {
-        // TODO(phase-5.2): this sets-and-restricts, matching ClipRect default behavior. If a
-        // caller expects "replace the current clip with exactly this rect" (wider than current),
-        // that is not expressible in Skia without rewinding saves.
+        // Sets-and-restricts (intersection). Replacing the clip with one wider than the current
+        // is not expressible in Skia without rewinding saves; callers should structure their
+        // Save / Restore boundaries to scope the clip explicitly.
         _canvas.ClipRect(ToSk(rect), SKClipOperation.Intersect);
     }
 

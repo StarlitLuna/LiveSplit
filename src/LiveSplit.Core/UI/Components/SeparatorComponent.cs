@@ -47,9 +47,9 @@ public class SeparatorComponent : IComponent
             return;
         }
 
-        // See ThinSeparatorComponent: the old `g.Clip = new Region();` clip-widen is dropped —
-        // Skia can't express it, and in practice the 2-pixel separator fits inside the clip set
-        // by ComponentRenderer.
+        // No explicit clip-widen here: Skia can't express GDI+'s `g.Clip = new Region();`
+        // idiom, and the 2-pixel separator fits inside the clip ComponentRenderer already
+        // sets, so dropping the widen is a no-op in practice.
         using IDrawingState state_ = ctx.Save();
         ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
         Line.LineColor = UseSeparatorColor ? state.LayoutSettings.SeparatorsColor : state.LayoutSettings.ThinSeparatorsColor;

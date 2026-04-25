@@ -6,9 +6,9 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
 
-    <!-- Excluded from non-Windows builds: VLC ActiveX COM interop bindings (AxInterop +
-         Interop.AXVLC) only exist on Windows. Linux video playback would need the libvlc
-         API directly via VideoLAN/libvlcsharp. Out of scope for the current Linux port. -->
+    <!-- Windows-only: depends on VLC ActiveX COM interop bindings that only exist on
+         Windows. The non-Windows configuration below compiles an empty Library so the
+         solution still builds. -->
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">

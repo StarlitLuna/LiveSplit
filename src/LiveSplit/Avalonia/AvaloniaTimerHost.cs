@@ -18,15 +18,14 @@ using LiveSplit.UI.LayoutFactories;
 namespace LiveSplit.Avalonia;
 
 /// <summary>
-/// Owns the LiveSplitState + Layout + ComponentRenderer that back the Avalonia vertical slice.
-/// Creates a Timer-only layout (matching <c>--avalonia</c> first-launch behavior) and drives a
-/// TimerModel so keybindings can call Split/Reset/Skip/Undo/Pause. The <see cref="SkiaRenderControl"/>
-/// pulls the state + renderer from here on each paint.
+/// Owns the <see cref="LiveSplitState"/> + Layout + <see cref="ComponentRenderer"/>. Creates a
+/// timer-only layout, drives a <see cref="TimerModel"/> so keybindings can call
+/// Split/Reset/Skip/Undo/Pause, and pumps repaints at the configured refresh rate so the running clock updates
+/// without user interaction. The <see cref="SkiaRenderControl"/> pulls state + renderer from
+/// here on each paint.
 ///
-/// This is the Linux-parity counterpart to <c>TimerForm</c>'s init in <c>src/LiveSplit.View</c>.
-/// It intentionally stops short of loading recent-splits / recent-layouts / settings from disk —
-/// Phase 7 wires those up once the settings + run-editor dialogs have Avalonia shells. The slice
-/// today: a fresh timer-only session on every launch.
+/// Recent-splits / recent-layouts / persisted settings aren't loaded here — every launch starts
+/// from a fresh timer-only session.
 /// </summary>
 public sealed class AvaloniaTimerHost : IDisposable
 {
@@ -60,15 +59,14 @@ public sealed class AvaloniaTimerHost : IDisposable
             VisibleComponents = State.Layout.LayoutComponents.Select(lc => lc.Component),
         };
 
+        // Avalonia is paint-on-demand; the running clock doesn't itself trigger repaints.
+        int delayMs = Math.Max(1, (int)Math.Round(1000.0 / settings.RefreshRate));
         _refreshTask = Task.Run(async () =>
         {
-            // Pump repaints while the window is open. Avalonia is paint-on-demand, so the Timer
-            // running its internal clock doesn't by itself cause repaints — we nudge the UI
-            // thread ~30 times/sec.
             while (!_disposed)
             {
                 Dispatcher.UIThread.Post(invalidateVisual, DispatcherPriority.Background);
-                await Task.Delay(33).ConfigureAwait(false);
+                await Task.Delay(delayMs).ConfigureAwait(false);
             }
         });
     }

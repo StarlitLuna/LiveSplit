@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using System.Windows.Input;
 
@@ -6,17 +10,21 @@ using global::Avalonia.Controls;
 using global::Avalonia.Input;
 using global::Avalonia.Interactivity;
 using global::Avalonia.Markup.Xaml;
+using global::Avalonia.Platform.Storage;
 using global::Avalonia.Threading;
 
 using LiveSplit.Avalonia.Dialogs;
+using LiveSplit.Model;
+using LiveSplit.Options;
+using LiveSplit.Server;
 
 namespace LiveSplit.Avalonia;
 
 /// <summary>
 /// Hosts a <see cref="SkiaRenderControl"/> backed by an <see cref="AvaloniaTimerHost"/>, plus
-/// window-focused split/reset/skip/undo/pause keys. Window dragging is wired through
-/// <see cref="Window.BeginMoveDrag"/>; right-click opens a context menu for editing splits /
-/// layout / settings / size / about / close.
+/// window-focused split/reset/skip/undo/pause keys, file/URL open commands, recents submenus,
+/// comparison + timing-method switching, drag-and-drop run/layout loading, and the control-server
+/// (TCP/WS/Pipe) wire-up.
 /// </summary>
 public sealed partial class TimerWindow : Window
 {
@@ -28,13 +36,22 @@ public sealed partial class TimerWindow : Window
     public ICommand UndoCommand { get; }
     public ICommand PauseCommand { get; }
 
+    public ICommand OpenSplitsCommand { get; }
+    public ICommand OpenLayoutCommand { get; }
+    public ICommand OpenSplitsFromUrlCommand { get; }
+    public ICommand OpenLayoutFromUrlCommand { get; }
+    public ICommand CloseSplitsCommand { get; }
     public ICommand EditSplitsCommand { get; }
     public ICommand EditLayoutCommand { get; }
     public ICommand LayoutSettingsCommand { get; }
     public ICommand SettingsCommand { get; }
     public ICommand SetSizeCommand { get; }
+    public ICommand ShareCommand { get; }
+    public ICommand RaceProvidersCommand { get; }
     public ICommand AboutCommand { get; }
     public ICommand CloseCommand { get; }
+
+    private CommandServer _commandServer;
 
     public TimerWindow()
         : this(splitsPath: null, layoutPath: null)
@@ -53,11 +70,18 @@ public sealed partial class TimerWindow : Window
         UndoCommand = new RelayCommand(() => Host.Model.UndoSplit());
         PauseCommand = new RelayCommand(() => Host.Model.Pause());
 
+        OpenSplitsCommand = new RelayCommand(async () => await OpenSplits());
+        OpenLayoutCommand = new RelayCommand(async () => await OpenLayout());
+        OpenSplitsFromUrlCommand = new RelayCommand(async () => await OpenSplitsFromUrl());
+        OpenLayoutFromUrlCommand = new RelayCommand(async () => await OpenLayoutFromUrl());
+        CloseSplitsCommand = new RelayCommand(() => Host.CloseSplits());
         EditSplitsCommand = new RelayCommand(async () => await OpenEditSplits());
         EditLayoutCommand = new RelayCommand(async () => await OpenEditLayout());
         LayoutSettingsCommand = new RelayCommand(async () => await OpenLayoutSettings());
         SettingsCommand = new RelayCommand(async () => await OpenSettings());
         SetSizeCommand = new RelayCommand(async () => await OpenSetSize());
+        ShareCommand = new RelayCommand(async () => await OpenShare());
+        RaceProvidersCommand = new RelayCommand(async () => await OpenRaceProviders());
         AboutCommand = new RelayCommand(async () => await OpenAbout());
         CloseCommand = new RelayCommand(Close);
 
@@ -68,10 +92,81 @@ public sealed partial class TimerWindow : Window
             canvas.Host = Host;
         }
 
+        WireDynamicSubmenus();
+
         // Tunnel-phase so the handler runs even when child controls swallow the bubble; the
         // right-click ContextMenu wired via XAML still surfaces normally.
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
+
+        // Drag-and-drop a .lss / .lsl onto the window to load it.
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DropEvent, OnDrop);
+
+        Closing += OnClosing;
         Closed += OnClosed;
+
+        StartConfiguredServer();
+    }
+
+    private bool _closeConfirmed;
+
+    private async void OnClosing(object sender, WindowClosingEventArgs e)
+    {
+        if (_closeConfirmed)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+
+        bool ok = await ConfirmUnsavedChanges();
+        if (ok)
+        {
+            _closeConfirmed = true;
+            Close();
+        }
+    }
+
+    private async Task<bool> ConfirmUnsavedChanges()
+    {
+        if (Host?.State?.Run is { HasChanged: true } run && !string.IsNullOrEmpty(run.FilePath))
+        {
+            var dlg = new MessageDialog(
+                "Save Splits?",
+                "Your splits have been updated but not yet saved.\nDo you want to save your splits now?",
+                MessageDialog.Buttons.YesNoCancel);
+            MessageResult r = await dlg.ShowDialogResultAsync(this);
+            if (r == MessageResult.Cancel)
+            {
+                return false;
+            }
+
+            if (r == MessageResult.Yes && !Host.SaveRun())
+            {
+                return false;
+            }
+        }
+
+        if (Host?.State?.Layout is { HasChanged: true } layout && !string.IsNullOrEmpty(layout.FilePath))
+        {
+            var dlg = new MessageDialog(
+                "Save Layout?",
+                "Your layout has been updated but not yet saved.\nDo you want to save your layout now?",
+                MessageDialog.Buttons.YesNoCancel);
+            MessageResult r = await dlg.ShowDialogResultAsync(this);
+            if (r == MessageResult.Cancel)
+            {
+                return false;
+            }
+
+            if (r == MessageResult.Yes && !Host.SaveLayout())
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void OnPointerPressed(object sender, PointerPressedEventArgs e)
@@ -80,6 +175,95 @@ public sealed partial class TimerWindow : Window
         if (props.IsLeftButtonPressed)
         {
             BeginMoveDrag(e);
+        }
+    }
+
+    private async Task OpenSplits()
+    {
+        string path = await PickFile("Open Splits", new[]
+        {
+            new FileDialogFilter { Name = "LiveSplit Splits", Extensions = { "lss" } },
+            new FileDialogFilter { Name = "All Files", Extensions = { "*" } },
+        });
+        if (!string.IsNullOrEmpty(path))
+        {
+            Host.LoadRun(path);
+        }
+    }
+
+    private async Task OpenLayout()
+    {
+        string path = await PickFile("Open Layout", new[]
+        {
+            new FileDialogFilter { Name = "LiveSplit Layout", Extensions = { "lsl" } },
+            new FileDialogFilter { Name = "All Files", Extensions = { "*" } },
+        });
+        if (!string.IsNullOrEmpty(path))
+        {
+            Host.LoadLayout(path);
+        }
+    }
+
+    private async Task OpenSplitsFromUrl()
+    {
+        var dlg = new TextInputDialog("Open Splits From URL", "Enter the URL of a .lss file:");
+        string url = await dlg.ShowDialogAsync(this);
+        if (string.IsNullOrEmpty(url))
+        {
+            return;
+        }
+
+        string downloaded = await DownloadToTempFile(url, "splits.lss");
+        if (!string.IsNullOrEmpty(downloaded))
+        {
+            Host.LoadRun(downloaded);
+        }
+    }
+
+    private async Task OpenLayoutFromUrl()
+    {
+        var dlg = new TextInputDialog("Open Layout From URL", "Enter the URL of a .lsl file:");
+        string url = await dlg.ShowDialogAsync(this);
+        if (string.IsNullOrEmpty(url))
+        {
+            return;
+        }
+
+        string downloaded = await DownloadToTempFile(url, "layout.lsl");
+        if (!string.IsNullOrEmpty(downloaded))
+        {
+            Host.LoadLayout(downloaded);
+        }
+    }
+
+    private async Task<string> PickFile(string title, IEnumerable<FileDialogFilter> filters)
+    {
+        var picker = new OpenFileDialog
+        {
+            Title = title,
+            AllowMultiple = false,
+            Filters = filters.ToList(),
+        };
+
+        string[] paths = await picker.ShowAsync(this);
+        return paths is { Length: > 0 } ? paths[0] : null;
+    }
+
+    private async Task<string> DownloadToTempFile(string url, string fileName)
+    {
+        try
+        {
+            using var client = new WebClient();
+            string tempPath = Path.Combine(Path.GetTempPath(), fileName);
+            byte[] data = await Task.Run(() => client.DownloadData(url));
+            await File.WriteAllBytesAsync(tempPath, data);
+            return tempPath;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+            await new MessageDialog("Download Failed", ex.Message).ShowDialogAsync(this);
+            return null;
         }
     }
 
@@ -121,14 +305,311 @@ public sealed partial class TimerWindow : Window
         await dlg.ShowDialogAsync(this);
     }
 
+    private async Task OpenShare()
+    {
+        var dlg = new ShareRunDialog(Host.State, Host.State.Settings, RenderToPng);
+        await dlg.ShowDialogAsync(this);
+    }
+
+    private async Task OpenRaceProviders()
+    {
+        var dlg = new RaceProviderManagingDialog(Host.State.Settings);
+        await dlg.ShowDialogAsync(this);
+    }
+
     private async Task OpenAbout()
     {
         var dlg = new AboutBox();
         await dlg.ShowDialog(this);
     }
 
+    private byte[] RenderToPng()
+    {
+        return this.FindControl<SkiaRenderControl>("Canvas")?.SnapshotPng();
+    }
+
+    // --- Dynamic submenus (recents, comparisons, timing methods, server) -------------------
+
+    private void WireDynamicSubmenus()
+    {
+        if (this.FindControl<MenuItem>("RecentSplitsMenu") is MenuItem recentSplits)
+        {
+            recentSplits.SubmenuOpened += (_, _) => PopulateRecentSplits(recentSplits);
+        }
+
+        if (this.FindControl<MenuItem>("RecentLayoutsMenu") is MenuItem recentLayouts)
+        {
+            recentLayouts.SubmenuOpened += (_, _) => PopulateRecentLayouts(recentLayouts);
+        }
+
+        if (this.FindControl<MenuItem>("ComparisonMenu") is MenuItem comparisons)
+        {
+            comparisons.SubmenuOpened += (_, _) => PopulateComparisons(comparisons);
+        }
+
+        if (this.FindControl<MenuItem>("TimingMethodMenu") is MenuItem timingMethod)
+        {
+            timingMethod.SubmenuOpened += (_, _) => PopulateTimingMethods(timingMethod);
+        }
+
+        if (this.FindControl<MenuItem>("ServerMenu") is MenuItem serverMenu)
+        {
+            serverMenu.SubmenuOpened += (_, _) => PopulateServerMenu(serverMenu);
+        }
+    }
+
+    private void PopulateRecentSplits(MenuItem parent)
+    {
+        var children = new List<MenuItem>();
+        // Settings.AddToRecentSplits appends, so the most-recent entry is at the tail; reverse
+        // for menu display.
+        foreach (RecentSplitsFile entry in Host.State.Settings.RecentSplits.Reverse())
+        {
+            if (string.IsNullOrEmpty(entry.Path))
+            {
+                continue;
+            }
+
+            string capturedPath = entry.Path;
+            var item = new MenuItem { Header = Path.GetFileName(capturedPath) };
+            item.Click += (_, _) => Host.LoadRun(capturedPath);
+            children.Add(item);
+        }
+
+        parent.ItemsSource = children;
+    }
+
+    private void PopulateRecentLayouts(MenuItem parent)
+    {
+        var children = new List<MenuItem>();
+        foreach (string path in Host.State.Settings.RecentLayouts.Reverse())
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                continue;
+            }
+
+            string capturedPath = path;
+            var item = new MenuItem { Header = Path.GetFileName(capturedPath) };
+            item.Click += (_, _) => Host.LoadLayout(capturedPath);
+            children.Add(item);
+        }
+
+        parent.ItemsSource = children;
+    }
+
+    private void PopulateComparisons(MenuItem parent)
+    {
+        var children = new List<MenuItem>();
+        string current = Host.State.CurrentComparison;
+        foreach (string name in Host.State.Run.Comparisons)
+        {
+            string captured = name;
+            var item = new MenuItem
+            {
+                Header = name,
+                Icon = string.Equals(name, current, StringComparison.Ordinal)
+                    ? new TextBlock { Text = "•" }
+                    : null,
+            };
+            item.Click += (_, _) =>
+            {
+                Host.State.CurrentComparison = captured;
+                InvalidateVisual();
+            };
+            children.Add(item);
+        }
+
+        parent.ItemsSource = children;
+    }
+
+    private void PopulateTimingMethods(MenuItem parent)
+    {
+        TimingMethod current = Host.State.CurrentTimingMethod;
+        var realTime = new MenuItem
+        {
+            Header = "Real Time",
+            Icon = current == TimingMethod.RealTime ? new TextBlock { Text = "•" } : null,
+        };
+        realTime.Click += (_, _) => { Host.State.CurrentTimingMethod = TimingMethod.RealTime; InvalidateVisual(); };
+
+        var gameTime = new MenuItem
+        {
+            Header = "Game Time",
+            Icon = current == TimingMethod.GameTime ? new TextBlock { Text = "•" } : null,
+        };
+        gameTime.Click += (_, _) => { Host.State.CurrentTimingMethod = TimingMethod.GameTime; InvalidateVisual(); };
+
+        parent.ItemsSource = new[] { realTime, gameTime };
+    }
+
+    private void PopulateServerMenu(MenuItem parent)
+    {
+        var children = new List<MenuItem>();
+
+        var startTcp = new MenuItem { Header = "Start TCP Server" };
+        startTcp.Click += (_, _) => StartServer(ServerStartupType.TCP);
+        children.Add(startTcp);
+
+        var startWs = new MenuItem { Header = "Start WebSocket Server" };
+        startWs.Click += (_, _) => StartServer(ServerStartupType.Websocket);
+        children.Add(startWs);
+
+        var startPipe = new MenuItem { Header = "Start Named Pipe Server" };
+        startPipe.Click += (_, _) => StartNamedPipeServer();
+        children.Add(startPipe);
+
+        if (_commandServer is { ServerState: not ServerStateType.Off })
+        {
+            children.Add(new MenuItem { Header = "-" });
+            var stop = new MenuItem { Header = $"Stop Server ({_commandServer.ServerState})" };
+            stop.Click += (_, _) => StopServer();
+            children.Add(stop);
+        }
+
+        parent.ItemsSource = children;
+    }
+
+    // --- Server lifecycle -------------------------------------------------------------------
+
+    private void StartConfiguredServer()
+    {
+        try
+        {
+            switch (Host.State.Settings.ServerStartup)
+            {
+                case ServerStartupType.TCP:
+                    StartServer(ServerStartupType.TCP);
+                    break;
+                case ServerStartupType.Websocket:
+                    StartServer(ServerStartupType.Websocket);
+                    break;
+            }
+        }
+        catch (Exception e)
+        {
+            Log.Error(e);
+        }
+    }
+
+    private void StartServer(ServerStartupType type)
+    {
+        try
+        {
+            _commandServer ??= new CommandServer(Host.State);
+            switch (type)
+            {
+                case ServerStartupType.TCP:
+                    _commandServer.StartTcp();
+                    break;
+                case ServerStartupType.Websocket:
+                    _commandServer.StartWs();
+                    break;
+            }
+
+            Host.State.Settings.ServerStartup = type;
+            Host.State.Settings.ServerState = _commandServer.ServerState;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e);
+        }
+    }
+
+    private void StartNamedPipeServer()
+    {
+        try
+        {
+            _commandServer ??= new CommandServer(Host.State);
+            _commandServer.StartNamedPipe();
+        }
+        catch (Exception e)
+        {
+            Log.Error(e);
+        }
+    }
+
+    private void StopServer()
+    {
+        try
+        {
+            _commandServer?.StopAll();
+            Host.State.Settings.ServerStartup = ServerStartupType.Off;
+            Host.State.Settings.ServerState = ServerStateType.Off;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e);
+        }
+    }
+
+    // --- Drag and drop ----------------------------------------------------------------------
+
+    private static readonly string[] DraggableExtensions = [".lss", ".lsl"];
+
+    private void OnDragOver(object sender, DragEventArgs e)
+    {
+        e.DragEffects = ContainsDraggableFile(e) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnDrop(object sender, DragEventArgs e)
+    {
+        IEnumerable<IStorageItem> files = e.Data.GetFiles() ?? Array.Empty<IStorageItem>();
+        foreach (IStorageItem item in files)
+        {
+            string path = item.TryGetLocalPath();
+            if (string.IsNullOrEmpty(path))
+            {
+                continue;
+            }
+
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext == ".lss")
+            {
+                Host.LoadRun(path);
+            }
+            else if (ext == ".lsl")
+            {
+                Host.LoadLayout(path);
+            }
+        }
+
+        e.Handled = true;
+    }
+
+    private static bool ContainsDraggableFile(DragEventArgs e)
+    {
+        IEnumerable<IStorageItem> files = e.Data.GetFiles();
+        if (files == null)
+        {
+            return false;
+        }
+
+        foreach (IStorageItem item in files)
+        {
+            string path = item.TryGetLocalPath();
+            if (!string.IsNullOrEmpty(path)
+                && DraggableExtensions.Contains(Path.GetExtension(path).ToLowerInvariant()))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void OnClosed(object sender, EventArgs e)
     {
+        try
+        {
+            _commandServer?.StopAll();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
+
         Host?.Dispose();
     }
 

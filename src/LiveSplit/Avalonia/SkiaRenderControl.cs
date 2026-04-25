@@ -28,6 +28,49 @@ public sealed class SkiaRenderControl : Control
 {
     public AvaloniaTimerHost Host { get; set; }
 
+    /// <summary>
+    /// Renders the current layout to a PNG-encoded byte buffer via an offscreen Skia surface.
+    /// Returns null if the host or layout is not yet initialized. Used by ShareRunDialog.
+    /// </summary>
+    public byte[] SnapshotPng()
+    {
+        if (Host?.State?.Layout == null)
+        {
+            return null;
+        }
+
+        int w = (int)System.Math.Max(1, Bounds.Width);
+        int h = (int)System.Math.Max(1, Bounds.Height);
+
+        Host.Renderer.CalculateOverallSize(Host.State.Layout.Mode);
+
+        using var surface = SKSurface.Create(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
+        if (surface == null)
+        {
+            return null;
+        }
+
+        SKCanvas canvas = surface.Canvas;
+        canvas.Clear(SKColors.Transparent);
+
+        IDrawingContext ctx = new SkiaDrawingContext(canvas);
+        LayoutMode mode = Host.State.Layout.Mode;
+        float overallSize = Host.Renderer.OverallSize;
+        float scale = mode == LayoutMode.Vertical ? h / overallSize : w / overallSize;
+        if (scale > 0 && !float.IsInfinity(scale) && !float.IsNaN(scale))
+        {
+            ctx.ScaleTransform(scale, scale);
+        }
+
+        float drawWidth = mode == LayoutMode.Vertical ? w / scale : overallSize;
+        float drawHeight = mode == LayoutMode.Vertical ? overallSize : h / scale;
+        Host.Renderer.Render(ctx, Host.State, drawWidth, drawHeight, mode, null);
+
+        using SKImage image = surface.Snapshot();
+        using SKData data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data?.ToArray();
+    }
+
     public override void Render(DrawingContext context)
     {
         if (Host is null)

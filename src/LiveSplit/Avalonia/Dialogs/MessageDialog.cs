@@ -7,15 +7,13 @@ using global::Avalonia.Media;
 
 namespace LiveSplit.Avalonia.Dialogs;
 
-/// <summary>
-/// Minimal Avalonia replacement for <see cref="System.Windows.Forms.MessageBox"/>. Shows a
-/// title + message + OK/Cancel buttons (configurable). Returns whether the user picked OK.
-/// </summary>
+public enum MessageResult { Ok, Yes, No, Cancel }
+
 public sealed class MessageDialog : Window
 {
-    public enum Buttons { Ok, OkCancel, YesNo }
+    public enum Buttons { Ok, OkCancel, YesNo, YesNoCancel }
 
-    private readonly TaskCompletionSource<bool> _result = new();
+    private readonly TaskCompletionSource<MessageResult> _result = new();
 
     public MessageDialog(string title, string message, Buttons buttons = Buttons.Ok)
     {
@@ -43,16 +41,21 @@ public sealed class MessageDialog : Window
         switch (buttons)
         {
             case Buttons.OkCancel:
-                AddCancelButton(buttonBar);
-                AddOkButton(buttonBar, "OK");
+                AddButton(buttonBar, "Cancel", MessageResult.Cancel, isCancel: true);
+                AddButton(buttonBar, "OK", MessageResult.Ok, isDefault: true);
                 break;
             case Buttons.YesNo:
-                AddCustomButton(buttonBar, "No", false);
-                AddCustomButton(buttonBar, "Yes", true, isDefault: true);
+                AddButton(buttonBar, "No", MessageResult.No, isCancel: true);
+                AddButton(buttonBar, "Yes", MessageResult.Yes, isDefault: true);
+                break;
+            case Buttons.YesNoCancel:
+                AddButton(buttonBar, "Cancel", MessageResult.Cancel, isCancel: true);
+                AddButton(buttonBar, "No", MessageResult.No);
+                AddButton(buttonBar, "Yes", MessageResult.Yes, isDefault: true);
                 break;
             case Buttons.Ok:
             default:
-                AddOkButton(buttonBar, "OK");
+                AddButton(buttonBar, "OK", MessageResult.Ok, isDefault: true, isCancel: true);
                 break;
         }
 
@@ -66,33 +69,25 @@ public sealed class MessageDialog : Window
         {
             if (!_result.Task.IsCompleted)
             {
-                _result.TrySetResult(false);
+                _result.TrySetResult(MessageResult.Cancel);
             }
         };
     }
 
-    private void AddOkButton(StackPanel bar, string text)
+    private void AddButton(StackPanel bar, string text, MessageResult result, bool isDefault = false, bool isCancel = false)
     {
-        var btn = new Button { Content = text, Width = 80, IsDefault = true };
-        btn.Click += (_, _) => { _result.TrySetResult(true); Close(); };
-        bar.Children.Add(btn);
-    }
-
-    private void AddCancelButton(StackPanel bar)
-    {
-        var btn = new Button { Content = "Cancel", Width = 80, IsCancel = true };
-        btn.Click += (_, _) => { _result.TrySetResult(false); Close(); };
-        bar.Children.Add(btn);
-    }
-
-    private void AddCustomButton(StackPanel bar, string text, bool returnValue, bool isDefault = false)
-    {
-        var btn = new Button { Content = text, Width = 80, IsDefault = isDefault };
-        btn.Click += (_, _) => { _result.TrySetResult(returnValue); Close(); };
+        var btn = new Button { Content = text, Width = 80, IsDefault = isDefault, IsCancel = isCancel };
+        btn.Click += (_, _) => { _result.TrySetResult(result); Close(); };
         bar.Children.Add(btn);
     }
 
     public async Task<bool> ShowDialogAsync(Window owner)
+    {
+        MessageResult r = await ShowDialogResultAsync(owner);
+        return r is MessageResult.Ok or MessageResult.Yes;
+    }
+
+    public async Task<MessageResult> ShowDialogResultAsync(Window owner)
     {
         if (owner is not null)
         {

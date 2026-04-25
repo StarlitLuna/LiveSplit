@@ -37,11 +37,13 @@ public sealed class AvaloniaTimerHost : IDisposable
     public ITimerModel Model { get; }
     public ComponentRenderer Renderer { get; }
 
+    private readonly Action _invalidateVisual;
     private readonly Task _refreshTask;
     private bool _disposed;
 
     public AvaloniaTimerHost(Action invalidateVisual, string splitsPath = null, string layoutPath = null)
     {
+        _invalidateVisual = invalidateVisual;
         // Plugin and on-disk auto-splitter resolution walks ComponentManager.BasePath.
         ComponentManager.BasePath = UserDataPaths.ExecutableDir;
 
@@ -125,6 +127,112 @@ public sealed class AvaloniaTimerHost : IDisposable
         {
             // Shutdown race; ignore.
         }
+    }
+
+    // --- Public mutation helpers (called by TimerWindow's File/Close menu and drag-drop) ---
+
+    public bool LoadRun(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var factory = new StandardFormatsRunFactory { FilePath = path };
+            using FileStream stream = File.OpenRead(path);
+            factory.Stream = stream;
+            IRun run = factory.Create(new StandardComparisonGeneratorsFactory());
+            run.FilePath = path;
+            run.FixSplits();
+
+            State.Run.AutoSplitter?.Deactivate();
+            State.Run = run;
+            State.Settings.AddToRecentSplits(path, run, State.CurrentTimingMethod, State.CurrentHotkeyProfile);
+            ApplyRecentSplitsFileState(path, State.Settings, State);
+
+            SwitchComparisonGenerators(State);
+            SwitchComparison(State, State.Settings.LastComparison);
+            RegenerateComparisons(State);
+
+            CreateAutoSplitter(State);
+
+            Invalidate();
+            return true;
+        }
+        catch (Exception e)
+        {
+            Options.Log.Error(e);
+            return false;
+        }
+    }
+
+    public bool LoadLayout(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            using FileStream stream = File.OpenRead(path);
+            ILayout layout = new XMLLayoutFactory(stream).Create(State);
+            layout.FilePath = path;
+            StandardLayoutFactory.CenturyGothicFix(layout);
+
+            ApplyLayout(layout);
+            State.Settings.AddToRecentLayouts(path);
+
+            Invalidate();
+            return true;
+        }
+        catch (Exception e)
+        {
+            Options.Log.Error(e);
+            return false;
+        }
+    }
+
+    public void CloseSplits()
+    {
+        try
+        {
+            State.Run.AutoSplitter?.Deactivate();
+            IRun fresh = new StandardRunFactory().Create(new StandardComparisonGeneratorsFactory());
+            State.Run = fresh;
+
+            ILayout layout = new TimerOnlyLayoutFactory().Create(State);
+            ApplyLayout(layout);
+
+            SwitchComparisonGenerators(State);
+            SwitchComparison(State, State.Settings.LastComparison);
+            RegenerateComparisons(State);
+
+            Invalidate();
+        }
+        catch (Exception e)
+        {
+            Options.Log.Error(e);
+        }
+    }
+
+    private void ApplyLayout(ILayout layout)
+    {
+        State.Layout = layout;
+        State.LayoutSettings = layout.Settings;
+        Renderer.VisibleComponents = layout.LayoutComponents.Select(lc => lc.Component);
+    }
+
+    private void Invalidate()
+    {
+        if (_invalidateVisual is null)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(_invalidateVisual, DispatcherPriority.Background);
     }
 
     // --- Bootstrap helpers (factored out of the constructor for readability) ---
@@ -342,11 +450,11 @@ public sealed class AvaloniaTimerHost : IDisposable
         }
     }
 
-    private void SaveRunIfDirty()
+    public bool SaveRun()
     {
-        if (State.Run == null || !State.Run.HasChanged || string.IsNullOrEmpty(State.Run.FilePath))
+        if (State.Run == null || string.IsNullOrEmpty(State.Run.FilePath))
         {
-            return;
+            return false;
         }
 
         try
@@ -354,18 +462,20 @@ public sealed class AvaloniaTimerHost : IDisposable
             using FileStream stream = File.Open(State.Run.FilePath, FileMode.Create, FileAccess.Write);
             new XMLRunSaver().Save(State.Run, stream);
             State.Run.HasChanged = false;
+            return true;
         }
         catch (Exception e)
         {
             Options.Log.Error(e);
+            return false;
         }
     }
 
-    private void SaveLayoutIfDirty()
+    public bool SaveLayout()
     {
-        if (State.Layout == null || !State.Layout.HasChanged || string.IsNullOrEmpty(State.Layout.FilePath))
+        if (State.Layout == null || string.IsNullOrEmpty(State.Layout.FilePath))
         {
-            return;
+            return false;
         }
 
         try
@@ -373,10 +483,28 @@ public sealed class AvaloniaTimerHost : IDisposable
             using FileStream stream = File.Open(State.Layout.FilePath, FileMode.Create, FileAccess.Write);
             new XMLLayoutSaver().Save(State.Layout, stream);
             State.Layout.HasChanged = false;
+            return true;
         }
         catch (Exception e)
         {
             Options.Log.Error(e);
+            return false;
+        }
+    }
+
+    private void SaveRunIfDirty()
+    {
+        if (State.Run is { HasChanged: true })
+        {
+            SaveRun();
+        }
+    }
+
+    private void SaveLayoutIfDirty()
+    {
+        if (State.Layout is { HasChanged: true })
+        {
+            SaveLayout();
         }
     }
 

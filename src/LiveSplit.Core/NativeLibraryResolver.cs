@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using LiveSplit.Options;
+
 namespace LiveSplit;
 
 /// <summary>
@@ -59,16 +61,23 @@ internal static class NativeLibraryResolver
             }
         }
 
-        // Legacy flat layout: bare x64/ and x86/ folders next to the assembly.
+        // Legacy flat layout: bare x64/ and x86/ folders next to the assembly. Only used when
+        // the standard runtimes/{rid}/native/ layout is missing — log when this fires so an
+        // ABI mismatch from a stale legacy drop doesn't go unnoticed.
         string archDir = RuntimeInformation.ProcessArchitecture == Architecture.X86 ? "x86" : "x64";
         string legacy = Path.Combine(baseDir, archDir, PlatformFileName(libraryName));
         if (File.Exists(legacy) && NativeLibrary.TryLoad(legacy, out IntPtr legacyHandle))
         {
+            Options.Log.Warning(
+                $"NativeLibraryResolver: loaded {libraryName} from legacy path {legacy}; expected runtimes/{{rid}}/native/.");
             return legacyHandle;
         }
 
         // Fall through to the default DllImport resolver — it tries the OS library-search path,
-        // which lets a system-installed .so on LD_LIBRARY_PATH satisfy the import.
+        // which lets a system-installed .so on LD_LIBRARY_PATH satisfy the import. Note this
+        // returning IntPtr.Zero defers, not fails — the runtime then runs its own probe path.
+        Options.Log.Warning(
+            $"NativeLibraryResolver: no bundled {libraryName} found under runtimes/; falling back to the OS loader search path.");
         return IntPtr.Zero;
     }
 

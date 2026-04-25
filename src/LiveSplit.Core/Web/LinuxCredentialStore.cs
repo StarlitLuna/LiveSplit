@@ -3,6 +3,8 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
+using LiveSplit.Options;
+
 namespace LiveSplit.Web;
 
 /// <summary>
@@ -162,13 +164,29 @@ internal sealed class LinuxCredentialStore : ICredentialStore
     private static byte[] DeriveKey(byte[] salt)
     {
         // Mix /etc/machine-id (32 hex chars on systemd hosts) with a fixed app-level salt so
-        // credentials are bound to the host but not predictable from the salt alone.
-        string machineId = ReadMachineId() ?? Environment.UserName;
+        // credentials are bound to the host but not predictable from the salt alone. If the
+        // machine-id read fails we fall through to the username; log it once so users with
+        // unusual systemd setups can diagnose lost credentials after a host change.
+        string machineId = ReadMachineId();
+        if (string.IsNullOrEmpty(machineId))
+        {
+            if (!_machineIdFallbackLogged)
+            {
+                _machineIdFallbackLogged = true;
+                Options.Log.Warning(
+                    "LinuxCredentialStore: machine-id unavailable; deriving key from username instead. Saved credentials will rotate if the username changes.");
+            }
+
+            machineId = Environment.UserName;
+        }
+
         byte[] secret = Encoding.UTF8.GetBytes(machineId + KdfSalt);
 
         using var pbkdf = new Rfc2898DeriveBytes(secret, salt, 100_000, HashAlgorithmName.SHA256);
         return pbkdf.GetBytes(32);
     }
+
+    private static bool _machineIdFallbackLogged;
 
     private static string ReadMachineId()
     {

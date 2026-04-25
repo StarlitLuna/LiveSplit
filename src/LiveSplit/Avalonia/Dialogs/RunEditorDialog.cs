@@ -15,9 +15,10 @@ namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
 /// Edits the run's game/category/offset/attempt count and the per-segment list (add /
-/// remove / rename / reorder). Per-segment Best Segment time editing across comparisons +
-/// timing methods, run history, custom variables, game icon picker, and Speedrun.com
-/// submit/import are not implemented here.
+/// remove / rename / reorder / double-click-rename) plus per-segment Personal Best split
+/// times for the current timing method. Run history viewing, custom variables, game icon
+/// picker, and Speedrun.com submit/import remain WinForms-specific and are not surfaced
+/// here yet.
 /// </summary>
 public sealed class RunEditorDialog : Window
 {
@@ -70,6 +71,7 @@ public sealed class RunEditorDialog : Window
             ItemsSource = SegmentNames(),
             Margin = new Thickness(0, 0, 8, 0),
         };
+        _segmentsList.DoubleTapped += async (_, _) => await RenameSegment();
 
         var addBtn = new Button { Content = "Add Segment", Margin = new Thickness(4) };
         addBtn.Click += async (_, _) => await AddSegment();

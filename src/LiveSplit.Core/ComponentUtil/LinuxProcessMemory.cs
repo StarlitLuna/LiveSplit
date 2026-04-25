@@ -148,22 +148,76 @@ internal sealed class LinuxProcessMemory : IProcessMemory
     {
         // ELF header: bytes 0..3 are the magic 0x7f 'E' 'L' 'F'. Byte 4 (EI_CLASS) is 1 for
         // ELFCLASS32, 2 for ELFCLASS64.
+        //
+        // Wine/Proton wrap most Linux speedrun targets, so the *kernel* is 64-bit but the
+        // game's process bitness is decided by the Windows binary it boots. /proc/{pid}/exe
+        // points at wine-preloader (or similar wrapper) for some launchers; if reading it
+        // does not yield a valid ELF header, fall through to scanning /proc/{pid}/maps for
+        // the first ELF mapping that is loadable from disk. As a last resort, assume 32-bit:
+        // returning the wrong answer corrupts every pointer-path traversal, and 32-bit reads
+        // (4 bytes) are the safer default for unknown Wine targets — autosplitters can
+        // override Is64Bit explicitly when needed.
+        bool? bitness = TryReadElfBitness($"/proc/{process.Id}/exe");
+        if (bitness.HasValue)
+        {
+            return bitness.Value;
+        }
+
         try
         {
-            using FileStream fs = File.OpenRead($"/proc/{process.Id}/exe");
+            string mapsPath = $"/proc/{process.Id}/maps";
+            if (File.Exists(mapsPath))
+            {
+                foreach (string raw in File.ReadAllLines(mapsPath))
+                {
+                    string perms = ParsePermsField(raw);
+                    if (perms == null || perms.Length < 3 || perms[2] != 'x')
+                    {
+                        continue;
+                    }
+
+                    int pathStart = raw.IndexOf('/');
+                    if (pathStart < 0)
+                    {
+                        continue;
+                    }
+
+                    string path = raw[pathStart..].TrimEnd();
+                    bitness = TryReadElfBitness(path);
+                    if (bitness.HasValue)
+                    {
+                        return bitness.Value;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Options.Log.Error(ex);
+        }
+
+        Options.Log.Warning(
+            $"Is64Bit: could not determine ELF class for pid {process.Id}; defaulting to 32-bit.");
+        return false;
+    }
+
+    private static bool? TryReadElfBitness(string path)
+    {
+        try
+        {
+            using FileStream fs = File.OpenRead(path);
             Span<byte> header = stackalloc byte[5];
             int read = fs.Read(header);
             if (read < 5 || header[0] != 0x7f || header[1] != (byte)'E' || header[2] != (byte)'L' || header[3] != (byte)'F')
             {
-                // Fallback: assume 64-bit on a 64-bit kernel.
-                return Environment.Is64BitOperatingSystem;
+                return null;
             }
 
             return header[4] == 2;
         }
         catch
         {
-            return Environment.Is64BitOperatingSystem;
+            return null;
         }
     }
 

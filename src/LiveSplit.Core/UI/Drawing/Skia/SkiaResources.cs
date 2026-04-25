@@ -196,8 +196,14 @@ internal sealed class SkiaGraphicsPath : IGraphicsPath
         float[] widths = new float[glyphs.Length];
         skFont.Font.GetGlyphWidths(glyphs, widths, null);
 
+        // Skia glyph paths are in baseline-relative coordinates (y=0 == baseline). GDI+
+        // GraphicsPath.AddString places the layoutRect.Y at the top of the line box, so we
+        // shift the baseline down by -Ascent (Skia's Ascent is negative — measured up from
+        // baseline). Using CapHeight here, as the original port did, dropped lowercase
+        // ascenders out of the path and caused SimpleLabel's outlines/shadows to render
+        // visibly above the fill text.
         float x = layoutRect.X;
-        float y = layoutRect.Y + skFont.Font.Metrics.CapHeight;
+        float y = layoutRect.Y - skFont.Font.Metrics.Ascent;
         for (int i = 0; i < glyphs.Length; i++)
         {
             using SKPath glyphPath = skFont.Font.GetGlyphPath(glyphs[i]);

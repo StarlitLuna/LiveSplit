@@ -15,9 +15,24 @@
   </Window.KeyBindings>
   <Window.ContextMenu>
     <ContextMenu>
+      <MenuItem Header="Open Splits…" Command="{Binding OpenSplitsCommand}" />
+      <MenuItem Header="Open Splits From URL…" Command="{Binding OpenSplitsFromUrlCommand}" />
+      <MenuItem Name="RecentSplitsMenu" Header="Recent Splits" />
       <MenuItem Header="Edit Splits…" Command="{Binding EditSplitsCommand}" />
+      <MenuItem Header="Close Splits" Command="{Binding CloseSplitsCommand}" />
+      <Separator />
+      <MenuItem Header="Open Layout…" Command="{Binding OpenLayoutCommand}" />
+      <MenuItem Header="Open Layout From URL…" Command="{Binding OpenLayoutFromUrlCommand}" />
+      <MenuItem Name="RecentLayoutsMenu" Header="Recent Layouts" />
       <MenuItem Header="Edit Layout…" Command="{Binding EditLayoutCommand}" />
       <MenuItem Header="Layout Settings…" Command="{Binding LayoutSettingsCommand}" />
+      <Separator />
+      <MenuItem Name="ComparisonMenu" Header="Compare Against" />
+      <MenuItem Name="TimingMethodMenu" Header="Timing Method" />
+      <Separator />
+      <MenuItem Header="Share…" Command="{Binding ShareCommand}" />
+      <MenuItem Header="Race Providers…" Command="{Binding RaceProvidersCommand}" />
+      <MenuItem Name="ServerMenu" Header="Control Server" />
       <Separator />
       <MenuItem Header="Settings…" Command="{Binding SettingsCommand}" />
       <MenuItem Header="Set Size…" Command="{Binding SetSizeCommand}" />

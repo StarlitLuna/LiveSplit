@@ -47,7 +47,16 @@ public static class JSON
             return null;
         }
 
-        JsonNode node = JsonNode.Parse(value);
+        // Match JavaScriptSerializer's lenient parsing: tolerate trailing commas and JS
+        // comments. Speedrun.com / SRL responses are well-formed today, but autosplitter
+        // configs in the wild rely on these affordances and would silently fail otherwise.
+        var options = new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip,
+        };
+
+        JsonNode node = JsonNode.Parse(value, documentOptions: options);
         return NodeToPoco(node);
     }
 
@@ -95,14 +104,13 @@ public static class JSON
                 case JsonValueKind.False:
                     return false;
                 case JsonValueKind.Number:
+                    // Match the legacy JavaScriptSerializer: integers map to long, all other
+                    // numerics map to double. Promoting to decimal first changed the runtime
+                    // type seen by downstream `dynamic` consumers and broke arithmetic on PB
+                    // times / segment durations that were stored as fractional seconds.
                     if (element.TryGetInt64(out long l))
                     {
                         return l;
-                    }
-
-                    if (element.TryGetDecimal(out decimal m))
-                    {
-                        return m;
                     }
 
                     return element.GetDouble();

@@ -62,8 +62,23 @@ jobs:
 
       - name: Install linuxdeploy (AppImage tooling)
         run: |
-          curl -sSL -o /tmp/linuxdeploy \
-            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          set -euo pipefail
+          url="https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          # --fail aborts on HTTP 4xx/5xx (without it, GitHub's HTML error pages
+          # were silently saved as the binary and the bash interpreter then choked
+          # on `<!DOCTYPE html>`). --retry covers transient release-asset CDN
+          # failures we've seen on ubuntu-22.04 runners.
+          curl --fail --silent --show-error --location \
+               --retry 5 --retry-delay 5 --retry-all-errors \
+               -o /tmp/linuxdeploy "$url"
+          # AppImages are ELF binaries with the AppImage magic ("AI\x02") at offset
+          # 8. Confirm before chmod+install so a CDN miss doesn't masquerade as a
+          # working install and detonate inside the package step.
+          if ! head -c 4 /tmp/linuxdeploy | od -An -c | grep -q 'E   L   F'; then
+            echo "::error::downloaded linuxdeploy is not an ELF binary; first bytes:"
+            head -c 200 /tmp/linuxdeploy
+            exit 1
+          fi
           chmod +x /tmp/linuxdeploy
           sudo mv /tmp/linuxdeploy /usr/local/bin/linuxdeploy
           # ubuntu-22.04 runners ship without libfuse2; tell every AppImage we

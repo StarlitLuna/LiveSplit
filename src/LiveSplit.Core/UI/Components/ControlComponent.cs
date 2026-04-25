@@ -118,6 +118,8 @@ public abstract class ControlComponent : IDeactivatableComponent
 
     public abstract Control GetSettingsControl(LayoutMode mode);
 
+    public virtual global::Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode) => null;
+
     public abstract System.Xml.XmlNode GetSettings(System.Xml.XmlDocument document);
 
     public abstract void SetSettings(System.Xml.XmlNode settings);

@@ -44,6 +44,8 @@ public abstract class LogicComponent : IComponent
 
     public abstract System.Windows.Forms.Control GetSettingsControl(LayoutMode mode);
 
+    public virtual global::Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode) => null;
+
     public abstract System.Xml.XmlNode GetSettings(System.Xml.XmlDocument document);
 
     public abstract void SetSettings(System.Xml.XmlNode settings);

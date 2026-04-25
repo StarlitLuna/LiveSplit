@@ -6,35 +6,29 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Windows.Forms;
 using System.Xml;
 
-using Fetze.WinFormsColor;
-
 namespace LiveSplit.UI;
 
 public class SettingsHelper
 {
-    public static CustomFontDialog.FontDialog GetFontDialog(Font previousFont, int minSize, int maxSize)
+    // GetFontDialog and ColorButtonClick wrapped the third-party CustomFontDialog /
+    // Fetze.WinFormsColor libraries deleted at the end of Phase 5. The component
+    // ComponentSettings.cs classes still reference ColorButtonClick from their WinForms
+    // Designer-generated click handlers, so we keep a signature-compatible no-op here:
+    // the Avalonia front-end never calls these paths (settings UI goes through
+    // AvaloniaSettingsBuilder instead), and the WinForms UserControl code path is dead
+    // at runtime since TimerForm was retired.
+
+    public static void ColorButtonClick(Button button, Control control)
     {
-        var dialog = new CustomFontDialog.FontDialog
-        {
-            OriginalFont = previousFont,
-            MinSize = minSize,
-            MaxSize = maxSize
-        };
-        return dialog;
+        // No-op: the WinForms color picker library was deleted along with TimerForm.
+        // Left as a stub so the existing designer-generated handlers on component
+        // ComponentSettings.cs classes still compile — those handlers are unreachable
+        // from the Avalonia runtime.
     }
 
     public static string FormatFont(Font font)
     {
         return $"{font.FontFamily.Name} {font.Style}";
-    }
-
-    public static void ColorButtonClick(Button button, Control control)
-    {
-        var picker = new ColorPickerDialog();
-        picker.SelectedColorChanged += (s, x) => button.BackColor = picker.SelectedColor;
-        picker.SelectedColor = picker.OldColor = button.BackColor;
-        picker.ShowDialog(control);
-        button.BackColor = picker.SelectedColor;
     }
 
     public static Color ParseColor(XmlElement colorElement, Color defaultColor = default)

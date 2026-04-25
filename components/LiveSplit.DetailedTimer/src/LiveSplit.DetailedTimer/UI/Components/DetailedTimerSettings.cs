@@ -456,26 +456,10 @@ public partial class DetailedTimerSettings : UserControl
         }
     }
 
-    private void btnSegmentLabelsFont_Click(object sender, EventArgs e)
-    {
-        CustomFontDialog.FontDialog dialog = SettingsHelper.GetFontDialog(SegmentLabelsFont, 7, 26);
-        dialog.FontChanged += (s, ev) => SegmentLabelsFont = ((CustomFontDialog.FontChangedEventArgs)ev).NewFont;
-        dialog.ShowDialog(this);
-        lblSegmentLabelsFont.Text = SegmentLabelsFontString;
-    }
-
-    private void btnSegmentTimesFont_Click(object sender, EventArgs e)
-    {
-        CustomFontDialog.FontDialog dialog = SettingsHelper.GetFontDialog(SegmentTimesFont, 7, 26);
-        dialog.FontChanged += (s, ev) => SegmentTimesFont = ((CustomFontDialog.FontChangedEventArgs)ev).NewFont;
-        dialog.ShowDialog(this);
-        lblSegmentTimesFont.Text = SegmentTimesFontString;
-    }
-    private void btnSplitNameFont_Click(object sender, EventArgs e)
-    {
-        CustomFontDialog.FontDialog dialog = SettingsHelper.GetFontDialog(SplitNameFont, 7, 26);
-        dialog.FontChanged += (s, ev) => SplitNameFont = ((CustomFontDialog.FontChangedEventArgs)ev).NewFont;
-        dialog.ShowDialog(this);
-        lblSplitNameFont.Text = SplitNameFontString;
-    }
+    // CustomFontDialog was deleted with the WinForms TimerForm rip in Phase 5. The three
+    // font buttons are preserved as dead click handlers so the designer-generated resx still
+    // binds; the Avalonia settings panel picks up Font* properties via reflection instead.
+    private void btnSegmentLabelsFont_Click(object sender, EventArgs e) { }
+    private void btnSegmentTimesFont_Click(object sender, EventArgs e) { }
+    private void btnSplitNameFont_Click(object sender, EventArgs e) { }
 }

@@ -1,5 +1,6 @@
-﻿using System.Drawing;
+using System.Drawing;
 using System.IO;
+using System.Reflection;
 
 using LiveSplit.Model;
 
@@ -7,9 +8,14 @@ namespace LiveSplit.UI.LayoutFactories;
 
 public class StandardLayoutFactory : ILayoutFactory
 {
+    private const string DefaultLayoutResourceName = "LiveSplit.Resources.DefaultLayout.lsl";
+
     public ILayout Create(LiveSplitState state)
     {
-        using var stream = new MemoryStream(Properties.Resources.DefaultLayout);
+        Assembly assembly = typeof(StandardLayoutFactory).Assembly;
+        using Stream stream = assembly.GetManifestResourceStream(DefaultLayoutResourceName)
+            ?? throw new FileNotFoundException(
+                $"Embedded resource '{DefaultLayoutResourceName}' was not found in {assembly.FullName}.");
         ILayout layout = new XMLLayoutFactory(stream).Create(state);
 
         layout.X = layout.Y = 100;

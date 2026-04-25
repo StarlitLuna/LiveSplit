@@ -4,7 +4,6 @@
     <ApplicationIcon>Icon.ico</ApplicationIcon>
 
     <OutputType>WinExe</OutputType>
-    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,8 +17,6 @@
 
   <ItemGroup>
     <ProjectReference Include="$(SrcPath)\LiveSplit.Core\LiveSplit.Core.csproj" />
-    <ProjectReference Include="$(SrcPath)\LiveSplit.View\LiveSplit.View.csproj" />
-    <ProjectReference Include="$(LibPath)\WinForms Color Picker\WinFormsColor\WinFormsColor.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -48,15 +45,9 @@
     <RemoveDir Directories="$(OutputPath)\runtimes" />
 
     <ItemGroup>
-      <_FilesToPrune Include="$(OutputPath)\Microsoft.WindowsAPICodePack.ExtendedLinguisticServices.dll" />
-      <_FilesToPrune Include="$(OutputPath)\Microsoft.WindowsAPICodePack.Sensors.dll" />
-      <_FilesToPrune Include="$(OutputPath)\Microsoft.WindowsAPICodePack.ShellExtensions.dll" />
       <_FilesToPrune Include="$(OutputPath)\x64\asr_capi.dll" />
       <_FilesToPrune Include="$(OutputPath)\x86\asr_capi.dll" />
       <_FilesToPrune Include="$(_ComponentsPath)\SpeedrunComSharp.dll" />
-      <_FilesToPrune Include="$(_ComponentsPath)\CustomFontDialog.dll" />
-      <_FilesToPrune Include="$(_ComponentsPath)\CustomFontDialog.dll.config" />
-      <_FilesToPrune Include="$(_ComponentsPath)\WinFormsColor.dll" />
       <_FilesToPrune Include="$(_ComponentsPath)\System.Buffers.dll" />
       <_FilesToPrune Include="$(_ComponentsPath)\System.Memory.dll" />
       <_FilesToPrune Include="$(_ComponentsPath)\System.Numerics.Vectors.dll" />

@@ -55,25 +55,13 @@ jobs:
           name: LiveSplit_Linux_x64
           path: ./bin/release
 
-      # ---------------------------------------------------------------------
-      # Packaging — produces the three release-style artifacts (tar.gz,
-      # AppImage, Flatpak) for whichever branch was picked in the Actions UI.
-      # ---------------------------------------------------------------------
-
       - name: Install linuxdeploy (AppImage tooling)
         run: |
           set -euo pipefail
           url="https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-          # --fail aborts on HTTP 4xx/5xx (without it, GitHub's HTML error pages
-          # were silently saved as the binary and the bash interpreter then choked
-          # on `<!DOCTYPE html>`). --retry covers transient release-asset CDN
-          # failures we've seen on ubuntu-22.04 runners.
           curl --fail --silent --show-error --location \
                --retry 5 --retry-delay 5 --retry-all-errors \
                -o /tmp/linuxdeploy "$url"
-          # AppImages are ELF binaries with the AppImage magic ("AI\x02") at offset
-          # 8. Confirm before chmod+install so a CDN miss doesn't masquerade as a
-          # working install and detonate inside the package step.
           if ! head -c 4 /tmp/linuxdeploy | od -An -c | grep -q 'E   L   F'; then
             echo "::error::downloaded linuxdeploy is not an ELF binary; first bytes:"
             head -c 200 /tmp/linuxdeploy
@@ -81,9 +69,6 @@ jobs:
           fi
           chmod +x /tmp/linuxdeploy
           sudo mv /tmp/linuxdeploy /usr/local/bin/linuxdeploy
-          # ubuntu-22.04 runners ship without libfuse2; tell every AppImage we
-          # invoke (linuxdeploy + the appimagetool it shells out to) to extract
-          # itself instead of mounting via FUSE.
           echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
 
       - name: Package tarball + AppImage
@@ -101,14 +86,6 @@ jobs:
           name: LiveSplit_Linux_AppImage
           path: dist/LiveSplit-*.AppImage
 
-      # The Flatpak action drives flatpak-builder against the manifest, which
-      # downloads the SDK extensions the manifest declares (dotnet8 + rust-stable),
-      # builds inside the sandbox, bundles the result, and uploads it as a workflow
-      # artifact named after the bundle file. The action expects flatpak-builder on
-      # PATH but ubuntu-22.04 runners don't ship it, so we install it explicitly
-      # plus the matching runtime/SDK on the host before the action runs. (The
-      # alternative — running the whole job in `bilelmoussaoui/flatpak-github-actions`
-      # container — would conflict with the host-side AppImage step above.)
       - name: Install flatpak-builder
         run: |
           set -euo pipefail
@@ -116,9 +93,6 @@ jobs:
           sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
-      # NODE_NO_WARNINGS hides the punycode DEP0040 noise emitted by the action's
-      # own Node.js dependencies on Node 21+ runners — purely cosmetic, the action
-      # still functions on warning-emitting Node versions.
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:

@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using global::Avalonia.Threading;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Input;
 using LiveSplit.Options;
+using LiveSplit.UI;
 
 using SharpHook;
 using SharpHook.Native;
@@ -26,14 +28,29 @@ namespace LiveSplit.Avalonia;
 /// osx-x64 — drop-in for the linux-port + matches what the original Windows build did
 /// (RegisterHotKey via Win32) on the platforms we ship to.
 ///
-/// On Wayland without a compositor portal, libuiohook can't grab global keys; the
-/// per-window <c>KeyBinding</c>s in <see cref="TimerWindow.axaml"/> are kept as a fallback.
+/// Wayland behavior:
+/// <list type="bullet">
+///   <item><description>Pure Wayland (no XWayland): libuiohook can't attach XInput2 and the
+///     hook task faults synchronously at <c>RunAsync</c>. We catch that, surface a
+///     <see cref="Notifications"/> Info message, and fall through to the per-window
+///     <c>KeyBinding</c>s in <c>TimerWindow.axaml</c>. The Avalonia front-end itself is
+///     Wayland-native (<see cref="AvaloniaProgram.BuildAvaloniaApp"/> uses
+///     <c>UsePlatformDetect</c>) — only the global-hotkey path is X11-specific.</description></item>
+///   <item><description>Wayland + XWayland (most distros' default): libuiohook attaches to
+///     XWayland's X11 server and captures events from XWayland clients, including all Steam /
+///     Proton games and any X11-launched window. Native Wayland clients' keystrokes still
+///     aren't visible — that's a libuiohook limitation, not something we can fix here.</description></item>
+///   <item><description>X11: full global capture, no caveats.</description></item>
+/// </list>
+/// The Flatpak manifest's <c>--socket=wayland</c> + <c>--socket=fallback-x11</c> grants both
+/// sockets so neither path is forced; Avalonia uses Wayland natively where available.
 /// </summary>
 public sealed class HotkeyService : IDisposable
 {
     private readonly LiveSplitState _state;
     private readonly ITimerModel _model;
     private TaskPoolGlobalHook _hook;
+    private Task _hookTask;
     private bool _disposed;
 
     public HotkeyService(LiveSplitState state, ITimerModel model)
@@ -53,17 +70,40 @@ public sealed class HotkeyService : IDisposable
         {
             _hook = new TaskPoolGlobalHook();
             _hook.KeyPressed += OnKeyPressed;
-            // Run async so the constructor doesn't block; libuiohook's main loop runs in a
-            // worker thread inside SharpHook.
-            _ = _hook.RunAsync();
+            // RunAsync's task either runs forever (hook is up) or completes/throws (hook
+            // couldn't start). Observe it so libuiohook init failures don't get swallowed.
+            // Common cases: pure Wayland session without XWayland (libuiohook needs an X11
+            // display to attach XInput2), missing input-group membership on udev evdev path,
+            // headless CI with no DISPLAY set.
+            _hookTask = _hook.RunAsync();
+            _ = _hookTask.ContinueWith(t =>
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                if (t.IsFaulted)
+                {
+                    Log.Error(t.Exception);
+                    Notifications.Info("Global hotkeys unavailable on this session — using window-focused keys only. (switch to an X11 session for global hotkeys.)");
+                }
+                else if (t.IsCompletedSuccessfully)
+                {
+                    // libuiohook returned without throwing means the hook stopped cleanly,
+                    // typically because Dispose() asked it to. Nothing to surface.
+                }
+            }, TaskScheduler.Default);
         }
         catch (Exception ex)
         {
-            // libuiohook startup failures (no X11 display, missing perms, headless CI) shouldn't
-            // crash the app — the user still has the per-window KeyBindings.
+            // Synchronous failures (DllNotFoundException for libuiohook on a host without the
+            // native lib, missing dependencies). Same fallback story as above.
             Log.Error(ex);
+            Notifications.Info("Global hotkeys unavailable — falling back to window-focused keys.");
             _hook?.Dispose();
             _hook = null;
+            _hookTask = null;
         }
     }
 

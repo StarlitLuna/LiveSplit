@@ -42,8 +42,6 @@ jobs:
           dotnet build
           -v m
           -c Release
-          -r linux-x64
-          --self-contained false
           ./LiveSplit.sln
 
       - name: Smoke-test LiveSplit binary starts

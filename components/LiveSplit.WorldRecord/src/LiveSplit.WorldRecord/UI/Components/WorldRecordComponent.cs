@@ -451,6 +451,12 @@ public class WorldRecordComponent : IComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        Settings.Mode = mode;
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, T("World Record"));
+    }
+
     public XmlNode GetSettings(XmlDocument document)
     {
         return Settings.GetSettings(document);

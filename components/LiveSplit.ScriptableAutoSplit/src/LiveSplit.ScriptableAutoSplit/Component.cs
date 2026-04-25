@@ -82,6 +82,11 @@ public class ASLComponent : LogicComponent
         return _settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(_settings, "Component");
+    }
+
     public override XmlNode GetSettings(XmlDocument document)
     {
         return _settings.GetSettings(document);

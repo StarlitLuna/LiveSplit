@@ -1,10 +1,14 @@
 using System;
+using System.Threading.Tasks;
 using System.Windows.Input;
 
 using global::Avalonia.Controls;
 using global::Avalonia.Input;
 using global::Avalonia.Interactivity;
 using global::Avalonia.Markup.Xaml;
+using global::Avalonia.Threading;
+
+using LiveSplit.Avalonia.Dialogs;
 
 namespace LiveSplit.Avalonia;
 
@@ -14,6 +18,9 @@ namespace LiveSplit.Avalonia;
 /// (global hotkeys + gamepad were dropped as part of Phase 1 — see plan). Window dragging is
 /// wired through Avalonia's <see cref="Window.BeginMoveDrag"/>; transparency is left at the
 /// solid-background "good enough" default per the linux-port plan's fallback.
+///
+/// Right-click brings up a context menu with the dialog surface migrated in Phase 5.3d:
+/// Edit Splits / Edit Layout / Settings / Set Size / About / Close.
 /// </summary>
 public sealed partial class TimerWindow : Window
 {
@@ -24,6 +31,14 @@ public sealed partial class TimerWindow : Window
     public ICommand SkipCommand { get; }
     public ICommand UndoCommand { get; }
     public ICommand PauseCommand { get; }
+
+    public ICommand EditSplitsCommand { get; }
+    public ICommand EditLayoutCommand { get; }
+    public ICommand LayoutSettingsCommand { get; }
+    public ICommand SettingsCommand { get; }
+    public ICommand SetSizeCommand { get; }
+    public ICommand AboutCommand { get; }
+    public ICommand CloseCommand { get; }
 
     public TimerWindow()
     {
@@ -37,25 +52,78 @@ public sealed partial class TimerWindow : Window
         UndoCommand = new RelayCommand(() => Host.Model.UndoSplit());
         PauseCommand = new RelayCommand(() => Host.Model.Pause());
 
+        EditSplitsCommand = new RelayCommand(async () => await OpenEditSplits());
+        EditLayoutCommand = new RelayCommand(async () => await OpenEditLayout());
+        LayoutSettingsCommand = new RelayCommand(async () => await OpenLayoutSettings());
+        SettingsCommand = new RelayCommand(async () => await OpenSettings());
+        SetSizeCommand = new RelayCommand(async () => await OpenSetSize());
+        AboutCommand = new RelayCommand(async () => await OpenAbout());
+        CloseCommand = new RelayCommand(Close);
+
         DataContext = this;
 
-        // Hand the host to the render control so its paint loop can read state + renderer.
         if (this.FindControl<SkiaRenderControl>("Canvas") is SkiaRenderControl canvas)
         {
             canvas.Host = Host;
         }
 
-        // Click-and-drag the window background. Mirrors TimerForm's WM_NCLBUTTONDOWN trick.
-        PointerPressed += OnPointerPressed;
+        // Left-click on the window background drags. Match TimerForm's WM_NCLBUTTONDOWN trick.
+        // Right-click opens the context menu (wired via XAML) — Avalonia handles that itself.
+        AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
         Closed += OnClosed;
     }
 
     private void OnPointerPressed(object sender, PointerPressedEventArgs e)
     {
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        PointerPointProperties props = e.GetCurrentPoint(this).Properties;
+        if (props.IsLeftButtonPressed)
         {
             BeginMoveDrag(e);
         }
+    }
+
+    private async Task OpenEditSplits()
+    {
+        var dlg = new RunEditorDialog(Host.State);
+        if (await dlg.ShowDialogAsync(this))
+        {
+            InvalidateVisual();
+        }
+    }
+
+    private async Task OpenEditLayout()
+    {
+        var dlg = new LayoutEditorDialog(Host.State.Layout, Host.State);
+        if (await dlg.ShowDialogAsync(this))
+        {
+            InvalidateVisual();
+        }
+    }
+
+    private async Task OpenLayoutSettings()
+    {
+        var dlg = new LayoutSettingsDialog(Host.State.LayoutSettings);
+        await dlg.ShowDialogAsync(this);
+        InvalidateVisual();
+    }
+
+    private async Task OpenSettings()
+    {
+        var dlg = new SettingsDialog(Host.State.Settings);
+        await dlg.ShowDialogAsync(this);
+        InvalidateVisual();
+    }
+
+    private async Task OpenSetSize()
+    {
+        var dlg = new SetSizeForm(this);
+        await dlg.ShowDialogAsync(this);
+    }
+
+    private async Task OpenAbout()
+    {
+        var dlg = new AboutBox();
+        await dlg.ShowDialog(this);
     }
 
     private void OnClosed(object sender, EventArgs e)
@@ -66,9 +134,24 @@ public sealed partial class TimerWindow : Window
     private sealed class RelayCommand : ICommand
     {
         private readonly Action _action;
+        private readonly Func<Task> _asyncAction;
+
         public RelayCommand(Action action) => _action = action;
+        public RelayCommand(Func<Task> action) => _asyncAction = action;
+
         public bool CanExecute(object parameter) => true;
-        public void Execute(object parameter) => _action();
+        public void Execute(object parameter)
+        {
+            if (_asyncAction is not null)
+            {
+                _ = Dispatcher.UIThread.InvokeAsync(async () => await _asyncAction());
+            }
+            else
+            {
+                _action?.Invoke();
+            }
+        }
+
         public event EventHandler CanExecuteChanged;
     }
 }

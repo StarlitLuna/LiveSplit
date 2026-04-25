@@ -59,6 +59,11 @@ public class SoundComponent : LogicComponent, IDeactivatableComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Component");
+    }
+
     public override XmlNode GetSettings(XmlDocument document)
     {
         return Settings.GetSettings(document);

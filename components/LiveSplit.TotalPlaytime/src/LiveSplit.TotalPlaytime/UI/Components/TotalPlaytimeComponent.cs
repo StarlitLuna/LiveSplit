@@ -102,6 +102,12 @@ public class TotalPlaytimeComponent : IComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        Settings.Mode = mode;
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Total Playtime");
+    }
+
     public void SetSettings(XmlNode settings)
     {
         Settings.SetSettings(settings);

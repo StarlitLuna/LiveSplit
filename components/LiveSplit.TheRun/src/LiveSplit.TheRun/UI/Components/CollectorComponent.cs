@@ -413,6 +413,12 @@ public class CollectorComponent : LogicComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        Settings.Mode = mode;
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Component");
+    }
+
     public override void SetSettings(XmlNode settings)
     {
         Settings.SetSettings(settings);

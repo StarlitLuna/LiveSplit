@@ -1,0 +1,178 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+using global::Avalonia;
+using global::Avalonia.Controls;
+using global::Avalonia.Layout;
+
+using LiveSplit.Model;
+using LiveSplit.UI;
+using LiveSplit.UI.Components;
+
+namespace LiveSplit.Avalonia.Dialogs;
+
+/// <summary>
+/// Avalonia replacement for the WinForms <c>LayoutEditorDialog</c>. The full WinForms version
+/// supports drag-and-drop reordering, per-component settings dialogs, add/remove from a
+/// component plugin browser, layout-mode flipping, and font/color settings. The Avalonia v1
+/// implementation supports the most-used flows: list the components, reorder up/down, remove,
+/// open per-component settings, and open layout-level settings.
+/// </summary>
+public sealed class LayoutEditorDialog : Window
+{
+    public ILayout Layout { get; }
+    public LiveSplitState State { get; }
+
+    private readonly TaskCompletionSource<bool> _result = new();
+    private readonly ListBox _list;
+
+    public LayoutEditorDialog(ILayout layout, LiveSplitState state)
+    {
+        Layout = layout;
+        State = state;
+
+        Title = "Layout Editor";
+        Width = 600;
+        Height = 540;
+
+        _list = new ListBox { ItemsSource = ComponentNames(), Margin = new Thickness(8) };
+
+        var addBtn = new Button { Content = "Add…", Margin = new Thickness(4) };
+        addBtn.Click += async (_, _) => await AddComponent();
+        var removeBtn = new Button { Content = "Remove", Margin = new Thickness(4) };
+        removeBtn.Click += (_, _) => RemoveSelected();
+        var upBtn = new Button { Content = "Move Up", Margin = new Thickness(4) };
+        upBtn.Click += (_, _) => MoveSelected(-1);
+        var downBtn = new Button { Content = "Move Down", Margin = new Thickness(4) };
+        downBtn.Click += (_, _) => MoveSelected(1);
+        var settingsBtn = new Button { Content = "Settings…", Margin = new Thickness(4) };
+        settingsBtn.Click += async (_, _) => await EditSelectedSettings();
+        var layoutSettingsBtn = new Button { Content = "Layout Settings…", Margin = new Thickness(4) };
+        layoutSettingsBtn.Click += async (_, _) =>
+        {
+            var dlg = new LayoutSettingsDialog(layout.Settings);
+            await dlg.ShowDialogAsync(this);
+        };
+
+        var sideBar = new StackPanel
+        {
+            Spacing = 4,
+            Margin = new Thickness(0, 8, 8, 8),
+            Children = { addBtn, removeBtn, upBtn, downBtn, settingsBtn, layoutSettingsBtn },
+        };
+
+        var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
+        ok.Click += (_, _) => { _result.TrySetResult(true); Close(); };
+        var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        cancel.Click += (_, _) => { _result.TrySetResult(false); Close(); };
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(0, 0, 12, 12),
+            Children = { cancel, ok },
+        };
+
+        var center = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+        };
+        Grid.SetColumn(_list, 0);
+        Grid.SetColumn(sideBar, 1);
+        center.Children.Add(_list);
+        center.Children.Add(sideBar);
+
+        var root = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+        root.Children.Add(center);
+        Content = root;
+
+        Closed += (_, _) =>
+        {
+            if (!_result.Task.IsCompleted)
+            {
+                _result.TrySetResult(false);
+            }
+        };
+    }
+
+    private List<string> ComponentNames()
+    {
+        var names = new List<string>();
+        foreach (ILayoutComponent c in Layout.LayoutComponents)
+        {
+            names.Add(c.Component.ComponentName);
+        }
+
+        return names;
+    }
+
+    private void Refresh() => _list.ItemsSource = ComponentNames();
+
+    private void RemoveSelected()
+    {
+        int idx = _list.SelectedIndex;
+        if (idx < 0 || idx >= Layout.LayoutComponents.Count)
+        {
+            return;
+        }
+
+        Layout.LayoutComponents.RemoveAt(idx);
+        Refresh();
+    }
+
+    private void MoveSelected(int direction)
+    {
+        int idx = _list.SelectedIndex;
+        int newIdx = idx + direction;
+        if (idx < 0 || newIdx < 0 || newIdx >= Layout.LayoutComponents.Count)
+        {
+            return;
+        }
+
+        ILayoutComponent moved = Layout.LayoutComponents[idx];
+        Layout.LayoutComponents.RemoveAt(idx);
+        Layout.LayoutComponents.Insert(newIdx, moved);
+        Refresh();
+        _list.SelectedIndex = newIdx;
+    }
+
+    private async Task AddComponent()
+    {
+        // Component-add via plugin discovery is deferred — Phase 7 wires up the
+        // ComponentManager-driven picker. For now, link to the docs path.
+        var dlg = new MessageDialog("Add Component", "Adding components from the plugin manager isn't wired up in the Avalonia front-end yet. Open this layout in the Windows version to add new components.");
+        await dlg.ShowDialogAsync(this);
+    }
+
+    private async Task EditSelectedSettings()
+    {
+        int idx = _list.SelectedIndex;
+        if (idx < 0 || idx >= Layout.LayoutComponents.Count)
+        {
+            return;
+        }
+
+        IComponent comp = Layout.LayoutComponents[idx].Component;
+        var dlg = new ComponentSettingsDialog(comp);
+        await dlg.ShowDialogAsync(this);
+    }
+
+    public async Task<bool> ShowDialogAsync(Window owner)
+    {
+        if (owner is not null)
+        {
+            await ShowDialog(owner);
+        }
+        else
+        {
+            Show();
+        }
+
+        return await _result.Task;
+    }
+}

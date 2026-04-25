@@ -123,6 +123,11 @@ public class CounterComponent : IComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Counter");
+    }
+
     public System.Xml.XmlNode GetSettings(System.Xml.XmlDocument document)
     {
         return Settings.GetSettings(document);

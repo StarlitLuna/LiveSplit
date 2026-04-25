@@ -280,6 +280,12 @@ public class DetailedTimer : IComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        Settings.Mode = mode;
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Detailed Timer");
+    }
+
     public void SetSettings(XmlNode settings)
     {
         Settings.SetSettings(settings);

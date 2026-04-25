@@ -150,6 +150,12 @@ public class SumOfBestComponent : IComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        Settings.Mode = mode;
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Sum of Best");
+    }
+
     public void SetSettings(System.Xml.XmlNode settings)
     {
         Settings.SetSettings(settings);

@@ -107,6 +107,14 @@ public class DeltaComponent : IComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        Settings.Mode = mode;
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Delta" + (Settings.Comparison == "Current Comparison"
+            ? ""
+            : " (" + CompositeComparisons.GetShortComparisonName(Settings.Comparison) + ")"));
+    }
+
     public void SetSettings(System.Xml.XmlNode settings)
     {
         Settings.SetSettings(settings);

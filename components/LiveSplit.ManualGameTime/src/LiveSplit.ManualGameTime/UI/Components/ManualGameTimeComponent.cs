@@ -58,6 +58,11 @@ public class ManualGameTimeComponent : LogicComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Component");
+    }
+
     public override System.Xml.XmlNode GetSettings(System.Xml.XmlDocument document)
     {
         return Settings.GetSettings(document);

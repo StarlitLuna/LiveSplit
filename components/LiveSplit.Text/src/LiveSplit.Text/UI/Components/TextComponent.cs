@@ -98,6 +98,12 @@ public class TextComponent : IComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        Settings.Mode = mode;
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, string.Join(" ", Settings.Text1, Settings.Text2));
+    }
+
     public void SetSettings(System.Xml.XmlNode settings)
     {
         Settings.SetSettings(settings);

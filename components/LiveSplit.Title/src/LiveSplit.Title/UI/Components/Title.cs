@@ -301,6 +301,11 @@ public class Title : IComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Title");
+    }
+
     public XmlNode GetSettings(XmlDocument document)
     {
         return Settings.GetSettings(document);

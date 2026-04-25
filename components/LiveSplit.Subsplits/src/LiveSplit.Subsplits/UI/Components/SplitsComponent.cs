@@ -453,6 +453,12 @@ public class SplitsComponent : IComponent
         return Settings;
     }
 
+    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    {
+        Settings.Mode = mode;
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Subsplits");
+    }
+
     public void SetSettings(System.Xml.XmlNode settings)
     {
         Settings.SetSettings(settings);

@@ -185,6 +185,12 @@ public class VideoComponent : ControlComponent
         return Settings;
     }
 
+    public override Avalonia.Controls.Control GetSettingsControlAvalonia(UI.LayoutMode mode)
+    {
+        Settings.Mode = mode;
+        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, ComponentName);
+    }
+
     public override XmlNode GetSettings(XmlDocument document)
     {
         return Settings.GetSettings(document);

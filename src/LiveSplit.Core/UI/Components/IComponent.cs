@@ -76,6 +76,14 @@ public interface IComponent : IDisposable
     Control GetSettingsControl(LayoutMode mode);
 
     /// <summary>
+    /// Avalonia counterpart of <see cref="GetSettingsControl"/>. Used by the cross-platform
+    /// Avalonia front-end to host the component's settings UI inside an Avalonia
+    /// <see cref="Avalonia.Controls.Window"/>. Components that haven't been migrated to Avalonia
+    /// yet return <c>null</c>; the dialog renders a "settings not available on Linux yet" notice.
+    /// </summary>
+    Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode) => null;
+
+    /// <summary>
     /// Returns the XML serialization of the component's settings.
     /// </summary>
     /// <param name="document">The XML document.</param>

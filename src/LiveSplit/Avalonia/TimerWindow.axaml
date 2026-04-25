@@ -13,5 +13,18 @@
     <KeyBinding Gesture="B" Command="{Binding UndoCommand}" />
     <KeyBinding Gesture="P" Command="{Binding PauseCommand}" />
   </Window.KeyBindings>
+  <Window.ContextMenu>
+    <ContextMenu>
+      <MenuItem Header="Edit Splits…" Command="{Binding EditSplitsCommand}" />
+      <MenuItem Header="Edit Layout…" Command="{Binding EditLayoutCommand}" />
+      <MenuItem Header="Layout Settings…" Command="{Binding LayoutSettingsCommand}" />
+      <Separator />
+      <MenuItem Header="Settings…" Command="{Binding SettingsCommand}" />
+      <MenuItem Header="Set Size…" Command="{Binding SetSizeCommand}" />
+      <Separator />
+      <MenuItem Header="About" Command="{Binding AboutCommand}" />
+      <MenuItem Header="Close" Command="{Binding CloseCommand}" />
+    </ContextMenu>
+  </Window.ContextMenu>
   <local:SkiaRenderControl Name="Canvas" />
 </Window>

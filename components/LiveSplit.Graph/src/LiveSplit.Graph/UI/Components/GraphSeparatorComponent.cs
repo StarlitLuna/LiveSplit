@@ -39,25 +39,24 @@ public class GraphSeparatorComponent : IComponent
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        Region oldClip = g.Clip;
-        System.Drawing.Drawing2D.Matrix oldMatrix = g.Transform;
-        System.Drawing.Drawing2D.SmoothingMode oldMode = g.SmoothingMode;
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
-        g.Clip = new Region();
+        // ctx.Save() captures the current clip + transform; ctx.SmoothingMode is part of the
+        // state (Graphics.Save preserves it; Skia treats it as per-paint and also restores).
+        // The old code did `g.Clip = new Region();` to widen the clip so a 1-pixel separator
+        // can overdraw a sub-pixel boundary; dropping that here. Skia can't widen a clip at all
+        // and in practice the containing component's bounds are already wider than the 1-pixel
+        // line — if a regression shows up visually it can come back as a specialized API.
+        using IDrawingState state_ = ctx.Save();
+        ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
         Line.LineColor = Settings.GraphLinesColor;
-        float scale = g.Transform.Elements.First();
+        float scale = ctx.GetTransform().M11;
         float newHeight = Math.Max((int)((1f * scale) + 0.5f), 1) / scale;
         Line.VerticalHeight = newHeight;
         if (LockToBottom)
         {
-            g.TranslateTransform(0, 1f - newHeight);
+            ctx.TranslateTransform(0, 1f - newHeight);
         }
 
         Line.DrawVertical(ctx, state, width, clipRegion);
-        g.Clip = oldClip;
-        g.Transform = oldMatrix;
-        g.SmoothingMode = oldMode;
     }
 
     public string ComponentName => "Graph Separator";
@@ -83,25 +82,18 @@ public class GraphSeparatorComponent : IComponent
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        Region oldClip = g.Clip;
-        System.Drawing.Drawing2D.Matrix oldMatrix = g.Transform;
-        System.Drawing.Drawing2D.SmoothingMode oldMode = g.SmoothingMode;
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
-        g.Clip = new Region();
+        using IDrawingState state_ = ctx.Save();
+        ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
         Line.LineColor = Settings.GraphLinesColor;
-        float scale = g.Transform.Elements.First();
+        float scale = ctx.GetTransform().M11;
         float newWidth = Math.Max((int)((1f * scale) + 0.5f), 1) / scale;
         if (LockToBottom)
         {
-            g.TranslateTransform(1f - newWidth, 0);
+            ctx.TranslateTransform(1f - newWidth, 0);
         }
 
         Line.HorizontalWidth = newWidth;
         Line.DrawHorizontal(ctx, state, height, clipRegion);
-        g.Clip = oldClip;
-        g.Transform = oldMatrix;
-        g.SmoothingMode = oldMode;
     }
 
     public void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode)

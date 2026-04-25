@@ -42,62 +42,55 @@ public class SeparatorComponent : IComponent
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        if (DisplayedSize > 0)
+        if (DisplayedSize <= 0)
         {
-            Region oldClip = g.Clip;
-            System.Drawing.Drawing2D.Matrix oldMatrix = g.Transform;
-            System.Drawing.Drawing2D.SmoothingMode oldMode = g.SmoothingMode;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
-            g.Clip = new Region();
-            Line.LineColor = UseSeparatorColor ? state.LayoutSettings.SeparatorsColor : state.LayoutSettings.ThinSeparatorsColor;
-            float scale = g.Transform.Elements.First();
-            float newHeight = Math.Max((int)((DisplayedSize * scale) + 0.5f), 1) / scale;
-            Line.VerticalHeight = newHeight;
-            if (LockToBottom)
-            {
-                g.TranslateTransform(0, 2f - newHeight);
-            }
-            else if (DisplayedSize > 1)
-            {
-                g.TranslateTransform(0, (2f - newHeight) / 2f);
-            }
-
-            Line.DrawVertical(ctx, state, width, clipRegion);
-            g.Clip = oldClip;
-            g.Transform = oldMatrix;
-            g.SmoothingMode = oldMode;
+            return;
         }
+
+        // See ThinSeparatorComponent: the old `g.Clip = new Region();` clip-widen is dropped —
+        // Skia can't express it, and in practice the 2-pixel separator fits inside the clip set
+        // by ComponentRenderer.
+        using IDrawingState state_ = ctx.Save();
+        ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
+        Line.LineColor = UseSeparatorColor ? state.LayoutSettings.SeparatorsColor : state.LayoutSettings.ThinSeparatorsColor;
+        float scale = ctx.GetTransform().M11;
+        float newHeight = Math.Max((int)((DisplayedSize * scale) + 0.5f), 1) / scale;
+        Line.VerticalHeight = newHeight;
+        if (LockToBottom)
+        {
+            ctx.TranslateTransform(0, 2f - newHeight);
+        }
+        else if (DisplayedSize > 1)
+        {
+            ctx.TranslateTransform(0, (2f - newHeight) / 2f);
+        }
+
+        Line.DrawVertical(ctx, state, width, clipRegion);
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        if (DisplayedSize > 0)
+        if (DisplayedSize <= 0)
         {
-            Region oldClip = g.Clip;
-            System.Drawing.Drawing2D.Matrix oldMatrix = g.Transform;
-            System.Drawing.Drawing2D.SmoothingMode oldMode = g.SmoothingMode;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
-            g.Clip = new Region();
-            Line.LineColor = UseSeparatorColor ? state.LayoutSettings.SeparatorsColor : state.LayoutSettings.ThinSeparatorsColor;
-            float scale = g.Transform.Elements.First();
-            float newWidth = Math.Max((int)((DisplayedSize * scale) + 0.5f), 1) / scale;
-            if (LockToBottom)
-            {
-                g.TranslateTransform(2f - newWidth, 0);
-            }
-            else if (DisplayedSize > 1)
-            {
-                g.TranslateTransform((2f - newWidth) / 2f, 0);
-            }
-
-            Line.HorizontalWidth = newWidth;
-            Line.DrawHorizontal(ctx, state, height, clipRegion);
-            g.Clip = oldClip;
-            g.Transform = oldMatrix;
-            g.SmoothingMode = oldMode;
+            return;
         }
+
+        using IDrawingState state_ = ctx.Save();
+        ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
+        Line.LineColor = UseSeparatorColor ? state.LayoutSettings.SeparatorsColor : state.LayoutSettings.ThinSeparatorsColor;
+        float scale = ctx.GetTransform().M11;
+        float newWidth = Math.Max((int)((DisplayedSize * scale) + 0.5f), 1) / scale;
+        if (LockToBottom)
+        {
+            ctx.TranslateTransform(2f - newWidth, 0);
+        }
+        else if (DisplayedSize > 1)
+        {
+            ctx.TranslateTransform((2f - newWidth) / 2f, 0);
+        }
+
+        Line.HorizontalWidth = newWidth;
+        Line.DrawHorizontal(ctx, state, height, clipRegion);
     }
 
     public string ComponentName

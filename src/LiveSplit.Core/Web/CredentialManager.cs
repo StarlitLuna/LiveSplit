@@ -30,11 +30,10 @@ using System.Runtime.InteropServices;
 namespace LiveSplit.Web;
 
 /// <summary>
-/// Cross-platform façade for the OS-level credential vault. The Windows backing uses the
-/// Win32 <c>CredReadW</c> / <c>CredWriteW</c> family (DPAPI-encrypted under the hood); the
-/// Linux backing stores AES-encrypted blobs in <c>~/.config/LiveSplit/credentials/{name}</c>
-/// with a key derived from <c>/etc/machine-id</c>. macOS isn't yet wired up — falls through
-/// to the Linux file-backed implementation when invoked there.
+/// OS-level credential vault façade. The Windows backing uses the Win32 <c>CredReadW</c> /
+/// <c>CredWriteW</c> family (DPAPI-encrypted under the hood); the Linux backing stores
+/// AES-GCM-encrypted blobs in <c>~/.config/LiveSplit/credentials/</c> with a key derived
+/// from <c>/etc/machine-id</c>.
 /// </summary>
 public static class CredentialManager
 {
@@ -47,9 +46,14 @@ public static class CredentialManager
             return new WindowsCredentialStore();
         }
 
-        // Default to the file-backed store for any non-Windows OS. macOS could in principle
-        // route through the Keychain instead, but that backing isn't implemented yet.
-        return new LinuxCredentialStore();
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return new LinuxCredentialStore();
+        }
+
+        throw new PlatformNotSupportedException(
+            $"CredentialManager has no backing for {RuntimeInformation.OSDescription}. " +
+            $"Supported platforms: Windows, Linux.");
     }
 
     public static Credential ReadCredential(string applicationName) => Backend.Read(applicationName);

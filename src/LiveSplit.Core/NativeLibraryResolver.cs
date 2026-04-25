@@ -92,11 +92,6 @@ internal static class NativeLibraryResolver
             return new[] { $"linux-{arch}", "linux" };
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            return new[] { $"osx-{arch}", "osx" };
-        }
-
         return Array.Empty<string>();
     }
 
@@ -107,12 +102,6 @@ internal static class NativeLibraryResolver
             return libraryName + ".dll";
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            return "lib" + libraryName + ".dylib";
-        }
-
-        // Linux / other Unix.
         return "lib" + libraryName + ".so";
     }
 }

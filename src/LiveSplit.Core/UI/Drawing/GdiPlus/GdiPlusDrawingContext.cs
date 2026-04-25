@@ -42,6 +42,12 @@ public sealed class GdiPlusDrawingContext : IDrawingContext
     public void DrawLine(IPen pen, PointF p1, PointF p2)
         => _g.DrawLine(((GdiPlusPen)pen).Native, p1, p2);
 
+    public void FillPolygon(IBrush brush, PointF[] points)
+        => _g.FillPolygon(Unwrap(brush), points);
+
+    public void FillEllipse(IBrush brush, float x, float y, float width, float height)
+        => _g.FillEllipse(Unwrap(brush), x, y, width, height);
+
     public void DrawImage(IImage image, RectangleF destRect)
         => _g.DrawImage(((GdiPlusImage)image).Native, destRect);
 

@@ -50,12 +50,10 @@ public class LabelsComponent : IComponent
 
     private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
-        Graphics g = ctx.AsGraphics();
         if (Settings.BackgroundGradient == ExtendedGradientType.Alternating)
         {
-            g.FillRectangle(new SolidBrush(
-                Settings.BackgroundColor
-                ), 0, 0, width, height);
+            using ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(Settings.BackgroundColor);
+            ctx.FillRectangle(brush, 0, 0, width, height);
         }
 
         foreach (SimpleLabel label in LabelsList)
@@ -86,20 +84,18 @@ public class LabelsComponent : IComponent
 
                 label.Font = state.LayoutSettings.TextFont;
                 label.HasShadow = state.LayoutSettings.DropShadows;
-                label.Draw(g);
+                label.Draw(ctx);
             }
         }
     }
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }
 

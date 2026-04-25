@@ -85,7 +85,6 @@ public class SplitComponent : IComponent
 
     private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
-        Graphics g = ctx.AsGraphics();
         if (NeedUpdateAll)
         {
             UpdateAll(state);
@@ -93,11 +92,11 @@ public class SplitComponent : IComponent
 
         if (Settings.BackgroundGradient == ExtendedGradientType.Alternating)
         {
-            g.FillRectangle(new SolidBrush(
-                (state.Run.IndexOf(Split) % 2) + (Settings.ShowColumnLabels ? 1 : 0) == 1
+            Color rowColor = (state.Run.IndexOf(Split) % 2) + (Settings.ShowColumnLabels ? 1 : 0) == 1
                 ? Settings.BackgroundColor2
-                : Settings.BackgroundColor
-                ), 0, 0, width, height);
+                : Settings.BackgroundColor;
+            using ISolidBrush rowBrush = DrawingApi.Factory.CreateSolidBrush(rowColor);
+            ctx.FillRectangle(rowBrush, 0, 0, width, height);
         }
 
         NameLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
@@ -151,16 +150,12 @@ public class SplitComponent : IComponent
 
             if (IsActive)
             {
-                var currentSplitBrush = new LinearGradientBrush(
-                    new PointF(0, 0),
-                    Settings.CurrentSplitGradient == GradientType.Horizontal
-                    ? new PointF(width, 0)
-                    : new PointF(0, height),
+                BackgroundHelper.DrawBackground(ctx,
                     Settings.CurrentSplitTopColor,
                     Settings.CurrentSplitGradient == GradientType.Plain
-                    ? Settings.CurrentSplitTopColor
-                    : Settings.CurrentSplitBottomColor);
-                g.FillRectangle(currentSplitBrush, 0, 0, width, height);
+                        ? Settings.CurrentSplitTopColor
+                        : Settings.CurrentSplitBottomColor,
+                    width, height, Settings.CurrentSplitGradient);
             }
 
             Image icon = Split.Icon;
@@ -193,6 +188,9 @@ public class SplitComponent : IComponent
                 }
 
                 ImageAnimator.UpdateFrames(shadow);
+                // Split icons + shadow are System.Drawing.Image from the XML loader; Phase 7
+                // migrates the image pipeline. Until then this branch gates Skia compatibility.
+                Graphics g = ctx.AsGraphics();
                 if (Settings.IconShadows && shadow != null)
                 {
                     g.DrawImage(
@@ -238,7 +236,7 @@ public class SplitComponent : IComponent
                     label.Font = state.LayoutSettings.TimesFont;
                     label.HasShadow = state.LayoutSettings.DropShadows;
                     label.IsMonospaced = true;
-                    label.Draw(g);
+                    label.Draw(ctx);
 
                     if (!string.IsNullOrEmpty(label.Text))
                     {
@@ -262,10 +260,9 @@ public class SplitComponent : IComponent
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         if (Settings.Display2Rows)
         {
-            VerticalHeight = Settings.SplitHeight + (0.85f * (g.MeasureString("A", state.LayoutSettings.TimesFont).Height + g.MeasureString("A", state.LayoutSettings.TextFont).Height));
+            VerticalHeight = Settings.SplitHeight + (0.85f * (MeasureFontCapHeight(ctx, state.LayoutSettings.TimesFont) + MeasureFontCapHeight(ctx, state.LayoutSettings.TextFont)));
             DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Horizontal);
         }
         else
@@ -277,9 +274,15 @@ public class SplitComponent : IComponent
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        MinimumHeight = 0.85f * (g.MeasureString("A", state.LayoutSettings.TimesFont).Height + g.MeasureString("A", state.LayoutSettings.TextFont).Height);
+        MinimumHeight = 0.85f * (MeasureFontCapHeight(ctx, state.LayoutSettings.TimesFont) + MeasureFontCapHeight(ctx, state.LayoutSettings.TextFont));
         DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
+    }
+
+    private static float MeasureFontCapHeight(IDrawingContext ctx, Font font)
+    {
+        using IFont iFont = DrawingApi.Factory.CreateFont(font.FontFamily.Name, font.Size, font.Style, font.Unit);
+        ITextFormat fmt = DrawingApi.Factory.CreateTextFormat();
+        return ctx.MeasureString("A", iFont, 9999, fmt).Height;
     }
 
     public string ComponentName => "Split";

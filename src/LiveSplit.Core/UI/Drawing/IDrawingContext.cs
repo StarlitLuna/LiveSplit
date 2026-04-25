@@ -20,6 +20,11 @@ public interface IDrawingContext
     void DrawRectangle(IPen pen, RectangleF rect);
     void DrawLine(IPen pen, PointF p1, PointF p2);
 
+    /// <summary>Fill a closed polygon. Used by the Graph component to paint delta fill regions.</summary>
+    void FillPolygon(IBrush brush, PointF[] points);
+    /// <summary>Fill an axis-aligned ellipse. Used by the Graph component to paint split circles.</summary>
+    void FillEllipse(IBrush brush, float x, float y, float width, float height);
+
     void DrawImage(IImage image, RectangleF destRect);
     void DrawImage(IImage image, Rectangle destRect, Rectangle srcRect);
     /// <summary>Draw a sub-rectangle of <paramref name="image"/> with a uniform opacity in [0, 1].</summary>
@@ -87,9 +92,11 @@ public interface ILinearGradientBrush : IBrush { }
 
 public interface IPen : IDisposable
 {
-    Color Color { get; }
-    float Width { get; }
+    Color Color { get; set; }
+    float Width { get; set; }
     LineJoin LineJoin { get; set; }
+    LineCap StartCap { get; set; }
+    LineCap EndCap { get; set; }
 }
 
 public interface IFont : IDisposable

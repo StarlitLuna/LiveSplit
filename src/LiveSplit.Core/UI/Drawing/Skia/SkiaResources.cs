@@ -55,9 +55,11 @@ internal sealed class SkiaLinearGradientBrush : ILinearGradientBrush
 
 internal sealed class SkiaPen : IPen
 {
-    public Color Color { get; }
-    public float Width { get; }
+    public Color Color { get; set; }
+    public float Width { get; set; }
     public LineJoin LineJoin { get; set; } = LineJoin.Miter;
+    public LineCap StartCap { get; set; } = LineCap.Flat;
+    public LineCap EndCap { get; set; } = LineCap.Flat;
 
     public SkiaPen(Color color, float width)
     {
@@ -71,6 +73,22 @@ internal sealed class SkiaPen : IPen
         LineJoin.Bevel => SKStrokeJoin.Bevel,
         _ => SKStrokeJoin.Miter,
     };
+
+    // Skia only has one stroke cap per paint; Graph rendering sets StartCap == EndCap so we
+    // collapse to a single value — prefer round/square if either endpoint requests it.
+    public SKStrokeCap SkStrokeCap
+    {
+        get
+        {
+            LineCap chosen = StartCap != LineCap.Flat ? StartCap : EndCap;
+            return chosen switch
+            {
+                LineCap.Round => SKStrokeCap.Round,
+                LineCap.Square => SKStrokeCap.Square,
+                _ => SKStrokeCap.Butt,
+            };
+        }
+    }
 
     public void Dispose()
     {

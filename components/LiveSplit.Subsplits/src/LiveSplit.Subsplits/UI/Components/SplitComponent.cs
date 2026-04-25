@@ -122,7 +122,7 @@ public class SplitComponent : IComponent
         LabelsList = [];
     }
 
-    private void SetMeasureLabels(Graphics g, LiveSplitState state)
+    private void SetMeasureLabels(IDrawingContext ctx, LiveSplitState state)
     {
         HeaderMeasureTimeLabel.Text = HeaderTimesFormatter.Format(new TimeSpan(24, 0, 0));
         HeaderMeasureDeltaLabel.Text = SectionTimerFormatter.Format(new TimeSpan(0, 9, 0, 0));
@@ -132,13 +132,12 @@ public class SplitComponent : IComponent
         HeaderMeasureDeltaLabel.Font = state.LayoutSettings.TimesFont;
         HeaderMeasureDeltaLabel.IsMonospaced = true;
 
-        HeaderMeasureTimeLabel.SetActualWidth(g);
-        HeaderMeasureDeltaLabel.SetActualWidth(g);
+        HeaderMeasureTimeLabel.SetActualWidth(ctx);
+        HeaderMeasureDeltaLabel.SetActualWidth(ctx);
     }
 
     private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         if (NeedUpdateAll)
         {
             UpdateAll(state);
@@ -146,30 +145,24 @@ public class SplitComponent : IComponent
 
         if (Settings.BackgroundGradient == ExtendedGradientType.Alternating)
         {
-            g.FillRectangle(new SolidBrush(
-                oddSplit
-                ? Settings.BackgroundColor
-                : Settings.BackgroundColor2
-                ), 0, 0, width, height);
+            Color rowColor = oddSplit ? Settings.BackgroundColor : Settings.BackgroundColor2;
+            using ISolidBrush rowBrush = DrawingApi.Factory.CreateSolidBrush(rowColor);
+            ctx.FillRectangle(rowBrush, 0, 0, width, height);
         }
 
         if ((IsSubsplit || ForceIndent) && Settings.OverrideSubsplitColor)
         {
-            var gradientBrush = new LinearGradientBrush(
-                new PointF(0, 0),
-                Settings.SubsplitGradient == GradientType.Horizontal
-                ? new PointF(width, 0)
-                : new PointF(0, height),
+            BackgroundHelper.DrawBackground(ctx,
                 Settings.SubsplitTopColor,
                 Settings.SubsplitGradient == GradientType.Plain
-                ? Settings.SubsplitTopColor
-                : Settings.SubsplitBottomColor);
-            g.FillRectangle(gradientBrush, 0, 0, width, height);
+                    ? Settings.SubsplitTopColor
+                    : Settings.SubsplitBottomColor,
+                width, height, Settings.SubsplitGradient);
         }
 
-        SetMeasureLabels(g, state);
-        TimeLabel.SetActualWidth(g);
-        DeltaLabel.SetActualWidth(g);
+        SetMeasureLabels(ctx, state);
+        TimeLabel.SetActualWidth(ctx);
+        DeltaLabel.SetActualWidth(ctx);
 
         NameLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         NameLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
@@ -234,22 +227,18 @@ public class SplitComponent : IComponent
 
             if (IsActive)
             {
-                var currentSplitBrush = new LinearGradientBrush(
-                    new PointF(0, 0),
-                    Settings.CurrentSplitGradient == GradientType.Horizontal
-                    ? new PointF(width, 0)
-                    : new PointF(0, height),
+                BackgroundHelper.DrawBackground(ctx,
                     Settings.CurrentSplitTopColor,
                     Settings.CurrentSplitGradient == GradientType.Plain
-                    ? Settings.CurrentSplitTopColor
-                    : Settings.CurrentSplitBottomColor);
-                g.FillRectangle(currentSplitBrush, 0, 0, width, height);
+                        ? Settings.CurrentSplitTopColor
+                        : Settings.CurrentSplitBottomColor,
+                    width, height, Settings.CurrentSplitGradient);
             }
 
             if (IsHighlight)
             {
-                var highlightPen = new Pen(Color.White);
-                g.DrawRectangle(highlightPen, 0, 0, width - 1, height - 1);
+                using IPen highlightPen = DrawingApi.Factory.CreatePen(Color.White, 1f);
+                ctx.DrawRectangle(highlightPen, new RectangleF(0, 0, width - 1, height - 1));
             }
 
             Image icon = Split.Icon;
@@ -282,6 +271,9 @@ public class SplitComponent : IComponent
                 }
 
                 ImageAnimator.UpdateFrames(shadow);
+                // Split icons + shadow are System.Drawing.Image from the XML loader; Phase 7
+                // migrates the image pipeline. Until then this branch gates Skia compatibility.
+                Graphics g = ctx.AsGraphics();
                 if (Settings.IconShadows && shadow != null)
                 {
                     g.DrawImage(
@@ -326,7 +318,7 @@ public class SplitComponent : IComponent
                     label.Font = state.LayoutSettings.TimesFont;
                     label.HasShadow = state.LayoutSettings.DropShadows;
                     label.IsMonospaced = true;
-                    label.Draw(g);
+                    label.Draw(ctx);
 
                     if (!string.IsNullOrEmpty(label.Text))
                     {
@@ -346,37 +338,30 @@ public class SplitComponent : IComponent
                     NameLabel.X += 20;
                 }
 
-                NameLabel.Draw(g);
+                NameLabel.Draw(ctx);
             }
         }
     }
 
     private void DrawHeader(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         if (Settings.BackgroundGradient == ExtendedGradientType.Alternating)
         {
-            g.FillRectangle(new SolidBrush(
-                oddSplit
-                ? Settings.BackgroundColor
-                : Settings.BackgroundColor2
-                ), 0, 0, width, height);
+            Color rowColor = oddSplit ? Settings.BackgroundColor : Settings.BackgroundColor2;
+            using ISolidBrush rowBrush = DrawingApi.Factory.CreateSolidBrush(rowColor);
+            ctx.FillRectangle(rowBrush, 0, 0, width, height);
         }
 
-        var currentSplitBrush = new LinearGradientBrush(
-            new PointF(0, 0),
-            Settings.HeaderGradient == GradientType.Horizontal
-            ? new PointF(width, 0)
-            : new PointF(0, height),
+        BackgroundHelper.DrawBackground(ctx,
             Settings.HeaderTopColor,
             Settings.HeaderGradient == GradientType.Plain
-            ? Settings.HeaderTopColor
-            : Settings.HeaderBottomColor);
-        g.FillRectangle(currentSplitBrush, 0, 0, width, height);
+                ? Settings.HeaderTopColor
+                : Settings.HeaderBottomColor,
+            width, height, Settings.HeaderGradient);
 
-        SetMeasureLabels(g, state);
-        TimeLabel.SetActualWidth(g);
-        DeltaLabel.SetActualWidth(g);
+        SetMeasureLabels(ctx, state);
+        TimeLabel.SetActualWidth(ctx);
+        DeltaLabel.SetActualWidth(ctx);
 
         NameLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         NameLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
@@ -465,6 +450,9 @@ public class SplitComponent : IComponent
             }
 
             ImageAnimator.UpdateFrames(shadow);
+            // Split icons + shadow are System.Drawing.Image from the XML loader; Phase 7
+            // migrates the image pipeline. Until then this branch gates Skia compatibility.
+            Graphics g = ctx.AsGraphics();
             if (Settings.IconShadows && shadow != null)
             {
                 g.DrawImage(
@@ -531,19 +519,18 @@ public class SplitComponent : IComponent
             }
         }
 
-        NameLabel.Draw(g);
-        TimeLabel.Draw(g);
-        DeltaLabel.Draw(g);
+        NameLabel.Draw(ctx);
+        TimeLabel.Draw(ctx);
+        DeltaLabel.Draw(ctx);
 
         DeltaLabel.Brush = new SolidBrush(originalColor);
     }
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         if (Settings.Display2Rows)
         {
-            VerticalHeight = Settings.SplitHeight + (0.85f * (g.MeasureString("A", state.LayoutSettings.TimesFont).Height + g.MeasureString("A", state.LayoutSettings.TextFont).Height));
+            VerticalHeight = Settings.SplitHeight + (0.85f * (MeasureFontCapHeight(ctx, state.LayoutSettings.TimesFont) + MeasureFontCapHeight(ctx, state.LayoutSettings.TextFont)));
             if (Header)
             {
                 DrawHeader(ctx, state, width, VerticalHeight, LayoutMode.Horizontal, clipRegion);
@@ -569,8 +556,7 @@ public class SplitComponent : IComponent
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        MinimumHeight = 0.85f * (g.MeasureString("A", state.LayoutSettings.TimesFont).Height + g.MeasureString("A", state.LayoutSettings.TextFont).Height);
+        MinimumHeight = 0.85f * (MeasureFontCapHeight(ctx, state.LayoutSettings.TimesFont) + MeasureFontCapHeight(ctx, state.LayoutSettings.TextFont));
         if (Header)
         {
             DrawHeader(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal, clipRegion);
@@ -579,6 +565,13 @@ public class SplitComponent : IComponent
         {
             DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal, clipRegion);
         }
+    }
+
+    private static float MeasureFontCapHeight(IDrawingContext ctx, Font font)
+    {
+        using IFont iFont = DrawingApi.Factory.CreateFont(font.FontFamily.Name, font.Size, font.Style, font.Unit);
+        ITextFormat fmt = DrawingApi.Factory.CreateTextFormat();
+        return ctx.MeasureString("A", iFont, 9999, fmt).Height;
     }
 
     public string ComponentName => "Split";

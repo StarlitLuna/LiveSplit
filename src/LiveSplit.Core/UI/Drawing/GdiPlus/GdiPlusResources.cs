@@ -56,13 +56,34 @@ internal sealed class GdiPlusPen : IPen
         Native = new Pen(color, width);
     }
 
-    public Color Color => Native.Color;
-    public float Width => Native.Width;
+    public Color Color
+    {
+        get => Native.Color;
+        set => Native.Color = value;
+    }
+
+    public float Width
+    {
+        get => Native.Width;
+        set => Native.Width = value;
+    }
 
     public LineJoin LineJoin
     {
         get => Native.LineJoin;
         set => Native.LineJoin = value;
+    }
+
+    public LineCap StartCap
+    {
+        get => Native.StartCap;
+        set => Native.StartCap = value;
+    }
+
+    public LineCap EndCap
+    {
+        get => Native.EndCap;
+        set => Native.EndCap = value;
     }
 
     public void Dispose() => Native.Dispose();

@@ -413,7 +413,7 @@ public class SplitsComponent : IComponent
         }
     }
 
-    private void SetMeasureLabels(Graphics g, LiveSplitState state)
+    private void SetMeasureLabels(IDrawingContext ctx, LiveSplitState state)
     {
         MeasureTimeLabel.Text = TimeFormatter.Format(new TimeSpan(24, 0, 0));
         MeasureDeltaLabel.Text = DeltaTimeFormatter.Format(new TimeSpan(0, 9, 0, 0));
@@ -426,26 +426,24 @@ public class SplitsComponent : IComponent
         MeasureCharLabel.Font = state.LayoutSettings.TimesFont;
         MeasureCharLabel.IsMonospaced = true;
 
-        MeasureTimeLabel.SetActualWidth(g);
-        MeasureDeltaLabel.SetActualWidth(g);
-        MeasureCharLabel.SetActualWidth(g);
+        MeasureTimeLabel.SetActualWidth(ctx);
+        MeasureDeltaLabel.SetActualWidth(ctx);
+        MeasureCharLabel.SetActualWidth(ctx);
     }
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         Prepare(state);
         DrawBackground(ctx, width, VerticalHeight);
-        SetMeasureLabels(g, state);
+        SetMeasureLabels(ctx, state);
         InternalComponent.DrawVertical(ctx, state, width, clipRegion);
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         Prepare(state);
         DrawBackground(ctx, HorizontalWidth, height);
-        SetMeasureLabels(g, state);
+        SetMeasureLabels(ctx, state);
         InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
     }
 

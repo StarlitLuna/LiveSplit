@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -54,19 +55,17 @@ public class GraphComponent : IComponent
 
     private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
-        Graphics g = ctx.AsGraphics();
-        System.Drawing.Drawing2D.Matrix oldMatrix = g.Transform;
+        using IDrawingState savedState = ctx.Save();
         if (Settings.FlipGraph)
         {
-            g.ScaleTransform(1, -1);
-            g.TranslateTransform(0, -height);
+            ctx.ScaleTransform(1, -1);
+            ctx.TranslateTransform(0, -height);
         }
 
-        DrawUnflipped(g, state, width, height);
-        g.Transform = oldMatrix;
+        DrawUnflipped(ctx, state, width, height);
     }
 
-    private void DrawUnflipped(Graphics g, LiveSplitState state, float width, float height)
+    private void DrawUnflipped(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
         string comparison = Settings.Comparison == "Current Comparison" ? state.CurrentComparison : Settings.Comparison;
         if (!state.Run.Comparisons.Contains(comparison))
@@ -78,17 +77,17 @@ public class GraphComponent : IComponent
 
         CalculateMiddleAndGraphEdge(height, totalDelta, out float graphEdge, out float graphHeight, out float middle);
 
-        var brush = new SolidBrush(Settings.GraphColor);
-        DrawGreenAndRedGraphPortions(g, width, graphHeight, middle, brush);
+        using ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(Settings.GraphColor);
+        DrawGreenAndRedGraphPortions(ctx, width, graphHeight, middle, brush);
 
         CalculateGridlines(state, width, totalDelta, graphEdge, graphHeight, out double gridValueX, out double gridValueY);
 
-        var pen = new Pen(Settings.GridlinesColor, 2.0f);
-        DrawGridlines(g, width, graphHeight, middle, gridValueX, gridValueY, pen);
+        using IPen pen = DrawingApi.Factory.CreatePen(Settings.GridlinesColor, 2.0f);
+        DrawGridlines(ctx, width, graphHeight, middle, gridValueX, gridValueY, pen);
 
         try
         {
-            DrawGraph(g, state, width, comparison, totalDelta, graphEdge, graphHeight, middle, brush, pen);
+            DrawGraph(ctx, state, width, comparison, totalDelta, graphEdge, graphHeight, middle, brush, pen);
         }
         catch (Exception ex)
         {
@@ -96,11 +95,11 @@ public class GraphComponent : IComponent
         }
     }
 
-    private void DrawGraph(Graphics g, LiveSplitState state, float width, string comparison, TimeSpan TotalDelta, float graphEdge, float graphHeight, float middle, SolidBrush brush, Pen pen)
+    private void DrawGraph(IDrawingContext ctx, LiveSplitState state, float width, string comparison, TimeSpan TotalDelta, float graphEdge, float graphHeight, float middle, ISolidBrush brush, IPen pen)
     {
         pen.Width = 1.75f;
-        pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
-        pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+        pen.StartCap = LineCap.Round;
+        pen.EndCap = LineCap.Round;
         var circleList = new List<PointF>();
         if (Deltas.Count > 0)
         {
@@ -132,29 +131,29 @@ public class GraphComponent : IComponent
                 if (Deltas[y] != null)
                 {
                     CalculateRightSideCoordinates(state, width, TotalDelta, graphEdge, graphHeight, ref heightTwo, ref widthTwo, y);
-                    DrawFillBeneathGraph(g, TotalDelta, middle, brush, heightOne, heightTwo, widthOne, widthTwo, y, pointArray);
-                    AddGraphNode(g, state, comparison, pen, circleList, heightOne, heightTwo, widthOne, widthTwo, y);
+                    DrawFillBeneathGraph(ctx, TotalDelta, middle, brush, heightOne, heightTwo, widthOne, widthTwo, y, pointArray);
+                    AddGraphNode(circleList, heightTwo, widthTwo);
                     CalculateLeftSideCoordinates(state, width, TotalDelta, graphEdge, graphHeight, ref heightOne, ref widthOne, y);
                 }
                 else
                 {
-                    DrawFinalPolygon(g, middle, brush, pointArray);
+                    DrawFinalPolygon(ctx, middle, brush, pointArray);
                 }
 
                 y++;
             }
 
-            DrawCirclesAndLines(g, state, width, comparison, pen, brush, circleList);
+            DrawCirclesAndLines(ctx, state, width, pen, brush, circleList);
         }
     }
 
-    private void DrawCirclesAndLines(Graphics g, LiveSplitState state, float width, string comparison, Pen pen, SolidBrush brush, List<PointF> circleList)
+    private void DrawCirclesAndLines(IDrawingContext ctx, LiveSplitState state, float width, IPen pen, ISolidBrush brush, List<PointF> circleList)
     {
         int i = Deltas.Count - 1;
 
         circleList.Reverse();
         PointF previousCircle = circleList.FirstOrDefault();
-        if (previousCircle != null)
+        if (circleList.Count > 0)
         {
             circleList.RemoveAt(0);
         }
@@ -173,10 +172,10 @@ public class GraphComponent : IComponent
                 pen.Color = brush.Color = Settings.GraphGoldColor;
             }
 
-            DrawLineShadowed(g, pen, previousCircle.X, previousCircle.Y, circle.X, circle.Y, Settings.FlipGraph);
+            DrawLineShadowed(ctx, pen, previousCircle.X, previousCircle.Y, circle.X, circle.Y, Settings.FlipGraph);
             if (!finalDelta)
             {
-                DrawEllipseShadowed(g, brush, previousCircle.X - 2.5f, previousCircle.Y - 2.5f, 5, 5, Settings.FlipGraph);
+                DrawEllipseShadowed(ctx, brush, previousCircle.X - 2.5f, previousCircle.Y - 2.5f, 5, 5, Settings.FlipGraph);
             }
 
             previousCircle = circle;
@@ -184,7 +183,7 @@ public class GraphComponent : IComponent
         }
     }
 
-    private void AddGraphNode(Graphics g, LiveSplitState state, string comparison, Pen pen, List<PointF> circleList, float heightOne, float heightTwo, float widthOne, float widthTwo, int y)
+    private static void AddGraphNode(List<PointF> circleList, float heightTwo, float widthTwo)
     {
         circleList.Add(new PointF(widthTwo, heightTwo));
     }
@@ -229,11 +228,11 @@ public class GraphComponent : IComponent
         }
     }
 
-    private void DrawFillBeneathGraph(Graphics g, TimeSpan TotalDelta, float Middle, SolidBrush brush, float heightOne, float heightTwo, float widthOne, float widthTwo, int y, List<PointF> pointArray)
+    private void DrawFillBeneathGraph(IDrawingContext ctx, TimeSpan TotalDelta, float Middle, ISolidBrush brush, float heightOne, float heightTwo, float widthOne, float widthTwo, int y, List<PointF> pointArray)
     {
         if ((heightTwo - Middle) / (heightOne - Middle) > 0)
         {
-            AddFillOneSide(g, Middle, brush, heightOne, heightTwo, widthOne, widthTwo, y, pointArray);
+            AddFillOneSide(ctx, Middle, brush, heightOne, heightTwo, widthOne, widthTwo, y, pointArray);
         }
         else
         {
@@ -243,35 +242,35 @@ public class GraphComponent : IComponent
                 ratio = 0.0f;
             }
 
-            AddFillFirstHalf(g, TotalDelta, Middle, brush, heightOne, widthOne, widthTwo, y, pointArray, ratio);
-            AddFillSecondHalf(g, TotalDelta, Middle, brush, heightTwo, widthOne, widthTwo, y, pointArray, ratio);
+            AddFillFirstHalf(ctx, TotalDelta, Middle, brush, heightOne, widthOne, widthTwo, y, pointArray, ratio);
+            AddFillSecondHalf(ctx, TotalDelta, Middle, brush, heightTwo, widthOne, widthTwo, y, pointArray, ratio);
         }
 
         if (y == Deltas.Count - 1)
         {
-            DrawFinalPolygon(g, Middle, brush, pointArray);
+            DrawFinalPolygon(ctx, Middle, brush, pointArray);
         }
     }
 
-    private void DrawFinalPolygon(Graphics g, float Middle, SolidBrush brush, List<PointF> pointArray)
+    private void DrawFinalPolygon(IDrawingContext ctx, float Middle, ISolidBrush brush, List<PointF> pointArray)
     {
         pointArray.Add(new PointF(pointArray.Last().X, Middle));
         if (pointArray.Count > 1)
         {
             brush.Color = pointArray[^2].Y > Middle ? Settings.CompleteFillColorAhead : Settings.CompleteFillColorBehind;
-            g.FillPolygon(brush, pointArray.ToArray());
+            ctx.FillPolygon(brush, pointArray.ToArray());
         }
     }
 
     // Adds to the point array the second portion of the fill if the graph goes from ahead to behind or vice versa
-    private void AddFillSecondHalf(Graphics g, TimeSpan TotalDelta, float Middle, SolidBrush brush, float heightTwo, float widthOne, float widthTwo, int y, List<PointF> pointArray, float ratio)
+    private void AddFillSecondHalf(IDrawingContext ctx, TimeSpan TotalDelta, float Middle, ISolidBrush brush, float heightTwo, float widthOne, float widthTwo, int y, List<PointF> pointArray, float ratio)
     {
         if (y == Deltas.Count - 1 && IsLiveDeltaActive)
         {
             brush.Color = heightTwo > Middle ? Settings.PartialFillColorAhead : Settings.PartialFillColorBehind;
             if (TotalDelta != TimeSpan.Zero)
             {
-                g.FillPolygon(brush, new PointF[]
+                ctx.FillPolygon(brush, new PointF[]
                 {
                     new(widthOne+((widthTwo-widthOne)*ratio), Middle),
                     new(widthTwo, heightTwo),
@@ -289,14 +288,14 @@ public class GraphComponent : IComponent
     }
 
     // Adds to the point array the first portion of the fill if the graph goes from ahead to behind or vice versa
-    private void AddFillFirstHalf(Graphics g, TimeSpan TotalDelta, float Middle, SolidBrush brush, float heightOne, float widthOne, float widthTwo, int y, List<PointF> pointArray, float ratio)
+    private void AddFillFirstHalf(IDrawingContext ctx, TimeSpan TotalDelta, float Middle, ISolidBrush brush, float heightOne, float widthOne, float widthTwo, int y, List<PointF> pointArray, float ratio)
     {
         if (y == Deltas.Count - 1 && IsLiveDeltaActive)
         {
             brush.Color = heightOne > Middle ? Settings.PartialFillColorAhead : Settings.PartialFillColorBehind;
             if (TotalDelta != TimeSpan.Zero)
             {
-                g.FillPolygon(brush, new PointF[]
+                ctx.FillPolygon(brush, new PointF[]
                 {
                     new(widthOne, Middle),
                     new(widthOne, heightOne),
@@ -308,18 +307,18 @@ public class GraphComponent : IComponent
         {
             pointArray.Add(new PointF(widthOne + ((widthTwo - widthOne) * ratio), Middle));
             brush.Color = heightOne > Middle ? Settings.CompleteFillColorAhead : Settings.CompleteFillColorBehind;
-            g.FillPolygon(brush, pointArray.ToArray());
+            ctx.FillPolygon(brush, pointArray.ToArray());
             brush.Color = heightOne > Middle ? Settings.CompleteFillColorAhead : Settings.CompleteFillColorBehind;
         }
     }
 
     // Adds to the point array the fill under the graph if the current portion of the graph is either completely ahead or completely behind
-    private void AddFillOneSide(Graphics g, float Middle, SolidBrush brush, float heightOne, float heightTwo, float widthOne, float widthTwo, int y, List<PointF> pointArray)
+    private void AddFillOneSide(IDrawingContext ctx, float Middle, ISolidBrush brush, float heightOne, float heightTwo, float widthOne, float widthTwo, int y, List<PointF> pointArray)
     {
         if (y == Deltas.Count - 1 && IsLiveDeltaActive)
         {
             brush.Color = heightTwo > Middle ? Settings.PartialFillColorAhead : Settings.PartialFillColorBehind;
-            g.FillPolygon(brush, new PointF[]
+            ctx.FillPolygon(brush, new PointF[]
             {
                  new(widthOne, Middle),
                  new(widthOne, heightOne),
@@ -333,21 +332,19 @@ public class GraphComponent : IComponent
         }
     }
 
-    private static void DrawGridlines(Graphics g, float width, float GraphHeight, float Middle, double gridValueX, double gridValueY, Pen pen)
+    private static void DrawGridlines(IDrawingContext ctx, float width, float GraphHeight, float Middle, double gridValueX, double gridValueY, IPen pen)
     {
         if (gridValueX > 0)
         {
             for (double x = gridValueX; x < width; x += gridValueX)
             {
-                g.DrawLine(pen, (float)x,
-                        0, (float)x,
-                        GraphHeight * 2);
+                ctx.DrawLine(pen, new PointF((float)x, 0), new PointF((float)x, GraphHeight * 2));
             }
         }
 
         for (float y = Middle - 1; y > 0; y -= (float)gridValueY)
         {
-            g.DrawLine(pen, 0, y, width, y);
+            ctx.DrawLine(pen, new PointF(0, y), new PointF(width, y));
             if (gridValueY < 0)
             {
                 break;
@@ -356,7 +353,7 @@ public class GraphComponent : IComponent
 
         for (float y = Middle; y < GraphHeight * 2; y += (float)gridValueY)
         {
-            g.DrawLine(pen, 0, y, width, y);
+            ctx.DrawLine(pen, new PointF(0, y), new PointF(width, y));
             if (gridValueY < 0)
             {
                 break;
@@ -411,12 +408,12 @@ public class GraphComponent : IComponent
         }
     }
 
-    private void DrawGreenAndRedGraphPortions(Graphics g, float width, float GraphHeight, float Middle, SolidBrush brush)
+    private void DrawGreenAndRedGraphPortions(IDrawingContext ctx, float width, float GraphHeight, float Middle, ISolidBrush brush)
     {
         brush.Color = Settings.BehindGraphColor;
-        g.FillRectangle(brush, 0, 0, width, Middle);
+        ctx.FillRectangle(brush, 0, 0, width, Middle);
         brush.Color = Settings.AheadGraphColor;
-        g.FillRectangle(brush, 0, Middle, width, (GraphHeight * 2) - Middle);
+        ctx.FillRectangle(brush, 0, Middle, width, (GraphHeight * 2) - Middle);
     }
 
     public bool CheckBestSegment(LiveSplitState state, int splitNumber, TimingMethod method)
@@ -431,54 +428,55 @@ public class GraphComponent : IComponent
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         DrawGeneral(ctx, state, width, VerticalHeight);
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         DrawGeneral(ctx, state, HorizontalWidth, height);
     }
 
-    private void DrawLineShadowed(Graphics g, Pen pen, float x1, float y1, float x2, float y2, bool flipShadow)
+    private void DrawLineShadowed(IDrawingContext ctx, IPen pen, float x1, float y1, float x2, float y2, bool flipShadow)
     {
-        var shadowPen = (Pen)pen.Clone();
-        shadowPen.Color = Settings.ShadowsColor;
+        Color originalColor = pen.Color;
+        pen.Color = Settings.ShadowsColor;
         if (!flipShadow)
         {
-            g.DrawLine(shadowPen, x1 + 1, y1 + 1, x2 + 1, y2 + 1);
-            g.DrawLine(shadowPen, x1 + 1, y1 + 2, x2 + 1, y2 + 2);
-            g.DrawLine(shadowPen, x1 + 1, y1 + 3, x2 + 1, y2 + 3);
-            g.DrawLine(pen, x1, y1, x2, y2);
+            ctx.DrawLine(pen, new PointF(x1 + 1, y1 + 1), new PointF(x2 + 1, y2 + 1));
+            ctx.DrawLine(pen, new PointF(x1 + 1, y1 + 2), new PointF(x2 + 1, y2 + 2));
+            ctx.DrawLine(pen, new PointF(x1 + 1, y1 + 3), new PointF(x2 + 1, y2 + 3));
         }
         else
         {
-            g.DrawLine(shadowPen, x1 + 1, y1 - 1, x2 + 1, y2 - 1);
-            g.DrawLine(shadowPen, x1 + 1, y1 - 2, x2 + 1, y2 - 2);
-            g.DrawLine(shadowPen, x1 + 1, y1 - 3, x2 + 1, y2 - 3);
-            g.DrawLine(pen, x1, y1, x2, y2);
+            ctx.DrawLine(pen, new PointF(x1 + 1, y1 - 1), new PointF(x2 + 1, y2 - 1));
+            ctx.DrawLine(pen, new PointF(x1 + 1, y1 - 2), new PointF(x2 + 1, y2 - 2));
+            ctx.DrawLine(pen, new PointF(x1 + 1, y1 - 3), new PointF(x2 + 1, y2 - 3));
         }
+
+        pen.Color = originalColor;
+        ctx.DrawLine(pen, new PointF(x1, y1), new PointF(x2, y2));
     }
 
-    private void DrawEllipseShadowed(Graphics g, Brush brush, float x, float y, float width, float height, bool flipShadow)
+    private void DrawEllipseShadowed(IDrawingContext ctx, ISolidBrush brush, float x, float y, float width, float height, bool flipShadow)
     {
-        var shadowBrush = new SolidBrush(Settings.ShadowsColor);
+        Color originalColor = brush.Color;
+        using ISolidBrush shadowBrush = DrawingApi.Factory.CreateSolidBrush(Settings.ShadowsColor);
 
         if (!flipShadow)
         {
-            g.FillEllipse(shadowBrush, x + 1, y + 1, width, height);
-            g.FillEllipse(shadowBrush, x + 1, y + 2, width, height);
-            g.FillEllipse(shadowBrush, x + 1, y + 3, width, height);
-            g.FillEllipse(brush, x, y, width, height);
+            ctx.FillEllipse(shadowBrush, x + 1, y + 1, width, height);
+            ctx.FillEllipse(shadowBrush, x + 1, y + 2, width, height);
+            ctx.FillEllipse(shadowBrush, x + 1, y + 3, width, height);
         }
         else
         {
-            g.FillEllipse(shadowBrush, x + 1, y - 1, width, height);
-            g.FillEllipse(shadowBrush, x + 1, y - 2, width, height);
-            g.FillEllipse(shadowBrush, x + 1, y - 3, width, height);
-            g.FillEllipse(brush, x, y, width, height);
+            ctx.FillEllipse(shadowBrush, x + 1, y - 1, width, height);
+            ctx.FillEllipse(shadowBrush, x + 1, y - 2, width, height);
+            ctx.FillEllipse(shadowBrush, x + 1, y - 3, width, height);
         }
+
+        brush.Color = originalColor;
+        ctx.FillEllipse(brush, x, y, width, height);
     }
 
     public string ComponentName => throw new NotImplementedException();

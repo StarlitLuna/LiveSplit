@@ -92,7 +92,6 @@ public class DetailedTimer : IComponent
 
     public void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
-        Graphics g = ctx.AsGraphics();
         Timer.DrawBackground(ctx, InternalComponent.TimerColor, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
 
         int lastSplitOffset = state.CurrentSplitIndex == state.Run.Count ? -1 : 0;
@@ -122,7 +121,9 @@ public class DetailedTimer : IComponent
 
             ImageAnimator.UpdateFrames(icon);
 
-            g.DrawImage(
+            // Split icon is a System.Drawing.Image from the XML loader; Phase 7 migrates
+            // the image pipeline. Until then, this branch gates Skia compatibility.
+            ctx.AsGraphics().DrawImage(
                 icon,
                 7 + ((originalDrawSize - drawWidth) / 2),
                 ((height - originalDrawSize) / 2.0f) + ((originalDrawSize - drawHeight) / 2),
@@ -166,7 +167,7 @@ public class DetailedTimer : IComponent
             LabelSegment.OutlineColor = state.LayoutSettings.TextOutlineColor;
             if (Comparison != "None")
             {
-                LabelSegment.Draw(g);
+                LabelSegment.Draw(ctx);
             }
 
             LabelBest.Font = labelsFont;
@@ -182,7 +183,7 @@ public class DetailedTimer : IComponent
             LabelBest.OutlineColor = state.LayoutSettings.TextOutlineColor;
             if (!HideComparison)
             {
-                LabelBest.Draw(g);
+                LabelBest.Draw(ctx);
             }
 
             float offset = Math.Max(LabelSegment.ActualWidth, HideComparison ? 0 : LabelBest.ActualWidth) + 10;
@@ -201,7 +202,7 @@ public class DetailedTimer : IComponent
                 SegmentTime.ShadowColor = state.LayoutSettings.ShadowsColor;
                 SegmentTime.OutlineColor = state.LayoutSettings.TextOutlineColor;
                 SegmentTime.IsMonospaced = true;
-                SegmentTime.Draw(g);
+                SegmentTime.Draw(ctx);
             }
 
             if (!HideComparison)
@@ -218,7 +219,7 @@ public class DetailedTimer : IComponent
                 BestSegmentTime.ShadowColor = state.LayoutSettings.ShadowsColor;
                 BestSegmentTime.OutlineColor = state.LayoutSettings.TextOutlineColor;
                 BestSegmentTime.IsMonospaced = true;
-                BestSegmentTime.Draw(g);
+                BestSegmentTime.Draw(ctx);
             }
 
             SplitName.Font = Settings.SplitNameFont;
@@ -234,37 +235,41 @@ public class DetailedTimer : IComponent
             SplitName.OutlineColor = state.LayoutSettings.TextOutlineColor;
             if (Settings.ShowSplitName)
             {
-                SplitName.Draw(g);
+                SplitName.Draw(ctx);
             }
         }
     }
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         DrawGeneral(ctx, state, width, VerticalHeight);
-        Matrix oldMatrix = g.Transform;
-        InternalComponent.Settings.TimerHeight = VerticalHeight * ((100f - Settings.SegmentTimerSizeRatio) / 100f);
-        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
-        g.Transform = oldMatrix;
-        g.TranslateTransform(0, VerticalHeight * ((100f - Settings.SegmentTimerSizeRatio) / 100f));
-        SegmentTimer.Settings.TimerHeight = VerticalHeight * (Settings.SegmentTimerSizeRatio / 100f);
-        SegmentTimer.DrawVertical(ctx, state, width, clipRegion);
-        g.Transform = oldMatrix;
+        {
+            using IDrawingState s = ctx.Save();
+            InternalComponent.Settings.TimerHeight = VerticalHeight * ((100f - Settings.SegmentTimerSizeRatio) / 100f);
+            InternalComponent.DrawVertical(ctx, state, width, clipRegion);
+        }
+        {
+            using IDrawingState s = ctx.Save();
+            ctx.TranslateTransform(0, VerticalHeight * ((100f - Settings.SegmentTimerSizeRatio) / 100f));
+            SegmentTimer.Settings.TimerHeight = VerticalHeight * (Settings.SegmentTimerSizeRatio / 100f);
+            SegmentTimer.DrawVertical(ctx, state, width, clipRegion);
+        }
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         DrawGeneral(ctx, state, HorizontalWidth, height);
-        Matrix oldMatrix = g.Transform;
-        InternalComponent.Settings.TimerWidth = HorizontalWidth;
-        InternalComponent.DrawHorizontal(ctx, state, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f), clipRegion);
-        g.Transform = oldMatrix;
-        g.TranslateTransform(0, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f));
-        SegmentTimer.DrawHorizontal(ctx, state, height * (Settings.SegmentTimerSizeRatio / 100f), clipRegion);
-        SegmentTimer.Settings.TimerWidth = HorizontalWidth;
-        g.Transform = oldMatrix;
+        {
+            using IDrawingState s = ctx.Save();
+            InternalComponent.Settings.TimerWidth = HorizontalWidth;
+            InternalComponent.DrawHorizontal(ctx, state, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f), clipRegion);
+        }
+        {
+            using IDrawingState s = ctx.Save();
+            ctx.TranslateTransform(0, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f));
+            SegmentTimer.DrawHorizontal(ctx, state, height * (Settings.SegmentTimerSizeRatio / 100f), clipRegion);
+            SegmentTimer.Settings.TimerWidth = HorizontalWidth;
+        }
     }
 
     public string ComponentName => "Detailed Timer";

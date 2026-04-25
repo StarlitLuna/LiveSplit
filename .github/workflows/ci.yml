@@ -101,11 +101,24 @@ jobs:
           name: LiveSplit_Linux_AppImage
           path: dist/LiveSplit-*.AppImage
 
-      # The Flatpak action runs in its own container with flatpak-builder +
-      # the freedesktop runtime preinstalled, downloads the SDK extensions the
-      # manifest declares (dotnet8 + rust-stable), builds inside the sandbox,
-      # bundles the result, and uploads it as a workflow artifact named after
-      # the bundle file.
+      # The Flatpak action drives flatpak-builder against the manifest, which
+      # downloads the SDK extensions the manifest declares (dotnet8 + rust-stable),
+      # builds inside the sandbox, bundles the result, and uploads it as a workflow
+      # artifact named after the bundle file. The action expects flatpak-builder on
+      # PATH but ubuntu-22.04 runners don't ship it, so we install it explicitly
+      # plus the matching runtime/SDK on the host before the action runs. (The
+      # alternative — running the whole job in `bilelmoussaoui/flatpak-github-actions`
+      # container — would conflict with the host-side AppImage step above.)
+      - name: Install flatpak-builder
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
+          flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      # NODE_NO_WARNINGS hides the punycode DEP0040 noise emitted by the action's
+      # own Node.js dependencies on Node 21+ runners — purely cosmetic, the action
+      # still functions on warning-emitting Node versions.
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:

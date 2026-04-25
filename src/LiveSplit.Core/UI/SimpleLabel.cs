@@ -8,7 +8,6 @@ using System.Windows.Forms;
 
 using LiveSplit.Options;
 using LiveSplit.UI.Drawing;
-using LiveSplit.UI.Drawing.GdiPlus;
 
 using static System.Windows.Forms.TextRenderer;
 
@@ -90,15 +89,6 @@ public class SimpleLabel
             Trimming = StringTrimming.EllipsisCharacter
         };
     }
-
-    // Graphics-taking overloads for callers that haven't been migrated off the direct
-    // System.Drawing.Graphics surface yet — they wrap `g` in a GdiPlusDrawingContext and
-    // forward. Phase 5.3 migrates each consumer to the IDrawingContext overloads; once that
-    // lands these three can be deleted.
-    public void Draw(Graphics g) => Draw(new GdiPlusDrawingContext(g));
-    public void SetActualWidth(Graphics g) => SetActualWidth(new GdiPlusDrawingContext(g));
-    public string CalculateAlternateText(Graphics g, float width)
-        => CalculateAlternateText(new GdiPlusDrawingContext(g), width);
 
     public void Draw(IDrawingContext ctx)
     {

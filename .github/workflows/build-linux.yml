@@ -2,6 +2,15 @@ name: Build Linux
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build'
+        required: true
+        default: linux-port
+        type: choice
+        options:
+          - linux-port
+          - master
 
 jobs:
   build-linux:
@@ -12,6 +21,7 @@ jobs:
       - name: Checkout LiveSplit
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.branch }}
           submodules: recursive
 
       - name: Set up .NET environment

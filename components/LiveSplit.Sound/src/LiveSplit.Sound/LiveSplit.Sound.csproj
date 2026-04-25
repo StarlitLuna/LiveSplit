@@ -1,20 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <UseWindowsForms>true</UseWindowsForms>
-
     <EnableDynamicLoading>true</EnableDynamicLoading>
 
-    <!-- Windows-only: NAudio is a Windows-only audio library. The non-Windows configuration
-         below compiles an empty Library so the solution still builds. -->
+    <!-- Windows-only at runtime: the original component used NAudio for sound playback,
+         which is Windows-only. The linux-port compiles an empty Library so the solution
+         still builds and the layout schema continues to recognize the component. -->
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
-    <UseWindowsForms>false</UseWindowsForms>
-    <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
-
-  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+  <ItemGroup>
     <Compile Remove="**\*.cs" />
     <Compile Include="LinuxStub.cs" />
   </ItemGroup>
@@ -22,10 +16,6 @@
   <ItemGroup>
     <ProjectReference Include="$(LsSrcPath)\LiveSplit.Core\LiveSplit.Core.csproj" Private="false" ExcludeAssets="runtime" />
     <ProjectReference Include="$(LsSrcPath)\UpdateManager\UpdateManager.csproj" Private="false" ExcludeAssets="runtime" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
-    <PackageReference Include="NAudio" Version="1.7.3" />
   </ItemGroup>
 
 </Project>

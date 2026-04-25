@@ -1,11 +1,10 @@
-﻿using System;
+using System;
 using System.Drawing;
-using System.Windows.Forms;
 using System.Xml;
 
 namespace LiveSplit.UI.Components;
 
-public partial class TitleSettings : UserControl
+public class TitleSettings
 {
     public bool ShowGameName { get; set; }
     public bool ShowCategoryName { get; set; }
@@ -38,7 +37,6 @@ public partial class TitleSettings : UserControl
 
     public TitleSettings()
     {
-        InitializeComponent();
         ShowGameName = true;
         ShowCategoryName = true;
         ShowAttemptCount = true;
@@ -55,44 +53,6 @@ public partial class TitleSettings : UserControl
         BackgroundGradient = GradientType.Vertical;
         TextAlignment = AlignmentType.Auto;
 
-        chkGameName.DataBindings.Add("Checked", this, "ShowGameName", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkCategoryName.DataBindings.Add("Checked", this, "ShowCategoryName", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkAttemptCount.DataBindings.Add("Checked", this, "ShowAttemptCount", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkFinishedRuns.DataBindings.Add("Checked", this, "ShowFinishedRunsCount", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkColor.DataBindings.Add("Checked", this, "OverrideTitleColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkSingleLine.DataBindings.Add("Checked", this, "SingleLine", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor.DataBindings.Add("BackColor", this, "TitleColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor1.DataBindings.Add("BackColor", this, "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor2.DataBindings.Add("BackColor", this, "BackgroundColor2", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkDisplayGameIcon.DataBindings.Add("Checked", this, "DisplayGameIcon", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbGradientType.DataBindings.Add("SelectedItem", this, "GradientString", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkRegion.DataBindings.Add("Checked", this, "ShowRegion", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkPlatform.DataBindings.Add("Checked", this, "ShowPlatform", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkVariables.DataBindings.Add("Checked", this, "ShowVariables", false, DataSourceUpdateMode.OnPropertyChanged);
-    }
-
-    private void TitleSettings_Load(object sender, EventArgs e)
-    {
-        chkColor_CheckedChanged(null, null);
-        cmbTextAlignment.SelectedIndex = (int)TextAlignment;
-    }
-
-    private void chkColor_CheckedChanged(object sender, EventArgs e)
-    {
-        label3.Enabled = btnColor.Enabled = chkColor.Checked;
-    }
-
-    private void cmbGradientType_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        btnColor1.Visible = cmbGradientType.SelectedItem.ToString() != "Plain";
-        btnColor2.DataBindings.Clear();
-        btnColor2.DataBindings.Add("BackColor", this, btnColor1.Visible ? "BackgroundColor2" : "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        GradientString = cmbGradientType.SelectedItem.ToString();
-    }
-
-    private void cmbTextAlignment_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        TextAlignment = (AlignmentType)cmbTextAlignment.SelectedIndex;
     }
 
     public void SetSettings(XmlNode node)
@@ -176,8 +136,4 @@ public partial class TitleSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "TextAlignment", (int)TextAlignment);
     }
 
-    private void ColorButtonClick(object sender, EventArgs e)
-    {
-        SettingsHelper.ColorButtonClick((Button)sender, this);
-    }
 }

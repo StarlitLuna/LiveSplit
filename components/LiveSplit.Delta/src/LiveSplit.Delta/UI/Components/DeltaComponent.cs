@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Windows.Forms;
-
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
 using LiveSplit.TimeFormatters;
@@ -73,18 +71,18 @@ public class DeltaComponent : IComponent
             width, height, Settings.BackgroundGradient);
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         DrawBackground(ctx, state, width, VerticalHeight);
         PrepareDraw(state);
-        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
+        InternalComponent.DrawVertical(ctx, state, width);
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         DrawBackground(ctx, state, HorizontalWidth, height);
         PrepareDraw(state);
-        InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
+        InternalComponent.DrawHorizontal(ctx, state, height);
     }
 
     public float VerticalHeight => InternalComponent.VerticalHeight;
@@ -100,13 +98,7 @@ public class DeltaComponent : IComponent
             ? ""
             : " (" + CompositeComparisons.GetShortComparisonName(Settings.Comparison) + ")");
 
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        Settings.Mode = mode;
-        return Settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         Settings.Mode = mode;
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Delta" + (Settings.Comparison == "Current Comparison"

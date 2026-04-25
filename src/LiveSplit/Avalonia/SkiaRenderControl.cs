@@ -62,7 +62,7 @@ public sealed class SkiaRenderControl : Control
 
         float drawWidth = mode == LayoutMode.Vertical ? w / scale : overallSize;
         float drawHeight = mode == LayoutMode.Vertical ? overallSize : h / scale;
-        Host.Renderer.Render(ctx, Host.State, drawWidth, drawHeight, mode, null);
+        Host.Renderer.Render(ctx, Host.State, drawWidth, drawHeight, mode);
 
         using SKImage image = surface.Snapshot();
         using SKData data = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -133,7 +133,7 @@ public sealed class SkiaRenderControl : Control
             float drawWidth = mode == LayoutMode.Vertical ? width / scale : overallSize;
             float drawHeight = mode == LayoutMode.Vertical ? overallSize : height / scale;
 
-            _host.Renderer.Render(ctx, state, drawWidth, drawHeight, mode, null);
+            _host.Renderer.Render(ctx, state, drawWidth, drawHeight, mode);
         }
     }
 }

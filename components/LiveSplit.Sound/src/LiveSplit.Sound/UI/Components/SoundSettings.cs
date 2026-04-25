@@ -1,12 +1,11 @@
-﻿using System;
-using System.Windows.Forms;
+using System;
 using System.Xml;
 
 using NAudio.Wave;
 
 namespace LiveSplit.UI.Components;
 
-public partial class SoundSettings : UserControl
+public class SoundSettings
 {
     public string Split { get; set; }
     public string SplitAheadGaining { get; set; }
@@ -43,7 +42,6 @@ public partial class SoundSettings : UserControl
 
     public SoundSettings()
     {
-        InitializeComponent();
 
         Split =
         SplitAheadGaining =
@@ -83,38 +81,6 @@ public partial class SoundSettings : UserControl
             cbOutputDevice.Items.Add(WaveOut.GetCapabilities(i));
         }
 
-        txtSplitPath.DataBindings.Add("Text", this, "Split");
-        txtSplitAheadGaining.DataBindings.Add("Text", this, "SplitAheadGaining");
-        txtSplitAheadLosing.DataBindings.Add("Text", this, "SplitAheadLosing");
-        txtSplitBehindGaining.DataBindings.Add("Text", this, "SplitBehindGaining");
-        txtSplitBehindLosing.DataBindings.Add("Text", this, "SplitBehindLosing");
-        txtBestSegment.DataBindings.Add("Text", this, "BestSegment");
-        txtUndo.DataBindings.Add("Text", this, "UndoSplit");
-        txtSkip.DataBindings.Add("Text", this, "SkipSplit");
-        txtPersonalBest.DataBindings.Add("Text", this, "PersonalBest");
-        txtNotAPersonalBest.DataBindings.Add("Text", this, "NotAPersonalBest");
-        txtReset.DataBindings.Add("Text", this, "Reset");
-        txtPause.DataBindings.Add("Text", this, "Pause");
-        txtResume.DataBindings.Add("Text", this, "Resume");
-        txtStartTimer.DataBindings.Add("Text", this, "StartTimer");
-
-        cbOutputDevice.DataBindings.Add("SelectedIndex", this, "OutputDevice");
-
-        tbGeneralVolume.DataBindings.Add("Value", this, "GeneralVolume");
-        tbSplitVolume.DataBindings.Add("Value", this, "SplitVolume");
-        tbSplitAheadGainingVolume.DataBindings.Add("Value", this, "SplitAheadGainingVolume");
-        tbSplitAheadLosingVolume.DataBindings.Add("Value", this, "SplitAheadLosingVolume");
-        tbSplitBehindGainingVolume.DataBindings.Add("Value", this, "SplitBehindGainingVolume");
-        tbSplitBehindLosingVolume.DataBindings.Add("Value", this, "SplitBehindLosingVolume");
-        tbBestSegmentVolume.DataBindings.Add("Value", this, "BestSegmentVolume");
-        tbUndoVolume.DataBindings.Add("Value", this, "UndoSplitVolume");
-        tbSkipVolume.DataBindings.Add("Value", this, "SkipSplitVolume");
-        tbPersonalBestVolume.DataBindings.Add("Value", this, "PersonalBestVolume");
-        tbNotAPersonalBestVolume.DataBindings.Add("Value", this, "NotAPersonalBestVolume");
-        tbResetVolume.DataBindings.Add("Value", this, "ResetVolume");
-        tbPauseVolume.DataBindings.Add("Value", this, "PauseVolume");
-        tbResumeVolume.DataBindings.Add("Value", this, "ResumeVolume");
-        tbStartTimerVolume.DataBindings.Add("Value", this, "StartTimerVolume");
     }
 
     public void SetSettings(XmlNode node)
@@ -222,76 +188,6 @@ public partial class SoundSettings : UserControl
         callback(path);
 
         return path;
-    }
-
-    private void btnSplit_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtSplitPath, (x) => Split = x);
-    }
-
-    private void btnAheadGaining_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtSplitAheadGaining, (x) => SplitAheadGaining = x);
-    }
-
-    private void btnAheadLosing_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtSplitAheadLosing, (x) => SplitAheadLosing = x);
-    }
-
-    private void btnBehindGaining_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtSplitBehindGaining, (x) => SplitBehindGaining = x);
-    }
-
-    private void btnBehindLosing_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtSplitBehindLosing, (x) => SplitBehindLosing = x);
-    }
-
-    private void btnBestSegment_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtBestSegment, (x) => BestSegment = x);
-    }
-
-    private void btnUndo_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtUndo, (x) => UndoSplit = x);
-    }
-
-    private void btnSkipSplit_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtSkip, (x) => SkipSplit = x);
-    }
-
-    private void btnPersonalBest_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtPersonalBest, (x) => PersonalBest = x);
-    }
-
-    private void btnNotAPersonalBest_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtNotAPersonalBest, (x) => NotAPersonalBest = x);
-    }
-
-    private void btnReset_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtReset, (x) => Reset = x);
-    }
-
-    private void btnPause_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtPause, (x) => Pause = x);
-    }
-
-    private void btnResume_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtResume, (x) => Resume = x);
-    }
-
-    private void btnStartTimer_Click(object sender, EventArgs e)
-    {
-        BrowseForPath(txtStartTimer, (x) => StartTimer = x);
     }
 
     private void VolumeTrackBarScrollHandler(object sender, EventArgs e)

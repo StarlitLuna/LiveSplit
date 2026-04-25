@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -6,8 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
-using System.Windows.Forms;
-
 using LiveSplit.Model;
 using LiveSplit.Options;
 using LiveSplit.TimeFormatters;
@@ -122,8 +120,9 @@ public class Imgur : IRunUploadPlatform
             dynamic result = UploadImage(image, titleBuilder.ToString(), comment);
 
             string url = "http://imgur.com/" + (string)result.data.id;
-            Process.Start(url);
-            Clipboard.SetText(url);
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+            // Clipboard.SetText was Windows-only; the Avalonia host should copy the returned
+            // URL via TopLevel.Clipboard.SetTextAsync once we plumb the upload result back.
         }
 
         return true;

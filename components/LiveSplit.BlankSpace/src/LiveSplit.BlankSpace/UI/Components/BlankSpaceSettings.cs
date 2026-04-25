@@ -1,13 +1,12 @@
-﻿using System;
+using System;
 using System.Drawing;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Localization;
 
 namespace LiveSplit.UI.Components;
 
-public partial class BlankSpaceSettings : UserControl
+public class BlankSpaceSettings
 {
     private static string T(string source) => UiLocalizer.Translate(source, LanguageResolver.ResolveCurrentCultureLanguage());
 
@@ -27,45 +26,12 @@ public partial class BlankSpaceSettings : UserControl
 
     public BlankSpaceSettings()
     {
-        InitializeComponent();
 
         SpaceHeight = 100;
         SpaceWidth = 100;
         BackgroundColor = Color.Transparent;
         BackgroundColor2 = Color.Transparent;
         BackgroundGradient = GradientType.Plain;
-        cmbGradientType.DataBindings.Add("SelectedItem", this, "GradientString", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor1.DataBindings.Add("BackColor", this, "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor2.DataBindings.Add("BackColor", this, "BackgroundColor2", false, DataSourceUpdateMode.OnPropertyChanged);
-    }
-
-    private void cmbGradientType_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        string selectedText = cmbGradientType.SelectedItem.ToString();
-        btnColor1.Visible = selectedText != "Plain";
-        btnColor2.DataBindings.Clear();
-        btnColor2.DataBindings.Add("BackColor", this, btnColor1.Visible ? "BackgroundColor2" : "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        GradientString = cmbGradientType.SelectedItem.ToString();
-    }
-
-    private void BlankSpaceSettings_Load(object sender, EventArgs e)
-    {
-        if (Mode == LayoutMode.Horizontal)
-        {
-            trkSize.DataBindings.Clear();
-            trkSize.Minimum = 1;
-            trkSize.Maximum = 1000;
-            trkSize.DataBindings.Add("Value", this, "SpaceWidth", false, DataSourceUpdateMode.OnPropertyChanged);
-            lblSize.Text = T("Width:");
-        }
-        else
-        {
-            trkSize.DataBindings.Clear();
-            trkSize.Minimum = 1;
-            trkSize.Maximum = 1000;
-            trkSize.DataBindings.Add("Value", this, "SpaceHeight", false, DataSourceUpdateMode.OnPropertyChanged);
-            lblSize.Text = T("Height:");
-        }
     }
 
     public void SetSettings(XmlNode node)
@@ -102,8 +68,4 @@ public partial class BlankSpaceSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "BackgroundGradient", BackgroundGradient);
     }
 
-    private void ColorButtonClick(object sender, EventArgs e)
-    {
-        SettingsHelper.ColorButtonClick((Button)sender, this);
-    }
 }

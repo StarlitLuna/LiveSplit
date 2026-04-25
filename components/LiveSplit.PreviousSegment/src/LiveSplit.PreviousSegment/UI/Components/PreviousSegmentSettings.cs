@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Linq;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model;
@@ -10,7 +9,7 @@ using LiveSplit.TimeFormatters;
 
 namespace LiveSplit.UI.Components;
 
-public partial class PreviousSegmentSettings : UserControl
+public class PreviousSegmentSettings
 {
     public Color TextColor { get; set; }
     public bool OverrideTextColor { get; set; }
@@ -36,7 +35,6 @@ public partial class PreviousSegmentSettings : UserControl
 
     public PreviousSegmentSettings()
     {
-        InitializeComponent();
 
         TextColor = Color.FromArgb(255, 255, 255);
         OverrideTextColor = false;
@@ -50,119 +48,6 @@ public partial class PreviousSegmentSettings : UserControl
         Display2Rows = false;
         ShowPossibleTimeSave = false;
 
-        btnTextColor.DataBindings.Add("BackColor", this, "TextColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkOverride.DataBindings.Add("Checked", this, "OverrideTextColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbGradientType.DataBindings.Add("SelectedItem", this, "GradientString", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor1.DataBindings.Add("BackColor", this, "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor2.DataBindings.Add("BackColor", this, "BackgroundColor2", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkDropDecimals.DataBindings.Add("Checked", this, "DropDecimals", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbComparison.DataBindings.Add("SelectedItem", this, "Comparison", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkPossibleTimeSave.DataBindings.Add("Checked", this, "ShowPossibleTimeSave", false, DataSourceUpdateMode.OnPropertyChanged);
-    }
-
-    private void chkOverride_CheckedChanged(object sender, EventArgs e)
-    {
-        label1.Enabled = btnTextColor.Enabled = chkOverride.Checked;
-    }
-
-    private void cmbComparison_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        Comparison = cmbComparison.SelectedItem.ToString();
-    }
-
-    private void rdoDeltaHundredths_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateDeltaAccuracy();
-    }
-
-    private void rdoDeltaTenths_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateDeltaAccuracy();
-    }
-
-    private void rdoDeltaSeconds_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateDeltaAccuracy();
-    }
-
-    private void PreviousSegmentSettings_Load(object sender, EventArgs e)
-    {
-        chkOverride_CheckedChanged(null, null);
-        chkPossibleTimeSave_CheckedChanged(null, null);
-        cmbComparison.Items.Clear();
-        cmbComparison.Items.Add("Current Comparison");
-        cmbComparison.Items.AddRange(CurrentState.Run.Comparisons.Where(x => x is not BestSplitTimesComparisonGenerator.ComparisonName and not NoneComparisonGenerator.ComparisonName).ToArray());
-        if (!cmbComparison.Items.Contains(Comparison))
-        {
-            cmbComparison.Items.Add(Comparison);
-        }
-
-        rdoDeltaHundredths.Checked = DeltaAccuracy == TimeAccuracy.Hundredths;
-        rdoDeltaTenths.Checked = DeltaAccuracy == TimeAccuracy.Tenths;
-        rdoDeltaSeconds.Checked = DeltaAccuracy == TimeAccuracy.Seconds;
-        rdoTimeSaveHundredths.Checked = TimeSaveAccuracy == TimeAccuracy.Hundredths;
-        rdoTimeSaveTenths.Checked = TimeSaveAccuracy == TimeAccuracy.Tenths;
-        rdoTimeSaveSeconds.Checked = TimeSaveAccuracy == TimeAccuracy.Seconds;
-        if (Mode == LayoutMode.Horizontal)
-        {
-            chkTwoRows.Enabled = false;
-            chkTwoRows.DataBindings.Clear();
-            chkTwoRows.Checked = true;
-        }
-        else
-        {
-            chkTwoRows.Enabled = true;
-            chkTwoRows.DataBindings.Clear();
-            chkTwoRows.DataBindings.Add("Checked", this, "Display2Rows", false, DataSourceUpdateMode.OnPropertyChanged);
-        }
-    }
-
-    private void UpdateDeltaAccuracy()
-    {
-        if (rdoDeltaSeconds.Checked)
-        {
-            DeltaAccuracy = TimeAccuracy.Seconds;
-        }
-        else if (rdoDeltaTenths.Checked)
-        {
-            DeltaAccuracy = TimeAccuracy.Tenths;
-        }
-        else if (rdoDeltaHundredths.Checked)
-        {
-            DeltaAccuracy = TimeAccuracy.Hundredths;
-        }
-        else
-        {
-            DeltaAccuracy = TimeAccuracy.Milliseconds;
-        }
-    }
-
-    private void UpdateTimeSaveAccuracy()
-    {
-        if (rdoTimeSaveSeconds.Checked)
-        {
-            TimeSaveAccuracy = TimeAccuracy.Seconds;
-        }
-        else if (rdoTimeSaveTenths.Checked)
-        {
-            TimeSaveAccuracy = TimeAccuracy.Tenths;
-        }
-        else if (rdoTimeSaveHundredths.Checked)
-        {
-            TimeSaveAccuracy = TimeAccuracy.Hundredths;
-        }
-        else
-        {
-            TimeSaveAccuracy = TimeAccuracy.Milliseconds;
-        }
-    }
-
-    private void cmbGradientType_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        btnColor1.Visible = cmbGradientType.SelectedItem.ToString() != "Plain";
-        btnColor2.DataBindings.Clear();
-        btnColor2.DataBindings.Add("BackColor", this, btnColor1.Visible ? "BackgroundColor2" : "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        GradientString = cmbGradientType.SelectedItem.ToString();
     }
 
     public void SetSettings(XmlNode node)
@@ -209,28 +94,4 @@ public partial class PreviousSegmentSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "TimeSaveAccuracy", TimeSaveAccuracy);
     }
 
-    private void ColorButtonClick(object sender, EventArgs e)
-    {
-        SettingsHelper.ColorButtonClick((Button)sender, this);
-    }
-
-    private void rdoTimeSaveSeconds_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateTimeSaveAccuracy();
-    }
-
-    private void rdoTimeSaveTenths_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateTimeSaveAccuracy();
-    }
-
-    private void rdoTimeSaveHundredths_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateTimeSaveAccuracy();
-    }
-
-    private void chkPossibleTimeSave_CheckedChanged(object sender, EventArgs e)
-    {
-        rdoTimeSaveSeconds.Enabled = rdoTimeSaveTenths.Enabled = rdoTimeSaveHundredths.Enabled = boxTimeSaveAccuracy.Enabled = chkPossibleTimeSave.Checked;
-    }
 }

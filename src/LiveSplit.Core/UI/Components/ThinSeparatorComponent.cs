@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.UI.Drawing;
@@ -35,7 +34,7 @@ public class ThinSeparatorComponent : IComponent
         Cache = new GraphicsCache();
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         // No explicit clip-widen here: Skia can't express GDI+'s `g.Clip = new Region();`
         // idiom, and a 1-pixel separator fits inside the clip ComponentRenderer already sets.
@@ -51,10 +50,10 @@ public class ThinSeparatorComponent : IComponent
             ctx.TranslateTransform(0, 1f - newHeight);
         }
 
-        Line.DrawVertical(ctx, state, width, clipRegion);
+        Line.DrawVertical(ctx, state, width);
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         using IDrawingState state_ = ctx.Save();
         ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
@@ -67,16 +66,11 @@ public class ThinSeparatorComponent : IComponent
         }
 
         Line.HorizontalWidth = newWidth;
-        Line.DrawHorizontal(ctx, state, height, clipRegion);
+        Line.DrawHorizontal(ctx, state, height);
     }
 
     public string ComponentName
         => "Thin Separator";
-
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        throw new NotImplementedException();
-    }
 
     public void SetSettings(System.Xml.XmlNode settings)
     {

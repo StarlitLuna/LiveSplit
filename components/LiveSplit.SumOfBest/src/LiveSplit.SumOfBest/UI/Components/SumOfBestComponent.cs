@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
-
 using LiveSplit.Model;
 using LiveSplit.TimeFormatters;
 using LiveSplit.UI.Drawing;
@@ -99,7 +97,7 @@ public class SumOfBestComponent : IComponent
             width, height, Settings.BackgroundGradient);
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         DrawBackground(ctx, state, width, VerticalHeight);
 
@@ -114,10 +112,10 @@ public class SumOfBestComponent : IComponent
         InternalComponent.NameLabel.ForeColor = Settings.OverrideTextColor ? Settings.TextColor : state.LayoutSettings.TextColor;
         InternalComponent.ValueLabel.ForeColor = Settings.OverrideTimeColor ? Settings.TimeColor : state.LayoutSettings.TextColor;
 
-        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
+        InternalComponent.DrawVertical(ctx, state, width);
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         DrawBackground(ctx, state, HorizontalWidth, height);
 
@@ -130,7 +128,7 @@ public class SumOfBestComponent : IComponent
         InternalComponent.NameLabel.ForeColor = Settings.OverrideTextColor ? Settings.TextColor : state.LayoutSettings.TextColor;
         InternalComponent.ValueLabel.ForeColor = Settings.OverrideTimeColor ? Settings.TimeColor : state.LayoutSettings.TextColor;
 
-        InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
+        InternalComponent.DrawHorizontal(ctx, state, height);
     }
 
     public float VerticalHeight => InternalComponent.VerticalHeight;
@@ -143,13 +141,7 @@ public class SumOfBestComponent : IComponent
 
     public string ComponentName => "Sum of Best";
 
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        Settings.Mode = mode;
-        return Settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         Settings.Mode = mode;
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Sum of Best");

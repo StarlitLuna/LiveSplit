@@ -1,22 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <UseWindowsForms>true</UseWindowsForms>
-
     <EnableDynamicLoading>true</EnableDynamicLoading>
-    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
 
-    <!-- Windows-only: depends on VLC ActiveX COM interop bindings that only exist on
-         Windows. The non-Windows configuration below compiles an empty Library so the
-         solution still builds. -->
+    <!-- Windows-only at runtime: the original component depended on VLC ActiveX COM interop,
+         which has no Linux equivalent. The linux-port compiles an empty Library so the solution
+         still builds and the layout schema continues to recognize the component. -->
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
-    <UseWindowsForms>false</UseWindowsForms>
-    <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
-
-  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+  <ItemGroup>
     <Compile Remove="**\*.cs" />
     <Compile Include="LinuxStub.cs" />
   </ItemGroup>
@@ -24,15 +16,6 @@
   <ItemGroup>
     <ProjectReference Include="$(LsSrcPath)\LiveSplit.Core\LiveSplit.Core.csproj" Private="false" ExcludeAssets="runtime" />
     <ProjectReference Include="$(LsSrcPath)\UpdateManager\UpdateManager.csproj" Private="false" ExcludeAssets="runtime" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
-    <PackageReference Include="System.Resources.Extensions" Version="6.0.0" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
-    <Reference Include="$(LsLibPath)\VLC\AxInterop.AXVLC.dll" />
-    <Reference Include="$(LsLibPath)\VLC\Interop.AXVLC.dll" />
   </ItemGroup>
 
 </Project>

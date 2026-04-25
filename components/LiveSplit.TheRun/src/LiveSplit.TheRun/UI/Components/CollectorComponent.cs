@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -6,7 +6,6 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model;
@@ -267,29 +266,17 @@ public class CollectorComponent : LogicComponent
 
     private void ShowToast(Action<UploadToast> action)
     {
-        if (!Settings.IsToastEnabled || State.Form == null || State.Form.IsDisposed)
+        if (!Settings.IsToastEnabled)
         {
             return;
         }
 
-        void invoke()
+        if (toast == null || toast.IsDisposed)
         {
-            if (toast == null || toast.IsDisposed)
-            {
-                toast = new UploadToast(State.Form);
-            }
-
-            action(toast);
+            toast = new UploadToast(null);
         }
 
-        if (State.Form.InvokeRequired)
-        {
-            State.Form.Invoke((Action)invoke);
-        }
-        else
-        {
-            invoke();
-        }
+        action(toast);
     }
 
     private string EncodeUrl(string url)
@@ -406,13 +393,7 @@ public class CollectorComponent : LogicComponent
         return Settings.GetSettings(document);
     }
 
-    public override Control GetSettingsControl(LayoutMode mode)
-    {
-        Settings.Mode = mode;
-        return Settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         Settings.Mode = mode;
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Component");

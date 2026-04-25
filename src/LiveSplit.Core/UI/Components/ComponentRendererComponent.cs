@@ -1,8 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
-using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.UI.Drawing;
@@ -33,22 +31,17 @@ public class ComponentRendererComponent : ComponentRenderer, IComponent
     public float PaddingBottom => VisibleComponents.Any() ? VisibleComponents.Last().PaddingBottom : 0;
     public float PaddingRight => VisibleComponents.Any() ? VisibleComponents.Last().PaddingRight : 0;
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
-        Render(ctx, state, width, 0, LayoutMode.Vertical, clipRegion);
+        Render(ctx, state, width, 0, LayoutMode.Vertical);
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
-        Render(ctx, state, 0, height, LayoutMode.Horizontal, clipRegion);
+        Render(ctx, state, 0, height, LayoutMode.Horizontal);
     }
 
     public string ComponentName => throw new NotSupportedException();
-
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        throw new NotSupportedException();
-    }
 
     public void SetSettings(System.Xml.XmlNode settings)
     {

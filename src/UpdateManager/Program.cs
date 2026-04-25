@@ -1,25 +1,21 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Windows.Forms;
 
 namespace UpdateManager;
 
+/// <summary>
+/// The original UpdateManager was a WinForms-hosted updater (UpdateForm) that polled remote
+/// XML manifests for new builds. The linux-port shipped through Flatpak/AppImage handles updates
+/// out-of-band, so the GUI is gone — but the entry point and CLI argument parsing stay so any
+/// hard-coded callers don't fail to launch the binary. A future net8.0 update flow can plug back
+/// in here with an Avalonia <c>UpdateWindow</c> + <see cref="Updater"/>.
+/// </summary>
 internal static class Program
 {
-    /// <summary>
-    /// Der Haupteinstiegspunkt für die Anwendung.
-    /// </summary>
-    [STAThread]
     private static void Main(string[] args)
     {
         try
         {
-            /*args = new String[4];
-            args[0] = "http://irc107.xe.cx/update.xml";
-            args[1] = "http://irc107.xe.cx/update/";
-            args[2] = "0.2.0.0";
-            args[3] = "D:\\Projekte\\C#\\IRC107\\bin\\Release\\IRC107.exe";*/
-            //"http://irc107.xe.cx/update.xml" "http://irc107.xe.cx/update/" 0.2.0.0 "D:\Projekte\C#\IRC107\bin\Release\IRC107.exe"
             if (args.Length >= 3)
             {
                 List<IUpdateable> updateables = [];
@@ -28,9 +24,9 @@ internal static class Program
                     updateables.Add(new Updateable(args[i], args[i + 1], Version.Parse(args[i + 2])));
                 }
 
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new UpdateForm(updateables, (args.Length % 3 == 1) ? args[^1] : null));
+                // No-op: the WinForms UpdateForm is gone on the linux-port. Construct the
+                // Updateables to keep the parsing path warm in case a CLI consumer relies on
+                // the binary returning successfully.
             }
         }
         catch (Exception) { }

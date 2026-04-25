@@ -1,12 +1,13 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.ASL;
 using LiveSplit.Model;
 using LiveSplit.Options;
+
+using Timer = System.Timers.Timer;
 
 namespace LiveSplit.UI.Components;
 
@@ -49,9 +50,9 @@ public class ASLComponent : LogicComponent
         // -try- to run a little faster than 60hz
         // note: Timer isn't very reliable and quite often takes ~30ms
         // we need to switch to threading
-        _update_timer = new Timer() { Interval = 15 };
-        _update_timer.Tick += (sender, args) => UpdateScript();
-        _update_timer.Enabled = true;
+        _update_timer = new Timer { Interval = 15 };
+        _update_timer.Elapsed += (sender, args) => UpdateScript();
+        _update_timer.Start();
     }
 
     public ASLComponent(LiveSplitState state, string script_path)
@@ -77,12 +78,7 @@ public class ASLComponent : LogicComponent
         _update_timer?.Dispose();
     }
 
-    public override Control GetSettingsControl(LayoutMode mode)
-    {
-        return _settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(_settings, "Component");
     }

@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model;
@@ -268,24 +267,19 @@ public class Title : IComponent
         }
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
     }
 
     public string ComponentName => "Title";
 
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        return Settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Title");
     }

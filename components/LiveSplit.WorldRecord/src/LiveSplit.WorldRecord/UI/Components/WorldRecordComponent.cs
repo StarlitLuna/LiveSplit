@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Localization;
@@ -430,27 +429,21 @@ public class WorldRecordComponent : IComponent
         InternalComponent.ValueLabel.ForeColor = Settings.OverrideTimeColor ? Settings.TimeColor : state.LayoutSettings.TextColor;
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, System.Drawing.Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         DrawBackground(ctx, state, HorizontalWidth, height);
         PrepareDraw(state, LayoutMode.Horizontal);
-        InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
+        InternalComponent.DrawHorizontal(ctx, state, height);
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, System.Drawing.Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         DrawBackground(ctx, state, width, VerticalHeight);
         PrepareDraw(state, LayoutMode.Vertical);
-        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
+        InternalComponent.DrawVertical(ctx, state, width);
     }
 
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        Settings.Mode = mode;
-        return Settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         Settings.Mode = mode;
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, T("World Record"));

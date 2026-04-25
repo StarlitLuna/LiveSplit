@@ -2,7 +2,7 @@
 
   <!-- Project properties. -->
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <LangVersion>12</LangVersion>
 
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>

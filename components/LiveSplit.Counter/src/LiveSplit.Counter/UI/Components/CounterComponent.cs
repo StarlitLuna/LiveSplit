@@ -1,8 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
-
 using LiveSplit.Model;
 using LiveSplit.UI.Drawing;
 
@@ -103,24 +101,19 @@ public class CounterComponent : IComponent
         CounterValueLabel.Draw(ctx);
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
     }
 
     public string ComponentName => "Counter";
 
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        return Settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Counter");
     }

@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model;
@@ -129,9 +127,8 @@ public class LayoutSerializationFontOverridesMust
 
         public IDictionary<string, Action> ContextMenuControls => null;
 
-        public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion) { }
-        public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion) { }
-        public Control GetSettingsControl(LayoutMode mode) { return null; }
+        public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height) { }
+        public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width) { }
 
         public XmlNode GetSettings(XmlDocument document)
         {

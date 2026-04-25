@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.UI.Drawing;
@@ -75,7 +74,7 @@ public class InfoTextComponent : IComponent
         }
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         if (DisplayTwoRows)
         {
@@ -116,7 +115,7 @@ public class InfoTextComponent : IComponent
         }
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         DrawTwoRows(ctx, state, HorizontalWidth, height);
     }
@@ -167,11 +166,6 @@ public class InfoTextComponent : IComponent
     }
 
     public string ComponentName => throw new NotSupportedException();
-
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        throw new NotImplementedException();
-    }
 
     public void SetSettings(System.Xml.XmlNode settings)
     {

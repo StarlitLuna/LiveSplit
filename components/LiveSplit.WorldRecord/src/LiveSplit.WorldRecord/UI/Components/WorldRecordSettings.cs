@@ -1,13 +1,12 @@
-﻿using System;
+using System;
 using System.Drawing;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model;
 
 namespace LiveSplit.UI.Components;
 
-public partial class WorldRecordSettings : UserControl
+public class WorldRecordSettings
 {
     public Color TextColor { get; set; }
     public bool OverrideTextColor { get; set; }
@@ -39,7 +38,6 @@ public partial class WorldRecordSettings : UserControl
 
     public WorldRecordSettings()
     {
-        InitializeComponent();
 
         TextColor = Color.FromArgb(255, 255, 255);
         OverrideTextColor = false;
@@ -57,60 +55,6 @@ public partial class WorldRecordSettings : UserControl
         TimingMethod = "Default for Leaderboard";
         WRPrecision = WorldRecordPrecisionType.FromLeaderboard;
 
-        chkOverrideTextColor.DataBindings.Add("Checked", this, "OverrideTextColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnTextColor.DataBindings.Add("BackColor", this, "TextColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkOverrideTimeColor.DataBindings.Add("Checked", this, "OverrideTimeColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnTimeColor.DataBindings.Add("BackColor", this, "TimeColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbGradientType.DataBindings.Add("SelectedItem", this, "GradientString", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor1.DataBindings.Add("BackColor", this, "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor2.DataBindings.Add("BackColor", this, "BackgroundColor2", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkRegion.DataBindings.Add("Checked", this, "FilterRegion", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkPlatform.DataBindings.Add("Checked", this, "FilterPlatform", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkVariables.DataBindings.Add("Checked", this, "FilterVariables", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkSubcategories.DataBindings.Add("Checked", this, "FilterSubcategories", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbTimingMethod.DataBindings.Add("SelectedItem", this, "TimingMethod", false, DataSourceUpdateMode.OnPropertyChanged);
-    }
-
-    private void chkOverrideTimeColor_CheckedChanged(object sender, EventArgs e)
-    {
-        label2.Enabled = btnTimeColor.Enabled = chkOverrideTimeColor.Checked;
-    }
-
-    private void chkOverrideTextColor_CheckedChanged(object sender, EventArgs e)
-    {
-        label1.Enabled = btnTextColor.Enabled = chkOverrideTextColor.Checked;
-    }
-
-    private void WorldRecordSettings_Load(object sender, EventArgs e)
-    {
-        chkOverrideTextColor_CheckedChanged(null, null);
-        chkOverrideTimeColor_CheckedChanged(null, null);
-        if (Mode == LayoutMode.Horizontal)
-        {
-            chkTwoRows.Enabled = false;
-            chkTwoRows.DataBindings.Clear();
-            chkTwoRows.Checked = true;
-        }
-        else
-        {
-            chkTwoRows.Enabled = true;
-            chkTwoRows.DataBindings.Clear();
-            chkTwoRows.DataBindings.Add("Checked", this, "Display2Rows", false, DataSourceUpdateMode.OnPropertyChanged);
-        }
-
-        chkTwoRows_CheckedChanged(null, null);
-
-        rdoPrecByLeaderboard.Checked = WRPrecision == WorldRecordPrecisionType.FromLeaderboard;
-        rdoPrecSeconds.Checked = WRPrecision ==  WorldRecordPrecisionType.Seconds;
-        rdoPrecMillis.Checked = WRPrecision == WorldRecordPrecisionType.Milliseconds;
-    }
-
-    private void cmbGradientType_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        btnColor1.Visible = cmbGradientType.SelectedItem.ToString() != "Plain";
-        btnColor2.DataBindings.Clear();
-        btnColor2.DataBindings.Add("BackColor", this, btnColor1.Visible ? "BackgroundColor2" : "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        GradientString = cmbGradientType.SelectedItem.ToString();
     }
 
     public void SetSettings(XmlNode node)
@@ -165,45 +109,4 @@ public partial class WorldRecordSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "PrecisionType", WRPrecision);
     }
 
-    private void ColorButtonClick(object sender, EventArgs e)
-    {
-        SettingsHelper.ColorButtonClick((Button)sender, this);
-    }
-
-    private void chkTwoRows_CheckedChanged(object sender, EventArgs e)
-    {
-        if (chkTwoRows.Checked)
-        {
-            chkCenteredText.Enabled = false;
-            chkCenteredText.DataBindings.Clear();
-            chkCenteredText.Checked = false;
-        }
-        else
-        {
-            chkCenteredText.Enabled = true;
-            chkCenteredText.DataBindings.Clear();
-            chkCenteredText.DataBindings.Add("Checked", this, "CenteredText", false, DataSourceUpdateMode.OnPropertyChanged);
-        }
-    }
-
-    private void cmbTimingMethod_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        TimingMethod = cmbTimingMethod.SelectedItem.ToString();
-    }
-
-    private void rdoPrecision_CheckedChanged(object sender, EventArgs e)
-    {
-        if (rdoPrecByLeaderboard.Checked)
-        {
-            WRPrecision = WorldRecordPrecisionType.FromLeaderboard;
-        }
-        else if (rdoPrecSeconds.Checked)
-        {
-            WRPrecision = WorldRecordPrecisionType.Seconds;
-        }
-        else if (rdoPrecMillis.Checked)
-        {
-            WRPrecision = WorldRecordPrecisionType.Milliseconds;
-        }
-    }
 }

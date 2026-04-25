@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Windows.Forms;
 
 using LiveSplit.Options;
 using LiveSplit.UI.Components;
@@ -61,7 +60,9 @@ public class AutoSplitter : ICloneable
             catch (Exception ex)
             {
                 Log.Error(ex);
-                MessageBox.Show(state.Form, "The Auto Splitter could not be activated. (" + ex.Message + ")", "Activation Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                // The Windows build raised a MessageBox here; on the linux-port the host UI is
+                // expected to subscribe to errors via the trace listener / Log surface and
+                // surface them through Avalonia. Failure is silent at the model layer.
             }
         }
     }

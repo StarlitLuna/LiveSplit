@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.UI.Drawing;
@@ -39,7 +38,7 @@ public class SeparatorComponent : IComponent
         Cache = new GraphicsCache();
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         if (DisplayedSize <= 0)
         {
@@ -64,10 +63,10 @@ public class SeparatorComponent : IComponent
             ctx.TranslateTransform(0, (2f - newHeight) / 2f);
         }
 
-        Line.DrawVertical(ctx, state, width, clipRegion);
+        Line.DrawVertical(ctx, state, width);
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         if (DisplayedSize <= 0)
         {
@@ -89,16 +88,11 @@ public class SeparatorComponent : IComponent
         }
 
         Line.HorizontalWidth = newWidth;
-        Line.DrawHorizontal(ctx, state, height, clipRegion);
+        Line.DrawHorizontal(ctx, state, height);
     }
 
     public string ComponentName
         => "----------------------------------------------------------------------------";
-
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        return null;
-    }
 
     public void SetSettings(System.Xml.XmlNode settings)
     {

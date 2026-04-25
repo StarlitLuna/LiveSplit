@@ -419,8 +419,7 @@ public sealed class RunEditorDialog : Window
     {
         try
         {
-            return splitter.Component?.GetSettingsControlAvalonia(LayoutMode.Vertical) != null
-                || splitter.Component?.GetSettingsControl(LayoutMode.Vertical) != null;
+            return splitter.Component?.GetSettingsControl(LayoutMode.Vertical) != null;
         }
         catch
         {

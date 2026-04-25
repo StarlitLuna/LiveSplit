@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Linq;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Localization;
@@ -11,7 +10,7 @@ using LiveSplit.TimeFormatters;
 
 namespace LiveSplit.UI.Components;
 
-public partial class DetailedTimerSettings : UserControl
+public class DetailedTimerSettings
 {
     private static string T(string source) => UiLocalizer.Translate(source, LanguageResolver.ResolveCurrentCultureLanguage());
 
@@ -108,7 +107,6 @@ public partial class DetailedTimerSettings : UserControl
 
     public DetailedTimerSettings()
     {
-        InitializeComponent();
 
         Height = 75;
         Width = 200;
@@ -150,138 +148,6 @@ public partial class DetailedTimerSettings : UserControl
         HideComparison = false;
         TimingMethod = "Current Timing Method";
 
-        chkShowGradientSegmentTimer.DataBindings.Add("Checked", this, "SegmentTimerShowGradient", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkShowGradientTimer.DataBindings.Add("Checked", this, "TimerShowGradient", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkOverrideTimerColors.DataBindings.Add("Checked", this, "OverrideTimerColors", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkSplitName.DataBindings.Add("Checked", this, "ShowSplitName", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnTimerColor.DataBindings.Add("BackColor", this, "TimerColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnSegmentTimerColor.DataBindings.Add("BackColor", this, "SegmentTimerColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnSegmentLabelsColor.DataBindings.Add("BackColor", this, "SegmentLabelsColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnSegmentTimesColor.DataBindings.Add("BackColor", this, "SegmentTimesColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnSplitNameColor.DataBindings.Add("BackColor", this, "SplitNameColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        trkSegmentTimerRatio.DataBindings.Add("Value", this, "SegmentTimerSizeRatio", false, DataSourceUpdateMode.OnPropertyChanged);
-        lblSegmentLabelsFont.DataBindings.Add("Text", this, "SegmentLabelsFontString", false, DataSourceUpdateMode.OnPropertyChanged);
-        lblSegmentTimesFont.DataBindings.Add("Text", this, "SegmentTimesFontString", false, DataSourceUpdateMode.OnPropertyChanged);
-        lblSplitNameFont.DataBindings.Add("Text", this, "SplitNameFontString", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkDisplayIcon.DataBindings.Add("Checked", this, "DisplayIcon", false, DataSourceUpdateMode.OnPropertyChanged);
-        trkIconSize.DataBindings.Add("Value", this, "IconSize", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbGradientType.DataBindings.Add("SelectedItem", this, "GradientString", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor1.DataBindings.Add("BackColor", this, "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor2.DataBindings.Add("BackColor", this, "BackgroundColor2", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbComparison.DataBindings.Add("SelectedItem", this, "Comparison", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbComparison2.DataBindings.Add("SelectedItem", this, "Comparison2", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkHideComparison.DataBindings.Add("Checked", this, "HideComparison", false, DataSourceUpdateMode.OnPropertyChanged);
-        trkDecimalsSize.DataBindings.Add("Value", this, "DecimalsSize", false, DataSourceUpdateMode.OnPropertyChanged);
-        trkSegmentDecimalsSize.DataBindings.Add("Value", this, "SegmentTimerDecimalsSize", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbDigitsFormat.DataBindings.Add("SelectedItem", this, "DigitsFormat", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbAccuracy.DataBindings.Add("SelectedItem", this, "Accuracy", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbSegmentDigitsFormat.DataBindings.Add("SelectedItem", this, "SegmentDigitsFormat", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbSegmentAccuracy.DataBindings.Add("SelectedItem", this, "SegmentAccuracy", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbTimingMethod.DataBindings.Add("SelectedItem", this, "TimingMethod", false, DataSourceUpdateMode.OnPropertyChanged);
-    }
-
-    private void cmbTimingMethod_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        TimingMethod = cmbTimingMethod.SelectedItem.ToString();
-    }
-
-    private void cmbSegmentDigitsFormat_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        SegmentDigitsFormat = cmbSegmentDigitsFormat.SelectedItem.ToString();
-    }
-
-    private void cmbSegmentAccuracy_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        SegmentAccuracy = cmbSegmentAccuracy.SelectedItem.ToString();
-    }
-
-    private void cmbDigitsFormat_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        DigitsFormat = cmbDigitsFormat.SelectedItem.ToString();
-    }
-
-    private void cmbAccuracy_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        Accuracy = cmbAccuracy.SelectedItem.ToString();
-    }
-
-    private void chkSplitName_CheckedChanged(object sender, EventArgs e)
-    {
-        label9.Enabled = label10.Enabled = lblSplitNameFont.Enabled = btnSplitNameColor.Enabled
-            = btnSplitNameFont.Enabled = chkSplitName.Checked;
-
-    }
-
-    private void chkDisplayIcon_CheckedChanged(object sender, EventArgs e)
-    {
-        label7.Enabled = trkIconSize.Enabled = chkDisplayIcon.Checked;
-    }
-
-    private void chkOverrideTimerColors_CheckedChanged(object sender, EventArgs e)
-    {
-        label1.Enabled = btnTimerColor.Enabled = chkOverrideTimerColors.Checked;
-    }
-
-    private void chkHideComparison_CheckedChanged(object sender, EventArgs e)
-    {
-        cmbComparison2.Enabled = label13.Enabled = !chkHideComparison.Checked;
-    }
-
-    private void cmbComparison2_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        Comparison2 = cmbComparison2.SelectedItem.ToString();
-    }
-
-    private void cmbComparison_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        Comparison = cmbComparison.SelectedItem.ToString();
-    }
-
-    private void cmbGradientType_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        string selectedText = cmbGradientType.SelectedItem.ToString();
-        btnColor1.Visible = selectedText != "Plain" && !selectedText.Contains("Delta");
-        btnColor2.Visible = !selectedText.Contains("Delta");
-        btnColor2.DataBindings.Clear();
-        btnColor2.DataBindings.Add("BackColor", this, btnColor1.Visible ? "BackgroundColor2" : "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        GradientString = cmbGradientType.SelectedItem.ToString();
-    }
-
-    private void rdoSegmentTimesHundredths_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateAccuracySegmentTimes();
-    }
-
-    private void rdoSegmentTimesTenths_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateAccuracySegmentTimes();
-    }
-
-    private void rdoSegmentTimesSeconds_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateAccuracySegmentTimes();
-    }
-
-    private void UpdateAccuracySegmentTimes()
-    {
-        if (rdoSegmentTimesSeconds.Checked)
-        {
-            SegmentTimesAccuracy = TimeAccuracy.Seconds;
-        }
-        else if (rdoSegmentTimesTenths.Checked)
-        {
-            SegmentTimesAccuracy = TimeAccuracy.Tenths;
-        }
-        else if (rdoSegmentTimesHundredths.Checked)
-        {
-            SegmentTimesAccuracy = TimeAccuracy.Hundredths;
-        }
-        else
-        {
-            SegmentTimesAccuracy = TimeAccuracy.Milliseconds;
-        }
-
-        SegmentTimesFormatter.Accuracy = SegmentTimesAccuracy;
     }
 
     public void SetSettings(XmlNode node)
@@ -404,56 +270,6 @@ public partial class DetailedTimerSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "TimingMethod", TimingMethod) ^
         SettingsHelper.CreateSetting(document, parent, "DecimalsSize", DecimalsSize) ^
         SettingsHelper.CreateSetting(document, parent, "SegmentTimerDecimalsSize", SegmentTimerDecimalsSize);
-    }
-
-    private void ColorButtonClick(object sender, EventArgs e)
-    {
-        SettingsHelper.ColorButtonClick((Button)sender, this);
-    }
-
-    private void DetailedTimerSettings_Load(object sender, EventArgs e)
-    {
-        chkHideComparison_CheckedChanged(null, null);
-        chkOverrideTimerColors_CheckedChanged(null, null);
-        chkDisplayIcon_CheckedChanged(null, null);
-        chkSplitName_CheckedChanged(null, null);
-        cmbComparison.Items.Clear();
-        cmbComparison.Items.Add("Current Comparison");
-        cmbComparison.Items.AddRange(CurrentState.Run.Comparisons.Where(x => x is not BestSplitTimesComparisonGenerator.ComparisonName and not NoneComparisonGenerator.ComparisonName).ToArray());
-        if (!cmbComparison.Items.Contains(Comparison))
-        {
-            cmbComparison.Items.Add(Comparison);
-        }
-
-        cmbComparison2.Items.Clear();
-        cmbComparison2.Items.Add("Current Comparison");
-        cmbComparison2.Items.AddRange(CurrentState.Run.Comparisons.Where(x => x is not BestSplitTimesComparisonGenerator.ComparisonName and not NoneComparisonGenerator.ComparisonName).ToArray());
-        if (!cmbComparison2.Items.Contains(Comparison2))
-        {
-            cmbComparison2.Items.Add(Comparison2);
-        }
-
-        rdoSegmentTimesMilliseconds.Checked = SegmentTimesAccuracy == TimeAccuracy.Milliseconds;
-        rdoSegmentTimesHundredths.Checked = SegmentTimesAccuracy == TimeAccuracy.Hundredths;
-        rdoSegmentTimesTenths.Checked = SegmentTimesAccuracy == TimeAccuracy.Tenths;
-        rdoSegmentTimesSeconds.Checked = SegmentTimesAccuracy == TimeAccuracy.Seconds;
-
-        if (Mode == LayoutMode.Horizontal)
-        {
-            trkSize.DataBindings.Clear();
-            trkSize.Minimum = 50;
-            trkSize.Maximum = 500;
-            trkSize.DataBindings.Add("Value", this, "Width", false, DataSourceUpdateMode.OnPropertyChanged);
-            lblSize.Text = T("Width:");
-        }
-        else
-        {
-            trkSize.DataBindings.Clear();
-            trkSize.Minimum = 20;
-            trkSize.Maximum = 150;
-            trkSize.DataBindings.Add("Value", this, "Height", false, DataSourceUpdateMode.OnPropertyChanged);
-            lblSize.Text = T("Height:");
-        }
     }
 
     // No-ops kept to satisfy the designer-generated resx wiring. The Avalonia settings panel

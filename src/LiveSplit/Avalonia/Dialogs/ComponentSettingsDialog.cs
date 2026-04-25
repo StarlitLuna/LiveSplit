@@ -31,7 +31,7 @@ public sealed class ComponentSettingsDialog : Window
         Width = 540;
         Height = 600;
 
-        Control settingsControl = component.GetSettingsControlAvalonia(LayoutMode.Vertical)
+        Control settingsControl = component.GetSettingsControl(LayoutMode.Vertical)
             ?? AvaloniaSettingsBuilder.Build(component, component.ComponentName);
 
         var ok = new Button { Content = "OK", Width = 80, IsDefault = true };

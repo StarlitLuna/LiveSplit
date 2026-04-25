@@ -1,8 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
-
 using LiveSplit.Model;
 using LiveSplit.UI.Drawing;
 
@@ -63,23 +61,17 @@ public class BlankSpace : IComponent
         DrawBackground(ctx, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         DrawGeneral(ctx, state, width, VerticalHeight);
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         DrawGeneral(ctx, state, HorizontalWidth, height);
     }
 
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        Settings.Mode = mode;
-        return Settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         Settings.Mode = mode;
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Blank Space");

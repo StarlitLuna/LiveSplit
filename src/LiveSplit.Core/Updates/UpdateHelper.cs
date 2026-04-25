@@ -1,72 +1,22 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 
 using LiveSplit.Options;
 
-using UpdateManager;
-
 namespace LiveSplit.Updates;
 
+/// <summary>
+/// The original UpdateHelper polled for new builds and prompted via a WinForms
+/// <c>ScrollableMessageBox</c>. The linux-port ships through Flatpak/AppImage where the host
+/// package manager handles updates, so the prompt path is gone — only the version-string
+/// helpers stay (used by the user-agent and by GitInfo display in About dialogs).
+/// </summary>
 public static class UpdateHelper
 {
     public static readonly Version Version = GetVersionFromGit();
     public static string UserAgent => GetUserAgent();
 
     public static readonly List<Type> AlreadyChecked = [];
-
-    public static void Update(Form form, Action closeAction, params IUpdateable[] updateables)
-    {
-        Task.Factory.StartNew(() =>
-        {
-            try
-            {
-                IEnumerable<IUpdateable> actualUpdateables = updateables.Where(x => !AlreadyChecked.Contains(x.GetType()));
-                if (Updater.CheckForAnyUpdate(actualUpdateables))
-                {
-                    string dialogText = actualUpdateables.Where(x => x.CheckForUpdate()).Select(x =>
-                            x.UpdateName + " (" + x.GetNewVersion() + ")\r\n" +
-                            x.GetChangeLog().Select(y => " - " + y + "\r\n")
-                                    .Aggregate("", (y, z) => y + z) + "\r\n")
-                                    .Aggregate((x, y) => x + y) + "Do you want to update?";
-
-                    Action promptForUpdates = () =>
-                    {
-                        DialogResult result = new ScrollableMessageBox().Show(dialogText, "New updates are available", MessageBoxButtons.YesNo);
-                        if (result == DialogResult.Yes)
-                        {
-                            try
-                            {
-                                Updater.UpdateAll(actualUpdateables, "http://livesplit.org/update/UpdateManagerV2.exe", "http://livesplit.org/update/UpdateManagerV2.exe.config");
-                                closeAction();
-                            }
-                            catch (Exception e)
-                            {
-                                Log.Error(e);
-                            }
-                        }
-                    };
-
-                    if (form.InvokeRequired)
-                    {
-                        form.Invoke(promptForUpdates);
-                    }
-                    else
-                    {
-                        promptForUpdates();
-                    }
-                }
-
-                AlreadyChecked.AddRange(actualUpdateables.Select(x => x.GetType()));
-            }
-            catch (Exception e)
-            {
-                Log.Error(e);
-            }
-        });
-    }
 
     private static Version GetVersionFromGit()
     {

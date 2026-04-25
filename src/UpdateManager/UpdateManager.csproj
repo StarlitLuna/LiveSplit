@@ -1,11 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <ApplicationIcon>Update.ico</ApplicationIcon>
-
-    <UseWindowsForms>true</UseWindowsForms>
-
-    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
     <Configurations>$(Configurations);UpdateManagerExe</Configurations>
   </PropertyGroup>
 

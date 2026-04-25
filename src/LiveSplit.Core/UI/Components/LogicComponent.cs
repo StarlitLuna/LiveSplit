@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 using LiveSplit.UI.Drawing;
@@ -34,17 +34,15 @@ public abstract class LogicComponent : IComponent
         protected set;
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, Model.LiveSplitState state, float height, System.Drawing.Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, Model.LiveSplitState state, float height)
     {
     }
 
-    public void DrawVertical(IDrawingContext ctx, Model.LiveSplitState state, float width, System.Drawing.Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, Model.LiveSplitState state, float width)
     {
     }
 
-    public abstract System.Windows.Forms.Control GetSettingsControl(LayoutMode mode);
-
-    public virtual global::Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode) => null;
+    public virtual global::Avalonia.Controls.Control GetSettingsControl(LayoutMode mode) => null;
 
     public abstract System.Xml.XmlNode GetSettings(System.Xml.XmlDocument document);
 

@@ -5,8 +5,6 @@ using LiveSplit.Model.Input;
 using LiveSplit.Options;
 using LiveSplit.UI;
 
-using Forms = System.Windows.Forms;
-
 namespace LiveSplit.Model;
 
 public class LiveSplitState : ICloneable
@@ -15,7 +13,16 @@ public class LiveSplitState : ICloneable
     public ILayout Layout { get; set; }
     public LayoutSettings LayoutSettings { get; set; }
     public ISettings Settings { get; set; }
-    public Forms.Form Form { get; set; }
+
+    /// <summary>
+    /// Host UI handle. Used to be a <c>System.Windows.Forms.Form</c>; on the linux-port the host
+    /// is the Avalonia timer window, but the existing component code only ever read it back to
+    /// pump <c>Form.Invoke</c> for thread marshaling. Stored as <c>object</c> so the Avalonia
+    /// host can pass its top-level window through without LiveSplit.Core taking an Avalonia
+    /// dependency. Components that need to marshal to the UI thread should use Avalonia's
+    /// <c>Dispatcher.UIThread.Post</c> directly.
+    /// </summary>
+    public object Form { get; set; }
 
     public AtomicDateTime AttemptStarted { get; set; }
     public AtomicDateTime AttemptEnded { get; set; }
@@ -172,7 +179,7 @@ public class LiveSplitState : ICloneable
 
     private LiveSplitState() { }
 
-    public LiveSplitState(IRun run, Forms.Form form, ILayout layout, LayoutSettings layoutSettings, ISettings settings)
+    public LiveSplitState(IRun run, object form, ILayout layout, LayoutSettings layoutSettings, ISettings settings)
     {
         Run = run;
         Form = form;

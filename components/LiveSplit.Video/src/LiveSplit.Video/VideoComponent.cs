@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.Drawing;
-using System.Windows.Forms;
 using System.Xml;
 
 using AxAXVLC;
@@ -179,13 +178,7 @@ public class VideoComponent : ControlComponent
         return vlc;
     }
 
-    public override Control GetSettingsControl(UI.LayoutMode mode)
-    {
-        Settings.Mode = mode;
-        return Settings;
-    }
-
-    public override Avalonia.Controls.Control GetSettingsControlAvalonia(UI.LayoutMode mode)
+    public override Avalonia.Controls.Control GetSettingsControl(UI.LayoutMode mode)
     {
         Settings.Mode = mode;
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, ComponentName);
@@ -210,17 +203,17 @@ public class VideoComponent : ControlComponent
         }
     }
 
-    public override void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public override void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         Graphics g = ctx.AsGraphics();
-        base.DrawVertical(ctx, state, width, clipRegion);
+        base.DrawVertical(ctx, state, width);
         DisposeIfError();
     }
 
-    public override void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public override void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         Graphics g = ctx.AsGraphics();
-        base.DrawHorizontal(ctx, state, height, clipRegion);
+        base.DrawHorizontal(ctx, state, height);
         DisposeIfError();
     }
 

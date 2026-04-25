@@ -1,19 +1,16 @@
-﻿using System.Windows.Forms;
 using System.Xml;
 
 namespace LiveSplit.UI.Components;
 
-public partial class ManualGameTimeSettings : UserControl
+public class ManualGameTimeSettings
 {
     public bool UseSegmentTimes { get; set; }
 
     public ManualGameTimeSettings()
     {
-        InitializeComponent();
 
         UseSegmentTimes = true;
 
-        rdoSegmentTimes.DataBindings.Add("Checked", this, "UseSegmentTimes", false, DataSourceUpdateMode.OnPropertyChanged);
     }
 
     public void SetSettings(XmlNode node)

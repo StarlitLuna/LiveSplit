@@ -1,32 +1,17 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 
 namespace LiveSplit.Options;
 
+/// <summary>
+/// Trace-listener-backed logger. The Windows build wired up an
+/// <see cref="System.Diagnostics.EventLog"/> sink under the "LiveSplit" source so errors flowed
+/// to the OS Application event log; that's a Windows-only API and is gone on the linux-port.
+/// Trace messages still flow through <see cref="Trace.Listeners"/>, so a host can register a
+/// console / file listener at startup if it wants persistent logs.
+/// </summary>
 public static class Log
 {
-    static Log()
-    {
-        try
-        {
-            if (!EventLog.SourceExists("LiveSplit"))
-            {
-                EventLog.CreateEventSource("LiveSplit", "Application");
-            }
-        }
-        catch { }
-
-        try
-        {
-            var listener = new EventLogTraceListener("LiveSplit")
-            {
-                Filter = new EventTypeFilter(SourceLevels.Warning)
-            };
-            Trace.Listeners.Add(listener);
-        }
-        catch { }
-    }
-
     public static void Error(Exception ex)
     {
         try

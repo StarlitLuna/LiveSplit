@@ -1,8 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
-
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
 using LiveSplit.UI.Drawing;
@@ -48,13 +46,7 @@ public class GraphCompositeComponent : IComponent
         }
     }
 
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        Settings.Mode = mode;
-        return Settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         Settings.Mode = mode;
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Graph" + (Settings.Comparison == "Current Comparison"
@@ -81,18 +73,18 @@ public class GraphCompositeComponent : IComponent
 
     public float MinimumHeight => InternalComponent.MinimumHeight;
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
-        InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
+        InternalComponent.DrawHorizontal(ctx, state, height);
     }
 
     public float VerticalHeight => InternalComponent.VerticalHeight;
 
     public float MinimumWidth => InternalComponent.MinimumWidth;
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
-        InternalComponent.DrawVertical(ctx, state, width, clipRegion);
+        InternalComponent.DrawVertical(ctx, state, width);
     }
 
     public void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode)

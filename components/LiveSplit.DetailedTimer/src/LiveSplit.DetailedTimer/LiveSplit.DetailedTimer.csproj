@@ -2,8 +2,6 @@
 
   <PropertyGroup>
     <RootNamespace>LiveSplit</RootNamespace>
-    <UseWindowsForms>true</UseWindowsForms>
-
     <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
 

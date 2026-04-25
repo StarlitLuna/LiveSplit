@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
-using System.Windows.Forms;
-
 using LiveSplit.Model;
 using LiveSplit.Options;
 using LiveSplit.UI.Drawing;
@@ -426,12 +424,12 @@ public class GraphComponent : IComponent
         return false;
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         DrawGeneral(ctx, state, width, VerticalHeight);
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         DrawGeneral(ctx, state, HorizontalWidth, height);
     }
@@ -480,11 +478,6 @@ public class GraphComponent : IComponent
     }
 
     public string ComponentName => throw new NotImplementedException();
-
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        throw new NotSupportedException();
-    }
 
     public System.Xml.XmlNode GetSettings(System.Xml.XmlDocument document)
     {

@@ -7,7 +7,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.Options;
@@ -26,7 +25,7 @@ public class CommandServer
     public ServerStateType ServerState { get; protected set; } = ServerStateType.Off;
 
     protected LiveSplitState State { get; set; }
-    protected Form Form { get; set; }
+    protected object Form { get; set; }
     protected TimerModel Model { get; set; }
     protected ITimeFormatter TimeFormatter { get; set; }
     protected NamedPipeServerStream WaitingServerPipe { get; set; }

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-
 using System.Numerics;
 
 using LiveSplit.Model;
@@ -31,7 +30,7 @@ public class ComponentRenderer
     // CALLER's scope (outside the per-component Save in Render) so inter-component translation
     // stacks across iterations, matching the GDI+ behavior. The inner clip+draw happens inside
     // the caller's Save so each component's IntersectClip doesn't leak into the next.
-    private void DrawVerticalComponent(int index, IDrawingContext ctx, LiveSplitState state, float width, float height, Region clipRegion)
+    private void DrawVerticalComponent(int index, IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
         IComponent component = VisibleComponents.ElementAt(index);
         float topPadding = Math.Min(GetPaddingAbove(index), component.PaddingTop) / 2f;
@@ -48,11 +47,11 @@ public class ComponentRenderer
             width,
             (separatorOffset * 2f) + (scale * (component.VerticalHeight + bottomPadding)))))
         {
-            component.DrawVertical(ctx, state, width, clipRegion);
+            component.DrawVertical(ctx, state, width);
         }
     }
 
-    private void DrawHorizontalComponent(int index, IDrawingContext ctx, LiveSplitState state, float width, float height, Region clipRegion)
+    private void DrawHorizontalComponent(int index, IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
         IComponent component = VisibleComponents.ElementAt(index);
         float leftPadding = Math.Min(GetPaddingToLeft(index), component.PaddingLeft) / 2f;
@@ -69,7 +68,7 @@ public class ComponentRenderer
             (separatorOffset * 2f) + (scale * (component.HorizontalWidth + rightPadding)),
             height)))
         {
-            component.DrawHorizontal(ctx, state, height, clipRegion);
+            component.DrawHorizontal(ctx, state, height);
         }
     }
 
@@ -168,7 +167,7 @@ public class ComponentRenderer
         OverallSize = Math.Max(totalSize, 1f);
     }
 
-    public void Render(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
+    public void Render(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
         if (!errorInComponent)
         {
@@ -195,11 +194,11 @@ public class ComponentRenderer
                             {
                                 if (mode == LayoutMode.Vertical)
                                 {
-                                    DrawVerticalComponent(index, ctx, state, width, height, clipRegion);
+                                    DrawVerticalComponent(index, ctx, state, width, height);
                                 }
                                 else
                                 {
-                                    DrawHorizontalComponent(index, ctx, state, width, height, clipRegion);
+                                    DrawHorizontalComponent(index, ctx, state, width, height);
                                 }
                             }
 

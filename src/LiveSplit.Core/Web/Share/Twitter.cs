@@ -1,10 +1,8 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Windows.Forms;
-
 using LiveSplit.Model;
 using LiveSplit.Options;
 
@@ -49,14 +47,9 @@ When you click share, LiveSplit opens a Tweet composition window in your default
             return;
         }
 
-        Image pngImage;
-        using (var stream = new MemoryStream())
-        {
-            image.Save(stream, ImageFormat.Png);
-            pngImage = Image.FromStream(stream);
-        }
-
-        Clipboard.SetDataObject(pngImage);
+        // Image-on-clipboard via System.Windows.Forms.Clipboard.SetDataObject is Windows-only.
+        // The Avalonia front-end can copy via TopLevel.Clipboard once we plumb the screenshot
+        // bytes through the share-result path.
     }
     private string MakeUri(string text)
     {

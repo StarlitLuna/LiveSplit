@@ -1,5 +1,4 @@
-﻿using System;
-using System.Windows.Forms;
+using System;
 using System.Xml;
 
 using LiveSplit.Model;
@@ -14,13 +13,10 @@ public class ASRComponent : LogicComponent
 {
     private readonly TimerModel model;
     private readonly ComponentSettings settings;
-    private readonly Form parentForm;
     private Timer updateTimer;
 
     public ASRComponent(LiveSplitState state)
     {
-        parentForm = state.Form;
-
         model = new TimerModel() { CurrentState = state };
 
         settings = new ComponentSettings(model);
@@ -30,8 +26,6 @@ public class ASRComponent : LogicComponent
 
     public ASRComponent(LiveSplitState state, string scriptPath)
     {
-        parentForm = state.Form;
-
         model = new TimerModel() { CurrentState = state };
 
         settings = new ComponentSettings(model, scriptPath);
@@ -61,12 +55,7 @@ public class ASRComponent : LogicComponent
         return settings.GetSettings(document);
     }
 
-    public override Control GetSettingsControl(LayoutMode mode)
-    {
-        return settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(settings, "Component");
     }
@@ -95,18 +84,10 @@ public class ASRComponent : LogicComponent
                 {
                     settings.runtime.Step();
 
-                    try
-                    {
-                        if (
-                            settings.previousMap == null
-                            || settings.previousWidgets == null
-                            || settings.runtime.AreSettingsChanged(settings.previousMap, settings.previousWidgets)
-                        )
-                        {
-                            settings.BuildTree();
-                        }
-                    }
-                    catch { }
+                    // BuildTree() rendered the runtime's settings into a WinForms TableLayoutPanel
+                    // and was removed for the linux-port — the Avalonia panel reads the settings
+                    // map via reflection instead, so the change-detection refresh is unnecessary
+                    // here.
 
                     // Poll the tick rate and modify the update interval if it has been changed
                     double tickRate = settings.runtime.TickRate().TotalMilliseconds;
@@ -126,13 +107,9 @@ public class ASRComponent : LogicComponent
 
     private void InvokeIfNeeded(Action x)
     {
-        if (parentForm != null && parentForm.InvokeRequired)
-        {
-            parentForm.Invoke(x);
-        }
-        else
-        {
-            x();
-        }
+        // The Windows build hopped to the form's UI thread via Form.Invoke before stepping the
+        // runtime. The Avalonia host pumps Update on its own thread already, and the runtime
+        // step is non-UI work, so direct invocation is fine on the linux-port.
+        x();
     }
 }

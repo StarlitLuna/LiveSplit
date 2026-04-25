@@ -1,7 +1,5 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model;
@@ -57,8 +55,7 @@ public interface IComponent : IDisposable
     /// <param name="ctx">The drawing context used for drawing</param>
     /// <param name="state">Represents the current state of LiveSplit</param>
     /// <param name="height">The height of the window and the component</param>
-    /// <param name="clipRegion">The rectangle on the form that is being redrawn for this paint event.</param>
-    void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion);
+    void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height);
 
     /// <summary>
     /// Draws the contents of the component vertically onto the window.
@@ -66,22 +63,14 @@ public interface IComponent : IDisposable
     /// <param name="ctx">The drawing context used for drawing</param>
     /// <param name="state">Represents the current state of LiveSplit</param>
     /// <param name="width">The width of the window and the component</param>
-    /// <param name="clipRegion">The rectangle on the form that is being redrawn for this paint event.</param>
-    void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion);
+    void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width);
 
     /// <summary>
-    /// Shows a dialog where the user can configure the component.
+    /// Returns the Avalonia control hosting the component's settings UI. Returning <c>null</c>
+    /// means the host falls back to the auto-generated reflection-driven panel from
+    /// <see cref="LiveSplit.UI.AvaloniaSettingsBuilder"/>.
     /// </summary>
-    /// <returns>Returns in what way the dialog was closed.</returns>
-    Control GetSettingsControl(LayoutMode mode);
-
-    /// <summary>
-    /// Avalonia counterpart of <see cref="GetSettingsControl"/>. Hosts the component's settings
-    /// UI inside an Avalonia <see cref="Avalonia.Controls.Window"/>. Components that don't
-    /// supply an Avalonia control return <c>null</c>; the host falls back to the auto-generated
-    /// reflection-driven panel.
-    /// </summary>
-    Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode) => null;
+    Avalonia.Controls.Control GetSettingsControl(LayoutMode mode) => null;
 
     /// <summary>
     /// Returns the XML serialization of the component's settings.

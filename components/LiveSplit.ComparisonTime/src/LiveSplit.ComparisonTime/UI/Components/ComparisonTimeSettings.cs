@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Linq;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model;
@@ -10,7 +9,7 @@ using LiveSplit.TimeFormatters;
 
 namespace LiveSplit.UI.Components;
 
-public partial class ComparisonTimeSettings : UserControl
+public class ComparisonTimeSettings
 {
     public Color TextColor { get; set; }
     public bool OverrideTextColor { get; set; }
@@ -38,7 +37,6 @@ public partial class ComparisonTimeSettings : UserControl
 
     public ComparisonTimeSettings()
     {
-        InitializeComponent();
 
         TextColor = Color.FromArgb(255, 255, 255);
         OverrideTextColor = false;
@@ -53,115 +51,6 @@ public partial class ComparisonTimeSettings : UserControl
         Display2Rows = false;
         Type = TimeType.FinalTime;
 
-        chkOverrideTextColor.DataBindings.Add("Checked", this, "OverrideTextColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnTextColor.DataBindings.Add("BackColor", this, "TextColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkOverrideTimeColor.DataBindings.Add("Checked", this, "OverrideTimeColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnTimeColor.DataBindings.Add("BackColor", this, "TimeColor", false, DataSourceUpdateMode.OnPropertyChanged);
-
-        cmbGradientType.SelectedIndexChanged += cmbGradientType_SelectedIndexChanged;
-        cmbGradientType.DataBindings.Add("SelectedItem", this, "GradientString", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor1.DataBindings.Add("BackColor", this, "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor2.DataBindings.Add("BackColor", this, "BackgroundColor2", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbComparison.SelectedIndexChanged += cmbComparison_SelectedIndexChanged;
-        cmbComparison.DataBindings.Add("SelectedItem", this, "Comparison", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbTimingMethod.DataBindings.Add("SelectedItem", this, "TimingMethod", false, DataSourceUpdateMode.OnPropertyChanged);
-
-        rdoSeconds.CheckedChanged += rdoSeconds_CheckedChanged;
-        rdoTenths.CheckedChanged += rdoTenths_CheckedChanged;
-        rdoHundredths.CheckedChanged += rdoHundredths_CheckedChanged;
-
-        chkOverrideTextColor.CheckedChanged += chkOverrideTextColor_CheckedChanged;
-        chkOverrideTimeColor.CheckedChanged += chkOverrideTimeColor_CheckedChanged;
-    }
-
-    private void chkOverrideTimeColor_CheckedChanged(object sender, EventArgs e)
-    {
-        label2.Enabled = btnTimeColor.Enabled = chkOverrideTimeColor.Checked;
-    }
-
-    private void chkOverrideTextColor_CheckedChanged(object sender, EventArgs e)
-    {
-        label1.Enabled = btnTextColor.Enabled = chkOverrideTextColor.Checked;
-    }
-
-    private void cmbComparison_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        Comparison = cmbComparison.SelectedItem.ToString();
-    }
-
-    private void ComparisonTimeSettings_Load(object sender, EventArgs e)
-    {
-        chkOverrideTextColor_CheckedChanged(null, null);
-        chkOverrideTimeColor_CheckedChanged(null, null);
-        cmbComparison.Items.Clear();
-        cmbComparison.Items.Add("Current Comparison");
-        cmbComparison.Items.AddRange(CurrentState.Run.Comparisons.Where(x => x is not BestSplitTimesComparisonGenerator.ComparisonName and not NoneComparisonGenerator.ComparisonName).ToArray());
-        if (!cmbComparison.Items.Contains(Comparison))
-        {
-            cmbComparison.Items.Add(Comparison);
-        }
-
-        rdoSeconds.Checked = Accuracy == TimeAccuracy.Seconds;
-        rdoTenths.Checked = Accuracy == TimeAccuracy.Tenths;
-        rdoHundredths.Checked = Accuracy == TimeAccuracy.Hundredths;
-        rdoTypeFinalTime.Checked = Type == TimeType.FinalTime;
-        rdoTypeSplitTime.Checked = Type == TimeType.SplitTime;
-        rdoTypeSegmentTime.Checked = Type == TimeType.SegmentTime;
-        if (Mode == LayoutMode.Horizontal)
-        {
-            chkTwoRows.Enabled = false;
-            chkTwoRows.DataBindings.Clear();
-            chkTwoRows.Checked = true;
-        }
-        else
-        {
-            chkTwoRows.Enabled = true;
-            chkTwoRows.DataBindings.Clear();
-            chkTwoRows.DataBindings.Add("Checked", this, "Display2Rows", false, DataSourceUpdateMode.OnPropertyChanged);
-        }
-    }
-
-    private void cmbGradientType_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        btnColor1.Visible = cmbGradientType.SelectedItem.ToString() != "Plain";
-        btnColor2.DataBindings.Clear();
-        btnColor2.DataBindings.Add("BackColor", this, btnColor1.Visible ? "BackgroundColor2" : "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        GradientString = cmbGradientType.SelectedItem.ToString();
-    }
-
-    private void rdoHundredths_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateAccuracy();
-    }
-
-    private void rdoTenths_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateAccuracy();
-    }
-
-    private void rdoSeconds_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateAccuracy();
-    }
-
-    private void UpdateAccuracy()
-    {
-        if (rdoSeconds.Checked)
-        {
-            Accuracy = TimeAccuracy.Seconds;
-        }
-        else if (rdoTenths.Checked)
-        {
-            Accuracy = TimeAccuracy.Tenths;
-        }
-        else if (rdoHundredths.Checked)
-        {
-            Accuracy = TimeAccuracy.Hundredths;
-        }
-        else
-        {
-            Accuracy = TimeAccuracy.Milliseconds;
-        }
     }
 
     public void SetSettings(XmlNode node)
@@ -210,40 +99,4 @@ public partial class ComparisonTimeSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "Type", Type);
     }
 
-    private void ColorButtonClick(object sender, EventArgs e)
-    {
-        SettingsHelper.ColorButtonClick((Button)sender, this);
-    }
-
-    private void rdoTypeFinalTime_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateTimeType();
-    }
-
-    private void rdoTypeSplitTime_CheckedChanged(object sender, EventArgs e)
-    {
-        UpdateTimeType();
-    }
-
-    private void UpdateTimeType()
-    {
-        if (rdoTypeFinalTime.Checked)
-        {
-            Type = TimeType.FinalTime;
-            return;
-        }
-
-        if (rdoTypeSplitTime.Checked)
-        {
-            Type = TimeType.SplitTime;
-            return;
-        }
-
-        Type = TimeType.SegmentTime;
-    }
-
-    private void cmbTimingMethod_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        TimingMethod = cmbTimingMethod.SelectedItem.ToString();
-    }
 }

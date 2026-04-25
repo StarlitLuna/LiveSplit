@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.Drawing;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Localization;
@@ -8,7 +7,7 @@ using LiveSplit.TimeFormatters;
 
 namespace LiveSplit.UI.Components;
 
-public partial class TimerSettings : UserControl
+public class TimerSettings
 {
     private static string T(string source) => UiLocalizer.Translate(source, LanguageResolver.ResolveCurrentCultureLanguage());
 
@@ -60,7 +59,6 @@ public partial class TimerSettings : UserControl
 
     public TimerSettings()
     {
-        InitializeComponent();
 
         TimerWidth = 225;
         TimerHeight = 50;
@@ -76,47 +74,6 @@ public partial class TimerSettings : UserControl
         TimingMethod = "Current Timing Method";
         DecimalsSize = 35f;
 
-        btnTimerColor.DataBindings.Add("BackColor", this, "TimerColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkOverrideTimerColors.DataBindings.Add("Checked", this, "OverrideSplitColors", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkGradient.DataBindings.Add("Checked", this, "ShowGradient", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbGradientType.DataBindings.Add("SelectedItem", this, "GradientString", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor1.DataBindings.Add("BackColor", this, "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        btnColor2.DataBindings.Add("BackColor", this, "BackgroundColor2", false, DataSourceUpdateMode.OnPropertyChanged);
-        chkCenterTimer.DataBindings.Add("Checked", this, "CenterTimer", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbTimingMethod.DataBindings.Add("SelectedItem", this, "TimingMethod", false, DataSourceUpdateMode.OnPropertyChanged);
-        trkDecimalsSize.DataBindings.Add("Value", this, "DecimalsSize", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbDigitsFormat.DataBindings.Add("SelectedItem", this, "DigitsFormat", false, DataSourceUpdateMode.OnPropertyChanged);
-        cmbAccuracy.DataBindings.Add("SelectedItem", this, "Accuracy", false, DataSourceUpdateMode.OnPropertyChanged);
-    }
-
-    private void cmbTimerFormat_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        DigitsFormat = cmbDigitsFormat.SelectedItem.ToString();
-    }
-
-    private void cmbAccuracy_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        Accuracy = cmbAccuracy.SelectedItem.ToString();
-    }
-
-    private void cmbTimingMethod_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        TimingMethod = cmbTimingMethod.SelectedItem.ToString();
-    }
-
-    private void chkOverrideTimerColors_CheckedChanged(object sender, EventArgs e)
-    {
-        label1.Enabled = btnTimerColor.Enabled = chkOverrideTimerColors.Checked;
-    }
-
-    private void cmbGradientType_SelectedIndexChanged(object sender, EventArgs e)
-    {
-        string selectedText = cmbGradientType.SelectedItem.ToString();
-        btnColor1.Visible = selectedText != "Plain" && !selectedText.Contains("Delta");
-        btnColor2.Visible = !selectedText.Contains("Delta");
-        btnColor2.DataBindings.Clear();
-        btnColor2.DataBindings.Add("BackColor", this, btnColor1.Visible ? "BackgroundColor2" : "BackgroundColor", false, DataSourceUpdateMode.OnPropertyChanged);
-        GradientString = cmbGradientType.SelectedItem.ToString();
     }
 
     public static string GetBackgroundTypeString(DeltasGradientType type)
@@ -130,28 +87,6 @@ public partial class TimerSettings : UserControl
             DeltasGradientType.VerticalWithDeltaColor => "Vertical With Delta Color",
             _ => "Plain",
         };
-    }
-
-    private void TimerSettings_Load(object sender, EventArgs e)
-    {
-        chkOverrideTimerColors_CheckedChanged(null, null);
-
-        if (Mode == LayoutMode.Horizontal)
-        {
-            trkSize.DataBindings.Clear();
-            trkSize.Minimum = 50;
-            trkSize.Maximum = 500;
-            trkSize.DataBindings.Add("Value", this, "TimerWidth", false, DataSourceUpdateMode.OnPropertyChanged);
-            lblSize.Text = T("Width:");
-        }
-        else
-        {
-            trkSize.DataBindings.Clear();
-            trkSize.Minimum = 20;
-            trkSize.Maximum = 150;
-            trkSize.DataBindings.Add("Value", this, "TimerHeight", false, DataSourceUpdateMode.OnPropertyChanged);
-            lblSize.Text = T("Height:");
-        }
     }
 
     public void SetSettings(XmlNode node)
@@ -239,8 +174,4 @@ public partial class TimerSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "DecimalsSize", DecimalsSize);
     }
 
-    private void ColorButtonClick(object sender, EventArgs e)
-    {
-        SettingsHelper.ColorButtonClick((Button)sender, this);
-    }
 }

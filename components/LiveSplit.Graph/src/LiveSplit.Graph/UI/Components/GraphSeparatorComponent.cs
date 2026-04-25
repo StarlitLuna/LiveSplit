@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model;
@@ -36,7 +35,7 @@ public class GraphSeparatorComponent : IComponent
         Cache = new GraphicsCache();
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         // No explicit clip-widen: Skia can't express GDI+'s `g.Clip = new Region();` idiom,
         // and the 1-pixel separator already fits inside the parent component's bounds. Save()
@@ -52,15 +51,10 @@ public class GraphSeparatorComponent : IComponent
             ctx.TranslateTransform(0, 1f - newHeight);
         }
 
-        Line.DrawVertical(ctx, state, width, clipRegion);
+        Line.DrawVertical(ctx, state, width);
     }
 
     public string ComponentName => "Graph Separator";
-
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        throw new NotSupportedException();
-    }
 
     public XmlNode GetSettings(XmlDocument document)
     {
@@ -76,7 +70,7 @@ public class GraphSeparatorComponent : IComponent
 
     public float MinimumHeight => 0f;
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         using IDrawingState state_ = ctx.Save();
         ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
@@ -89,7 +83,7 @@ public class GraphSeparatorComponent : IComponent
         }
 
         Line.HorizontalWidth = newWidth;
-        Line.DrawHorizontal(ctx, state, height, clipRegion);
+        Line.DrawHorizontal(ctx, state, height);
     }
 
     public void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode)

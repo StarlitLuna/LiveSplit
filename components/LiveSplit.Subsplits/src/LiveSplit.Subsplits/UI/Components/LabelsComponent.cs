@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Windows.Forms;
-
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
 using LiveSplit.UI.Drawing;
@@ -89,22 +87,17 @@ public class LabelsComponent : IComponent
         }
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }
 
     public string ComponentName => "Labels";
-
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        throw new NotSupportedException();
-    }
 
     public void SetSettings(System.Xml.XmlNode settings)
     {

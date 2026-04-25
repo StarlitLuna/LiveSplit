@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.UI.Drawing;
@@ -26,7 +25,7 @@ public class LineComponent : IComponent
         LineColor = lineColor;
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         using ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(LineColor);
         ctx.FillRectangle(brush, 0.0f, 0.0f, width, VerticalHeight);
@@ -35,11 +34,6 @@ public class LineComponent : IComponent
     public string ComponentName => throw new NotSupportedException();
 
     public float MinimumWidth => 0f;
-
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        throw new NotImplementedException();
-    }
 
     public void SetSettings(System.Xml.XmlNode settings)
     {
@@ -63,7 +57,7 @@ public class LineComponent : IComponent
 
     public float MinimumHeight => throw new NotImplementedException();
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         using ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(LineColor);
         ctx.FillRectangle(brush, 0.0f, 0.0f, HorizontalWidth, height);

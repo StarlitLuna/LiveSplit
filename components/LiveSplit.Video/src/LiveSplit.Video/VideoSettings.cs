@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Web;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Localization;
@@ -13,7 +12,7 @@ using LiveSplit.UI;
 
 namespace LiveSplit.Video;
 
-public partial class VideoSettings : UserControl
+public class VideoSettings
 {
     private static string T(string source) => UiLocalizer.Translate(source, LanguageResolver.ResolveCurrentCultureLanguage());
 
@@ -49,7 +48,6 @@ public partial class VideoSettings : UserControl
 
     public VideoSettings()
     {
-        InitializeComponent();
 
         TimeFormatter = new ShortTimeFormatter();
 
@@ -58,8 +56,6 @@ public partial class VideoSettings : UserControl
         Height = 200;
         Offset = TimeSpan.Zero;
 
-        txtVideoPath.DataBindings.Add("Text", this, "VideoPath", false, DataSourceUpdateMode.OnPropertyChanged);
-        txtOffset.DataBindings.Add("Text", this, "OffsetString");
     }
 
     public void SetSettings(XmlNode node)
@@ -92,42 +88,4 @@ public partial class VideoSettings : UserControl
         SettingsHelper.CreateSetting(document, parent, "Width", Width);
     }
 
-    private void btnSelectFile_Click(object sender, EventArgs e)
-    {
-        var dialog = new OpenFileDialog()
-        {
-            Filter = T("Video Files|*.avi;*.mpeg;*.mpg;*.mp4;*.mov;*.wmv;*.m4v;*.flv;*.mkv;*.ogg|All Files (*.*)|*.*")
-        };
-        if (File.Exists(VideoPath))
-        {
-            dialog.InitialDirectory = Path.GetDirectoryName(VideoPath);
-            dialog.FileName = Path.GetFileName(VideoPath);
-        }
-
-        DialogResult result = dialog.ShowDialog();
-        if (result == DialogResult.OK)
-        {
-            VideoPath = txtVideoPath.Text = dialog.FileName;
-        }
-    }
-
-    private void VideoSettings_Load(object sender, EventArgs e)
-    {
-        if (Mode == LayoutMode.Horizontal)
-        {
-            trkHeightWidth.DataBindings.Clear();
-            trkHeightWidth.Minimum = 100;
-            trkHeightWidth.Maximum = 400;
-            trkHeightWidth.DataBindings.Add("Value", this, "Width", false, DataSourceUpdateMode.OnPropertyChanged);
-            lblHeightWidth.Text = T("Width:");
-        }
-        else
-        {
-            trkHeightWidth.DataBindings.Clear();
-            trkHeightWidth.Minimum = 100;
-            trkHeightWidth.Maximum = 300;
-            trkHeightWidth.DataBindings.Add("Value", this, "Height", false, DataSourceUpdateMode.OnPropertyChanged);
-            lblHeightWidth.Text = T("Height:");
-        }
-    }
 }

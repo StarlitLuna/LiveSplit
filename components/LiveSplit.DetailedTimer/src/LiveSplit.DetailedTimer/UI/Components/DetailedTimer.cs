@@ -5,7 +5,6 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model;
@@ -229,47 +228,41 @@ public class DetailedTimer : IComponent
         }
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         DrawGeneral(ctx, state, width, VerticalHeight);
         {
             using IDrawingState s = ctx.Save();
             InternalComponent.Settings.TimerHeight = VerticalHeight * ((100f - Settings.SegmentTimerSizeRatio) / 100f);
-            InternalComponent.DrawVertical(ctx, state, width, clipRegion);
+            InternalComponent.DrawVertical(ctx, state, width);
         }
         {
             using IDrawingState s = ctx.Save();
             ctx.TranslateTransform(0, VerticalHeight * ((100f - Settings.SegmentTimerSizeRatio) / 100f));
             SegmentTimer.Settings.TimerHeight = VerticalHeight * (Settings.SegmentTimerSizeRatio / 100f);
-            SegmentTimer.DrawVertical(ctx, state, width, clipRegion);
+            SegmentTimer.DrawVertical(ctx, state, width);
         }
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         DrawGeneral(ctx, state, HorizontalWidth, height);
         {
             using IDrawingState s = ctx.Save();
             InternalComponent.Settings.TimerWidth = HorizontalWidth;
-            InternalComponent.DrawHorizontal(ctx, state, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f), clipRegion);
+            InternalComponent.DrawHorizontal(ctx, state, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f));
         }
         {
             using IDrawingState s = ctx.Save();
             ctx.TranslateTransform(0, height * ((100f - Settings.SegmentTimerSizeRatio) / 100f));
-            SegmentTimer.DrawHorizontal(ctx, state, height * (Settings.SegmentTimerSizeRatio / 100f), clipRegion);
+            SegmentTimer.DrawHorizontal(ctx, state, height * (Settings.SegmentTimerSizeRatio / 100f));
             SegmentTimer.Settings.TimerWidth = HorizontalWidth;
         }
     }
 
     public string ComponentName => "Detailed Timer";
 
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        Settings.Mode = mode;
-        return Settings;
-    }
-
-    public Avalonia.Controls.Control GetSettingsControlAvalonia(LayoutMode mode)
+    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         Settings.Mode = mode;
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Detailed Timer");

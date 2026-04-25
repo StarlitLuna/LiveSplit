@@ -2,21 +2,14 @@
 
   <PropertyGroup>
     <RootNamespace>LiveSplit</RootNamespace>
-    <OutputType>WinExe</OutputType>
-    <UseWindowsForms>true</UseWindowsForms>
-
-    <!-- Windows-only utility — registers .lss/.lsl file associations and IE compat-view
-         registry tweaks. On non-Windows hosts the project compiles to an empty Library so
-         the solution still builds; the real source files are excluded below. -->
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
-    <UseWindowsForms>false</UseWindowsForms>
     <OutputType>Library</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+
+    <!-- Windows-only utility — registered .lss/.lsl file associations and IE compat-view
+         registry tweaks. On Linux this compiles to an empty Library so the solution still
+         builds; the real source files are excluded below. -->
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+  <ItemGroup>
     <Compile Remove="**/*.cs" />
     <Compile Include="LinuxNoOp.cs" />
   </ItemGroup>

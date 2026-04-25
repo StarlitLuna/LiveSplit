@@ -4,8 +4,6 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Windows.Forms;
-
 using LiveSplit.Model;
 using LiveSplit.TimeFormatters;
 using LiveSplit.UI.Drawing;
@@ -133,7 +131,7 @@ public class SplitComponent : IComponent
         HeaderMeasureDeltaLabel.SetActualWidth(ctx);
     }
 
-    private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
+    private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
         if (NeedUpdateAll)
         {
@@ -329,7 +327,7 @@ public class SplitComponent : IComponent
         }
     }
 
-    private void DrawHeader(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode, Region clipRegion)
+    private void DrawHeader(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
         if (Settings.BackgroundGradient == ExtendedGradientType.Alternating)
         {
@@ -501,18 +499,18 @@ public class SplitComponent : IComponent
         DeltaLabel.Brush = new SolidBrush(originalColor);
     }
 
-    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
+    public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
         if (Settings.Display2Rows)
         {
             VerticalHeight = Settings.SplitHeight + (0.85f * (MeasureFontCapHeight(ctx, state.LayoutSettings.TimesFont) + MeasureFontCapHeight(ctx, state.LayoutSettings.TextFont)));
             if (Header)
             {
-                DrawHeader(ctx, state, width, VerticalHeight, LayoutMode.Horizontal, clipRegion);
+                DrawHeader(ctx, state, width, VerticalHeight, LayoutMode.Horizontal);
             }
             else
             {
-                DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Horizontal, clipRegion);
+                DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Horizontal);
             }
         }
         else
@@ -520,25 +518,25 @@ public class SplitComponent : IComponent
             VerticalHeight = Settings.SplitHeight + 25;
             if (Header)
             {
-                DrawHeader(ctx, state, width, VerticalHeight, LayoutMode.Vertical, clipRegion);
+                DrawHeader(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
             }
             else
             {
-                DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical, clipRegion);
+                DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
             }
         }
     }
 
-    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
+    public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height)
     {
         MinimumHeight = 0.85f * (MeasureFontCapHeight(ctx, state.LayoutSettings.TimesFont) + MeasureFontCapHeight(ctx, state.LayoutSettings.TextFont));
         if (Header)
         {
-            DrawHeader(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal, clipRegion);
+            DrawHeader(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
         }
         else
         {
-            DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal, clipRegion);
+            DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
         }
     }
 
@@ -550,11 +548,6 @@ public class SplitComponent : IComponent
     }
 
     public string ComponentName => "Split";
-
-    public Control GetSettingsControl(LayoutMode mode)
-    {
-        throw new NotSupportedException();
-    }
 
     public void SetSettings(System.Xml.XmlNode settings)
     {

@@ -25,11 +25,17 @@ public sealed class LayoutEditorDialog : Window
 
     private readonly TaskCompletionSource<bool> _result = new();
     private readonly ListBox _list;
+    private readonly List<ILayoutComponent> _originalComponents;
 
     public LayoutEditorDialog(ILayout layout, LiveSplitState state)
     {
         Layout = layout;
         State = state;
+
+        // Snapshot the layout's component list so Cancel can roll back the in-place mutations
+        // performed by Add / Remove / Move Up / Move Down (those buttons edit
+        // Layout.LayoutComponents directly to keep the running window's renderer in sync).
+        _originalComponents = new List<ILayoutComponent>(layout.LayoutComponents);
 
         Title = "Layout Editor";
         Width = 600;
@@ -70,7 +76,12 @@ public sealed class LayoutEditorDialog : Window
             Close();
         };
         var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
-        cancel.Click += (_, _) => { _result.TrySetResult(false); Close(); };
+        cancel.Click += (_, _) =>
+        {
+            RestoreOriginalComponents();
+            _result.TrySetResult(false);
+            Close();
+        };
 
         var buttons = new StackPanel
         {
@@ -100,9 +111,20 @@ public sealed class LayoutEditorDialog : Window
         {
             if (!_result.Task.IsCompleted)
             {
+                // Closed via the X button without confirming — same rollback as Cancel.
+                RestoreOriginalComponents();
                 _result.TrySetResult(false);
             }
         };
+    }
+
+    private void RestoreOriginalComponents()
+    {
+        Layout.LayoutComponents.Clear();
+        foreach (ILayoutComponent c in _originalComponents)
+        {
+            Layout.LayoutComponents.Add(c);
+        }
     }
 
     private List<string> ComponentNames()

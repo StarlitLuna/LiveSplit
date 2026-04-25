@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
 using global::Avalonia.Threading;
 
+using LiveSplit.Localization;
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
 using LiveSplit.Model.RunFactories;
@@ -66,6 +68,12 @@ public sealed class AvaloniaTimerHost : IDisposable
             ApplyRecentSplitsFileState(resolvedSplitsPath, settings, State);
         }
 
+        // Apply the user's enabled-comparison-generators preference + restore the previously
+        // selected comparison so the timer column matches what the user saw last session.
+        SwitchComparisonGenerators(State);
+        SwitchComparison(State, settings.LastComparison);
+        RegenerateComparisons(State);
+
         CreateAutoSplitter(State);
 
         Renderer = new ComponentRenderer
@@ -123,13 +131,14 @@ public sealed class AvaloniaTimerHost : IDisposable
 
     private static ISettings LoadOrCreateSettings()
     {
+        ISettings settings = null;
         try
         {
             string path = UserDataPaths.SettingsFile;
             if (File.Exists(path))
             {
                 using FileStream stream = File.OpenRead(path);
-                return new XMLSettingsFactory(stream).Create();
+                settings = new XMLSettingsFactory(stream).Create();
             }
         }
         catch (Exception e)
@@ -137,7 +146,13 @@ public sealed class AvaloniaTimerHost : IDisposable
             Options.Log.Error(e);
         }
 
-        return new StandardSettingsFactory().Create();
+        settings ??= new StandardSettingsFactory().Create();
+
+        // Apply the persisted UI language preference now that we have it; locale-aware UI
+        // strings rendered before this point would otherwise fall back to the system culture.
+        LanguageResolver.SetCurrentLanguageSetting(settings.UILanguage);
+
+        return settings;
     }
 
     private static IRun LoadRunOrFallback(string explicitPath, ISettings settings,
@@ -254,10 +269,7 @@ public sealed class AvaloniaTimerHost : IDisposable
         {
             try
             {
-                foreach (Model.Comparisons.IComparisonGenerator gen in State.Run.ComparisonGenerators)
-                {
-                    gen.Generate(State.Settings);
-                }
+                RegenerateComparisons(State);
             }
             catch (Exception e)
             {
@@ -266,6 +278,52 @@ public sealed class AvaloniaTimerHost : IDisposable
 
             Dispatcher.UIThread.Post(invalidateVisual, DispatcherPriority.Background);
         };
+    }
+
+    private static void SwitchComparisonGenerators(LiveSplitState state)
+    {
+        // Apply Settings.ComparisonGeneratorStates: keep only the generators the user has
+        // enabled (and add back any newly-enabled ones not currently on the run). Mirrors the
+        // pattern in the previous WinForms host.
+        IEnumerable<IComparisonGenerator> allGenerators =
+            new StandardComparisonGeneratorsFactory().GetAllGenerators(state.Run);
+        foreach (IComparisonGenerator generator in allGenerators)
+        {
+            IComparisonGenerator existing = state.Run.ComparisonGenerators
+                .FirstOrDefault(x => x.Name == generator.Name);
+            if (existing != null)
+            {
+                state.Run.ComparisonGenerators.Remove(existing);
+            }
+
+            if (state.Settings.ComparisonGeneratorStates.TryGetValue(generator.Name, out bool enabled) && enabled)
+            {
+                state.Run.ComparisonGenerators.Add(generator);
+            }
+        }
+    }
+
+    private static void SwitchComparison(LiveSplitState state, string name)
+    {
+        if (string.IsNullOrEmpty(name) || !state.Run.Comparisons.Contains(name))
+        {
+            name = Run.PersonalBestComparisonName;
+        }
+
+        state.CurrentComparison = name;
+    }
+
+    private static void RegenerateComparisons(LiveSplitState state)
+    {
+        if (state?.Run == null)
+        {
+            return;
+        }
+
+        foreach (IComparisonGenerator gen in state.Run.ComparisonGenerators)
+        {
+            gen.Generate(state.Settings);
+        }
     }
 
     // --- Persistence helpers (called from Dispose) ---

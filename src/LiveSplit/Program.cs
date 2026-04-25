@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 using LiveSplit.Avalonia;
@@ -19,9 +20,14 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        // Phase 5.2b opt-in flag: launch the Avalonia vertical slice instead of WinForms.
-        // Removed in Phase 5.3+ once Avalonia becomes the only UI.
-        if (args.Contains("--avalonia"))
+        // Use the Avalonia front-end on non-Windows platforms (the WinForms TimerForm path
+        // hard-depends on System.Drawing.Common's GDI+ bindings + Win32 P/Invokes for layered
+        // window transparency, which only work on Windows). On Windows the user can still opt in
+        // explicitly with `--avalonia` to exercise the cross-platform path during development.
+        // Phase 5.3d migrates the dialogs and lets Avalonia become the only path; until then,
+        // Windows defaults to the legacy WinForms front-end so the layout/run editor dialogs
+        // remain available.
+        if (args.Contains("--avalonia") || !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             InitializeLocalization();
             AvaloniaProgram.Run(args);

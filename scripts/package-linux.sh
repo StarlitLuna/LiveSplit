@@ -1,41 +1,71 @@
 #!/usr/bin/env bash
-# Package a Linux build of LiveSplit as a self-contained tarball + AppImage.
+# Package a Linux build of LiveSplit. Three output modes:
+#   tarball  (default) — self-contained publish, gzipped
+#   appimage           — also produces dist/LiveSplit-<rid>.AppImage
+#   flatpak            — produces dist/livesplit.flatpak (host-side native build skipped;
+#                        flatpak-builder runs the whole pipeline inside the sandbox)
 #
 # Prerequisites:
-#   - .NET 8 SDK
-#   - Rust toolchain (for liblivesplit_core.so — see scripts/build-native-linux.sh)
-#   - For the AppImage step: linuxdeploy (https://github.com/linuxdeploy/linuxdeploy)
+#   tarball / appimage:
+#     - .NET 8 SDK
+#     - Rust toolchain (for the .so files — see scripts/build-native-linux.sh)
+#     - linuxdeploy on PATH (appimage only)
+#   flatpak:
+#     - flatpak + flatpak-builder
+#     - org.freedesktop.{Platform,Sdk}//23.08
+#     - org.freedesktop.Sdk.Extension.{dotnet8,rust-stable}//23.08
+#     (no .NET or Rust required on the host)
 #
 # Usage:
-#   scripts/package-linux.sh                  # build linux-x64 tarball
-#   scripts/package-linux.sh --appimage       # also build the AppImage
-#   scripts/package-linux.sh --rid linux-arm64
-#
-# Output:
-#   dist/livesplit-linux-x64.tar.gz
-#   dist/LiveSplit-x86_64.AppImage              (if --appimage)
+#   scripts/package-linux.sh                        # dist/livesplit-linux-x64.tar.gz
+#   scripts/package-linux.sh --appimage             # also dist/LiveSplit-x86_64.AppImage
+#   scripts/package-linux.sh --flatpak              # dist/livesplit.flatpak (linux-x64 only)
+#   scripts/package-linux.sh --rid linux-arm64      # cross-RID tarball
 
 set -euo pipefail
 
 RID="linux-x64"
 MAKE_APPIMAGE="false"
+MAKE_FLATPAK="false"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --appimage) MAKE_APPIMAGE="true"; shift ;;
-        --rid) RID="$2"; shift 2 ;;
+        --flatpak)  MAKE_FLATPAK="true"; shift ;;
+        --rid)      RID="$2"; shift 2 ;;
         *) echo "error: unknown option '$1'" >&2; exit 1 ;;
     esac
 done
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST_DIR="$REPO_ROOT/dist"
-PUBLISH_DIR="$REPO_ROOT/dist/publish-$RID"
-
 mkdir -p "$DIST_DIR"
+
+# Flatpak short-circuits the host-side pipeline entirely: the manifest invokes
+# build-native-linux.sh + dotnet publish inside the sandbox, where the dotnet8
+# and rust-stable SDK extensions live.
+if [[ "$MAKE_FLATPAK" == "true" ]]; then
+    if ! command -v flatpak-builder >/dev/null 2>&1; then
+        echo "error: flatpak-builder not found in PATH; install flatpak + flatpak-builder" >&2
+        exit 1
+    fi
+
+    pushd "$REPO_ROOT" >/dev/null
+    flatpak-builder --repo="$DIST_DIR/flatpak-repo" --force-clean \
+        "$DIST_DIR/flatpak-build" org.livesplit.LiveSplit.yml
+    flatpak build-bundle "$DIST_DIR/flatpak-repo" \
+        "$DIST_DIR/livesplit.flatpak" org.livesplit.LiveSplit
+    popd >/dev/null
+
+    echo "wrote $DIST_DIR/livesplit.flatpak"
+    echo "install with: flatpak install --user $DIST_DIR/livesplit.flatpak"
+    exit 0
+fi
+
+PUBLISH_DIR="$DIST_DIR/publish-$RID"
 rm -rf "$PUBLISH_DIR"
 
-# Build the Rust native lib for the target RID first (no-op if already built).
+# Build the Rust native libs for the target RID first (no-op if already built).
 bash "$REPO_ROOT/scripts/build-native-linux.sh" "$RID"
 
 # Self-contained publish so users don't need .NET installed.

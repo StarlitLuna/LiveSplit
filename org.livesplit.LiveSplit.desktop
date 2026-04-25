@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=LiveSplit
+Exec=LiveSplit
+Icon=org.livesplit.LiveSplit
+Categories=Utility;Game;
+Terminal=false

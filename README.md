@@ -55,6 +55,128 @@ After cloning, simply run `dotnet build LiveSplit.sln` from the root of the repo
 
 To use Visual Studio, you must install a version that supports the .NET SDK version you installed. At the time of writing, the most recent version is [Visual Studio 2022](https://visualstudio.microsoft.com/vs/community).
 
+## Building on Linux
+
+The instructions above produce a Windows binary (`net8.0-windows`). A Linux port using an Avalonia front-end and a SkiaSharp renderer lives on the `linux-port` branch. The notes below cover building it on any distro and packaging it as a tarball, AppImage, or — recommended for distribution — a Flatpak.
+
+### Prerequisites (all distros)
+
+You need three toolchains on the build host (or, for the Flatpak path, only `flatpak-builder` — see below):
+
+1. **.NET 8 SDK** — install from your distro's package manager (`dotnet-sdk-8.0` on most), Microsoft's repo, or <https://dotnet.microsoft.com/en-us/download/dotnet/8.0>. Verify with `dotnet --version`; it must report `8.x`.
+2. **Rust toolchain** — install via [rustup](https://rustup.rs/) and add the target you want to publish for:
+   ```sh
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   rustup target add x86_64-unknown-linux-gnu        # required for linux-x64
+   rustup target add aarch64-unknown-linux-gnu       # optional, for linux-arm64
+   rustup target add i686-unknown-linux-gnu          # optional, for linux-x86
+   ```
+   Rust is required because LiveSplit's timing and splits-file core (`livesplit-core`) is a Rust crate compiled to a native shared library (`liblivesplit_core.so`) that the .NET side `P/Invoke`s into.
+3. **Build essentials** — a C toolchain, `pkg-config`, `git`, and `curl`. Some Rust dependencies and `linuxdeploy` (for AppImages) need them.
+   - Debian/Ubuntu: `sudo apt install build-essential pkg-config git curl`
+   - Fedora/RHEL: `sudo dnf install @development-tools pkgconf-pkg-config git curl`
+   - Arch: `sudo pacman -S base-devel pkgconf git curl`
+
+For an AppImage build, also grab [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy/releases) and put it on `PATH`.
+
+### Step 1 — Clone with submodules
+
+```sh
+git clone --recursive -b linux-port https://github.com/LiveSplit/LiveSplit.git
+cd LiveSplit
+```
+
+If you've already cloned without `--recursive`:
+
+```sh
+git submodule update --init --recursive
+```
+
+The `lib/livesplit-core` submodule contains the Rust crate; the build will fail without it.
+
+### Step 2 — Build the native shared libraries
+
+LiveSplit `P/Invoke`s into two Rust-built shared libraries:
+
+- `liblivesplit_core.so` — the timing/splits-file engine, sourced from the `lib/livesplit-core` submodule.
+- `libasr_capi.so` — the auto-splitting runtime, sourced from [components/LiveSplit.AutoSplittingRuntime/src/asr-capi](components/LiveSplit.AutoSplittingRuntime/src/asr-capi). Without it, LiveSplit still runs but auto-splitters won't load. 64-bit only.
+
+The helper script [scripts/build-native-linux.sh](scripts/build-native-linux.sh) builds both with `cargo build --release` and copies the resulting `.so` files into the `runtimes/<rid>/native/` layout the .NET `NativeLibraryResolver` looks for at startup:
+
+```sh
+scripts/build-native-linux.sh                     # default: linux-x64
+scripts/build-native-linux.sh linux-arm64
+scripts/build-native-linux.sh linux-x86           # skips asr_capi (64-bit only)
+```
+
+Run it once per RID you plan to publish for.
+
+### Step 3 — Build the .NET solution
+
+For day-to-day development:
+
+```sh
+dotnet build LiveSplit.sln -c Release
+```
+
+Output lands under `artifacts/bin/LiveSplit/release/`. Run it with:
+
+```sh
+dotnet artifacts/bin/LiveSplit/release/LiveSplit.dll
+```
+
+To produce a self-contained build that doesn't require the host to have .NET installed, use the packaging script described next.
+
+### Packaging: tarball and AppImage
+
+[scripts/package-linux.sh](scripts/package-linux.sh) wraps the whole pipeline. It invokes `build-native-linux.sh` for you, runs `dotnet publish --self-contained` for the requested RID, drops a tarball into `dist/`, and optionally produces an AppImage:
+
+```sh
+scripts/package-linux.sh                       # → dist/livesplit-linux-x64.tar.gz
+scripts/package-linux.sh --appimage            # → also dist/LiveSplit-x86_64.AppImage
+scripts/package-linux.sh --rid linux-arm64     # cross-RID build
+```
+
+`--appimage` requires `linuxdeploy` on `PATH`; the script generates a minimal `.desktop` entry and bundles `res/Icon.png` if it exists.
+
+### Packaging: Flatpak (recommended for distribution)
+
+Flatpak is the preferred way to distribute the Linux build because the runtime sandbox abstracts away each distro's `glibc`, `libstdc++`, and graphics-stack versions, giving you one artifact that works everywhere. Going this route, you do **not** need .NET or Rust on the host — `flatpak-builder` is the only requirement, since the manifest at [org.livesplit.LiveSplit.yml](org.livesplit.LiveSplit.yml) runs the whole build pipeline (native libs + `dotnet publish`) inside the sandbox using the `dotnet8` and `rust-stable` SDK extensions.
+
+#### One-time setup
+
+```sh
+# Install the builder (use your distro's equivalent of apt if needed).
+sudo apt install flatpak flatpak-builder
+
+# Add Flathub.
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+# Pull down the runtime + the .NET 8 and Rust SDK extensions used at build time.
+flatpak install --user flathub \
+    org.freedesktop.Platform//23.08 \
+    org.freedesktop.Sdk//23.08 \
+    org.freedesktop.Sdk.Extension.dotnet8//23.08 \
+    org.freedesktop.Sdk.Extension.rust-stable//23.08
+```
+
+#### Build
+
+```sh
+scripts/package-linux.sh --flatpak
+```
+
+This produces a redistributable `dist/livesplit.flatpak` bundle. Install it locally with:
+
+```sh
+flatpak install --user dist/livesplit.flatpak
+flatpak run org.livesplit.LiveSplit
+```
+
+The bundle installs on any distro with `flatpak install ./livesplit.flatpak`.
+
+Note: the manifest sets `--share=network` during the build phase so cargo and `dotnet restore` can fetch packages — fine for personal use, but Flathub doesn't allow it. Submitting upstream needs NuGet packages and Cargo crates vendored ahead of time and listed under `sources:` in the manifest.
+
 ## Common Compiling Issues
 1. No submodules pulled in when you fork/clone the repo which causes the project not to build. There are two ways to remedy this:
  - Cloning for the first time: `git clone --recursive https://github.com/LiveSplit/LiveSplit.git`

@@ -53,6 +53,9 @@ public sealed class SkiaRenderControl : Control
 
         IDrawingContext ctx = new SkiaDrawingContext(canvas);
         LayoutMode mode = Host.State.Layout.Mode;
+
+        RenderOp.DrawLayoutBackgroundInner(ctx, Host.State.LayoutSettings, w, h);
+
         float overallSize = Host.Renderer.OverallSize;
         float scale = mode == LayoutMode.Vertical ? h / overallSize : w / overallSize;
         if (scale > 0 && !float.IsInfinity(scale) && !float.IsNaN(scale))
@@ -119,6 +122,12 @@ public sealed class SkiaRenderControl : Control
             float height = (float)Bounds.Height;
             LayoutMode mode = state.Layout.Mode;
 
+            // Layout-level background (solid, gradient, or image). Drawn before the per-component
+            // scale transform so the fill spans the full window. Per-component backgrounds
+            // (set via BackgroundHelper.DrawBackground) layer on top inside each component's
+            // own clip region.
+            DrawLayoutBackgroundInner(ctx, state.LayoutSettings, width, height);
+
             // Scale so components paint at their natural size; the layout mode picks which
             // axis is the constraint (full height for vertical, full width for horizontal).
             float overallSize = _host.Renderer.OverallSize;
@@ -134,6 +143,74 @@ public sealed class SkiaRenderControl : Control
             float drawHeight = mode == LayoutMode.Vertical ? overallSize : height / scale;
 
             _host.Renderer.Render(ctx, state, drawWidth, drawHeight, mode);
+        }
+
+        internal static void DrawLayoutBackgroundInner(IDrawingContext ctx, LiveSplit.Options.LayoutSettings settings, float width, float height)
+        {
+            if (settings is null)
+            {
+                return;
+            }
+
+            switch (settings.BackgroundType)
+            {
+                case LiveSplit.Options.BackgroundType.Image:
+                {
+                    LiveSplit.UI.Drawing.IImage image = settings.GetCachedBackgroundImage();
+                    if (image is null)
+                    {
+                        // Decode failed or no image set; fall through to a transparent fill so the
+                        // window still paints rather than retaining old pixels.
+                        return;
+                    }
+
+                    float opacity = System.Math.Clamp(settings.ImageOpacity, 0f, 1f);
+                    if (opacity <= 0f)
+                    {
+                        return;
+                    }
+
+                    var dest = new System.Drawing.Rectangle(0, 0, (int)System.Math.Ceiling(width), (int)System.Math.Ceiling(height));
+                    var src = new System.Drawing.Rectangle(0, 0, image.Width, image.Height);
+                    if (opacity >= 1f)
+                    {
+                        ctx.DrawImage(image, dest, src);
+                    }
+                    else
+                    {
+                        ctx.DrawImageWithOpacity(image, dest, src, opacity);
+                    }
+
+                    break;
+                }
+                case LiveSplit.Options.BackgroundType.SolidColor:
+                {
+                    if (settings.BackgroundColor.A == 0)
+                    {
+                        return;
+                    }
+
+                    using ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(settings.BackgroundColor);
+                    ctx.FillRectangle(brush, 0f, 0f, width, height);
+                    break;
+                }
+                case LiveSplit.Options.BackgroundType.VerticalGradient:
+                case LiveSplit.Options.BackgroundType.HorizontalGradient:
+                {
+                    if (settings.BackgroundColor.A == 0 && settings.BackgroundColor2.A == 0)
+                    {
+                        return;
+                    }
+
+                    System.Drawing.PointF endPoint = settings.BackgroundType == LiveSplit.Options.BackgroundType.HorizontalGradient
+                        ? new System.Drawing.PointF(width, 0f)
+                        : new System.Drawing.PointF(0f, height);
+                    using LiveSplit.UI.Drawing.ILinearGradientBrush brush = DrawingApi.Factory.CreateLinearGradientBrush(
+                        new System.Drawing.PointF(0f, 0f), endPoint, settings.BackgroundColor, settings.BackgroundColor2);
+                    ctx.FillRectangle(brush, 0f, 0f, width, height);
+                    break;
+                }
+            }
         }
     }
 }

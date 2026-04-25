@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 
 using global::Avalonia;
 using global::Avalonia.Controls;
 using global::Avalonia.Controls.Primitives;
 using global::Avalonia.Layout;
 using global::Avalonia.Media;
+using global::Avalonia.Media.Imaging;
+using global::Avalonia.Platform.Storage;
 
 namespace LiveSplit.UI;
 
@@ -158,8 +162,18 @@ public static class AvaloniaSettingsBuilder
             return BuildTextRow(target, prop, isNumeric: true);
         }
 
-        // Unsupported property type (System.Drawing.Font, lists of complex objects, etc.) —
-        // skip; the value still round-trips through XML, just isn't editable in this panel.
+        if (type == typeof(FontDescriptor))
+        {
+            return BuildFontRow(target, prop);
+        }
+
+        if (type == typeof(byte[]))
+        {
+            return BuildImageRow(target, prop);
+        }
+
+        // Unsupported property type (lists of complex objects, etc.) — skip; the value still
+        // round-trips through XML, just isn't editable in this panel.
         return null;
     }
 
@@ -256,6 +270,120 @@ public static class AvaloniaSettingsBuilder
             }
         };
         return WithLabel(prop.Name, box);
+    }
+
+    private static Control BuildFontRow(object target, PropertyInfo prop)
+    {
+        FontDescriptor font = (FontDescriptor)prop.GetValue(target) ?? new FontDescriptor();
+
+        var familyBox = new TextBox { Text = font.FamilyName, Width = 160 };
+        var sizeBox = new TextBox { Text = font.Size.ToString(System.Globalization.CultureInfo.InvariantCulture), Width = 60 };
+        var styleCombo = new ComboBox
+        {
+            ItemsSource = Enum.GetValues(typeof(System.Drawing.FontStyle)),
+            SelectedItem = font.Style,
+            Width = 110,
+        };
+
+        void Commit()
+        {
+            float size = font.Size;
+            float.TryParse(sizeBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out size);
+            var style = (System.Drawing.FontStyle)(styleCombo.SelectedItem ?? font.Style);
+            string family = string.IsNullOrWhiteSpace(familyBox.Text) ? font.FamilyName : familyBox.Text;
+            prop.SetValue(target, new FontDescriptor(family, size, style, font.Unit));
+        }
+
+        familyBox.LostFocus += (_, _) => Commit();
+        sizeBox.LostFocus += (_, _) => Commit();
+        styleCombo.SelectionChanged += (_, _) => Commit();
+
+        var inner = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children = { familyBox, sizeBox, styleCombo },
+        };
+        return WithLabel(prop.Name, inner);
+    }
+
+    private static Control BuildImageRow(object target, PropertyInfo prop)
+    {
+        var preview = new Image { Width = 80, Height = 45, Stretch = Stretch.Uniform };
+        UpdatePreview((byte[])prop.GetValue(target));
+
+        var pickButton = new Button { Content = "Choose Image…" };
+        var clearButton = new Button { Content = "Clear" };
+
+        pickButton.Click += async (_, _) =>
+        {
+            TopLevel top = TopLevel.GetTopLevel(pickButton);
+            if (top is null)
+            {
+                return;
+            }
+
+            IReadOnlyList<IStorageFile> files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Choose Image",
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new FilePickerFileType("Images") { Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif" } },
+                    new FilePickerFileType("All Files") { Patterns = new[] { "*" } },
+                },
+            });
+
+            if (files is { Count: > 0 })
+            {
+                try
+                {
+                    using Stream s = await files[0].OpenReadAsync();
+                    using var ms = new MemoryStream();
+                    await s.CopyToAsync(ms);
+                    byte[] bytes = ms.ToArray();
+                    prop.SetValue(target, bytes);
+                    UpdatePreview(bytes);
+                }
+                catch (Exception ex)
+                {
+                    Options.Log.Error(ex);
+                }
+            }
+        };
+
+        clearButton.Click += (_, _) =>
+        {
+            prop.SetValue(target, null);
+            UpdatePreview(null);
+        };
+
+        void UpdatePreview(byte[] bytes)
+        {
+            if (bytes is null || bytes.Length == 0)
+            {
+                preview.Source = null;
+                return;
+            }
+
+            try
+            {
+                using var ms = new MemoryStream(bytes);
+                preview.Source = new Bitmap(ms);
+            }
+            catch
+            {
+                preview.Source = null;
+            }
+        }
+
+        var inner = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children = { preview, pickButton, clearButton },
+        };
+        return WithLabel(prop.Name, inner);
     }
 
     private static Control WithLabel(string name, Control inner)

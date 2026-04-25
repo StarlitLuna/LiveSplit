@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Drawing;
+using System.IO;
 
 using LiveSplit.UI;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.Options;
 
@@ -25,9 +27,57 @@ public class LayoutSettings : ICloneable
 
     public BackgroundType BackgroundType { get; set; }
 
+    private byte[] _backgroundImage;
+    private IImage _cachedBackgroundImage;
+
     /// <summary>Encoded image bytes (PNG/JPEG). Stored opaquely so the data type stays cross-platform;
     /// rendering decodes via SkiaSharp when the layout draws.</summary>
-    public byte[] BackgroundImage { get; set; }
+    public byte[] BackgroundImage
+    {
+        get => _backgroundImage;
+        set
+        {
+            if (!ReferenceEquals(_backgroundImage, value))
+            {
+                _cachedBackgroundImage?.Dispose();
+                _cachedBackgroundImage = null;
+            }
+
+            _backgroundImage = value;
+        }
+    }
+
+    /// <summary>Lazily-decoded <see cref="IImage"/> for <see cref="BackgroundImage"/>. The
+    /// renderer reads this on each frame; the decode happens once and caches until
+    /// <see cref="BackgroundImage"/> is reassigned. Returns null if the bytes are missing or
+    /// fail to decode (any IO/decoder error gets logged and the cache stays null so we don't
+    /// hot-loop on a broken image).</summary>
+    public IImage GetCachedBackgroundImage()
+    {
+        if (_cachedBackgroundImage != null)
+        {
+            return _cachedBackgroundImage;
+        }
+
+        if (_backgroundImage is null || _backgroundImage.Length == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = new MemoryStream(_backgroundImage);
+            _cachedBackgroundImage = DrawingApi.Factory.LoadImage(stream);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+            _cachedBackgroundImage = null;
+        }
+
+        return _cachedBackgroundImage;
+    }
+
     public float ImageOpacity { get; set; }
     public float ImageBlur { get; set; }
 

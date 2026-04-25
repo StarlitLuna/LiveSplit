@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 
 using global::Avalonia.Controls;
+using global::Avalonia.Controls.Notifications;
 using global::Avalonia.Input;
 using global::Avalonia.Interactivity;
 using global::Avalonia.Markup.Xaml;
@@ -17,6 +18,7 @@ using LiveSplit.Avalonia.Dialogs;
 using LiveSplit.Model;
 using LiveSplit.Options;
 using LiveSplit.Server;
+using LiveSplit.UI;
 
 namespace LiveSplit.Avalonia;
 
@@ -51,6 +53,8 @@ public sealed partial class TimerWindow : Window
     public ICommand CloseCommand { get; }
 
     private CommandServer _commandServer;
+    private WindowNotificationManager _notificationManager;
+    private EventHandler<NotificationEventArgs> _notificationHandler;
 
     public TimerWindow()
         : this(splitsPath: null, layoutPath: null)
@@ -91,6 +95,7 @@ public sealed partial class TimerWindow : Window
         }
 
         WireDynamicSubmenus();
+        WireComponentContextMenu();
 
         // Tunnel-phase so the handler runs even when child controls swallow the bubble; the
         // right-click ContextMenu wired via XAML still surfaces normally.
@@ -103,6 +108,25 @@ public sealed partial class TimerWindow : Window
 
         Closing += OnClosing;
         Closed += OnClosed;
+
+        // Toast/notification surface for component status messages (therun.gg uploads, etc.).
+        // Components publish through LiveSplit.UI.Notifications without taking an Avalonia
+        // dependency; we route into Avalonia's WindowNotificationManager here.
+        Opened += (_, _) =>
+        {
+            _notificationManager = new WindowNotificationManager(this) { Position = NotificationPosition.BottomRight, MaxItems = 3 };
+            _notificationHandler = (_, args) => Dispatcher.UIThread.Post(() =>
+            {
+                NotificationType type = args.Severity switch
+                {
+                    NotificationSeverity.Success => NotificationType.Success,
+                    NotificationSeverity.Error => NotificationType.Error,
+                    _ => NotificationType.Information,
+                };
+                _notificationManager.Show(new Notification("LiveSplit", args.Message, type));
+            });
+            Notifications.Raised += _notificationHandler;
+        };
 
         StartConfiguredServer();
     }
@@ -318,6 +342,135 @@ public sealed partial class TimerWindow : Window
     private byte[] RenderToPng()
     {
         return this.FindControl<SkiaRenderControl>("Canvas")?.SnapshotPng();
+    }
+
+    // --- Component-specific right-click items -----------------------------------------------
+
+    // Set when the right-click happens, read when the ContextMenu opens. Captures the
+    // component the cursor was over so we can build its ContextMenuControls into the menu
+    // before the window-level entries.
+    private LiveSplit.UI.Components.IComponent _contextMenuComponent;
+
+    private void WireComponentContextMenu()
+    {
+        if (ContextMenu is null)
+        {
+            return;
+        }
+
+        // ContextRequestedEvent fires before ContextMenu.Opening, so we can capture the
+        // pointer position then.
+        AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Tunnel);
+        ContextMenu.Opening += OnContextMenuOpening;
+    }
+
+    private void OnContextRequested(object sender, ContextRequestedEventArgs e)
+    {
+        _contextMenuComponent = null;
+        if (Host?.State?.Layout is null)
+        {
+            return;
+        }
+
+        if (this.FindControl<SkiaRenderControl>("Canvas") is not SkiaRenderControl canvas)
+        {
+            return;
+        }
+
+        // ContextRequestedEventArgs.TryGetPosition gives screen-relative coords; ask in the
+        // canvas's coord space to hit-test against the layout.
+        if (!e.TryGetPosition(canvas, out global::Avalonia.Point pos))
+        {
+            return;
+        }
+
+        _contextMenuComponent = HitTestComponent(canvas, pos);
+    }
+
+    private LiveSplit.UI.Components.IComponent HitTestComponent(SkiaRenderControl canvas, global::Avalonia.Point pos)
+    {
+        Model.LiveSplitState state = Host.State;
+        UI.LayoutMode mode = state.Layout.Mode;
+        float overall = Math.Max(0.001f, Host.Renderer.OverallSize);
+
+        float canvasW = (float)canvas.Bounds.Width;
+        float canvasH = (float)canvas.Bounds.Height;
+        float scale = mode == UI.LayoutMode.Vertical ? canvasH / overall : canvasW / overall;
+        if (scale <= 0f || float.IsInfinity(scale) || float.IsNaN(scale))
+        {
+            return null;
+        }
+
+        float cursorAlongAxis = (float)(mode == UI.LayoutMode.Vertical ? pos.Y / scale : pos.X / scale);
+
+        float cursor = 0f;
+        foreach (LiveSplit.UI.Components.IComponent component in Host.Renderer.VisibleComponents)
+        {
+            float size = mode == UI.LayoutMode.Vertical ? component.VerticalHeight : component.HorizontalWidth;
+            if (cursorAlongAxis >= cursor && cursorAlongAxis <= cursor + size)
+            {
+                return component;
+            }
+
+            cursor += size;
+        }
+
+        return null;
+    }
+
+    private void OnContextMenuOpening(object sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+        {
+            return;
+        }
+
+        // Strip any items we added on the previous open so the menu doesn't grow unbounded.
+        var staticItems = new List<object>();
+        foreach (object item in menu.Items)
+        {
+            if (item is MenuItem mi && (mi.Tag as string) == "__component_action")
+            {
+                continue;
+            }
+
+            if (item is Separator s && (s.Tag as string) == "__component_separator")
+            {
+                continue;
+            }
+
+            staticItems.Add(item);
+        }
+
+        menu.Items.Clear();
+        if (_contextMenuComponent?.ContextMenuControls is { Count: > 0 } actions)
+        {
+            foreach (KeyValuePair<string, Action> kv in actions)
+            {
+                Action handler = kv.Value;
+                var item = new MenuItem { Header = kv.Key, Tag = "__component_action" };
+                item.Click += (_, _) =>
+                {
+                    try
+                    {
+                        handler?.Invoke();
+                        InvalidateVisual();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex);
+                    }
+                };
+                menu.Items.Add(item);
+            }
+
+            menu.Items.Add(new Separator { Tag = "__component_separator" });
+        }
+
+        foreach (object item in staticItems)
+        {
+            menu.Items.Add(item);
+        }
     }
 
     // --- Dynamic submenus (recents, comparisons, timing methods, server) -------------------
@@ -639,6 +792,12 @@ public sealed partial class TimerWindow : Window
 
     private void OnClosed(object sender, EventArgs e)
     {
+        if (_notificationHandler != null)
+        {
+            Notifications.Raised -= _notificationHandler;
+            _notificationHandler = null;
+        }
+
         try
         {
             _commandServer?.StopAll();

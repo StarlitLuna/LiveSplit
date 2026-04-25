@@ -6,11 +6,17 @@
         Width="300" Height="500"
         Background="#101214"
         CanResize="True">
+  <!--
+    Window-focused fallback bindings. The primary path is HotkeyService (libuiohook), which
+    fires on the user's configured HotkeyProfile keys system-wide. These are kept so the timer
+    is still usable when the global hook can't initialize (Wayland without portal, headless CI,
+    libuiohook missing).
+  -->
   <Window.KeyBindings>
-    <KeyBinding Gesture="Space" Command="{Binding SplitCommand}" />
-    <KeyBinding Gesture="R" Command="{Binding ResetCommand}" />
-    <KeyBinding Gesture="N" Command="{Binding SkipCommand}" />
-    <KeyBinding Gesture="B" Command="{Binding UndoCommand}" />
+    <KeyBinding Gesture="NumPad1" Command="{Binding SplitCommand}" />
+    <KeyBinding Gesture="NumPad3" Command="{Binding ResetCommand}" />
+    <KeyBinding Gesture="NumPad2" Command="{Binding SkipCommand}" />
+    <KeyBinding Gesture="NumPad8" Command="{Binding UndoCommand}" />
     <KeyBinding Gesture="P" Command="{Binding PauseCommand}" />
   </Window.KeyBindings>
   <Window.ContextMenu>

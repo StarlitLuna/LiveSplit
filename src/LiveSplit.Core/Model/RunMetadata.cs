@@ -385,10 +385,11 @@ public class RunMetadata
             VariableValueNames = VariableValueNames.ToDictionary(x => x.Key, x => x.Value),
             CustomVariables = CustomVariables.ToDictionary(x => x.Key, x => x.Value.Clone()),
             CategoryAvailable = CategoryAvailable,
-            GameAvailable = GameAvailable
-            //TODO: set members instead later
-            //TODO: clone PropertyChanged
+            GameAvailable = GameAvailable,
         };
+        // PropertyChanged is intentionally not copied: subscribers to the original instance keep
+        // their subscriptions; the clone starts with no subscribers, which is the right semantics
+        // when the clone is used as a snapshot for cancel/rollback in the run editor.
     }
 
     private void TriggerPropertyChanged(bool clearRunID)

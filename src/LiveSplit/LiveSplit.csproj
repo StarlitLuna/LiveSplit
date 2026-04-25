@@ -25,6 +25,11 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.0" />
     <PackageReference Include="Avalonia.Skia" Version="11.2.0" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.0" />
+    <!-- Cross-platform global keyboard hook (libuiohook wrapper) for split/reset/skip/undo/pause
+         hotkeys that work when LiveSplit isn't focused. Linux X11 path requires the X11 socket
+         (granted by socket=fallback-x11 in the Flatpak manifest); Wayland users without the
+         compositor's input portal fall back to the per-window KeyBindings. -->
+    <PackageReference Include="SharpHook" Version="5.3.8" />
   </ItemGroup>
 
   <!-- Copy Splits/Layout file-association icons next to the binary, and prune transitive

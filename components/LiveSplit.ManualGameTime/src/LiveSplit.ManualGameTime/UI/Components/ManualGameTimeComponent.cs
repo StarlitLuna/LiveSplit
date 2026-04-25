@@ -1,16 +1,15 @@
 using System;
 
+using global::Avalonia.Threading;
+
 using LiveSplit.Model;
 
 namespace LiveSplit.UI.Components;
 
 /// <summary>
-/// Tracks state for manual game-time entry. The Windows build popped a WinForms entry box
-/// (<c>ShitSplitter</c>) at run start where the user typed the per-segment game time; that
-/// popup is gone on the linux-port and the Avalonia front-end is expected to provide its own
-/// entry surface that calls <see cref="LiveSplitState.SetGameTime"/> directly. Run lifecycle
-/// hooks here keep the existing pause/undo behavior so a future Avalonia popup can plug in
-/// without re-deriving the timer interaction.
+/// Tracks state for manual game-time entry. The Windows build owned a small WinForms popup
+/// (<c>ShitSplitter</c>) that opened at run start; the linux-port replacement is
+/// <see cref="ManualGameTimeWindow"/>, an Avalonia top-level window opened on the UI thread.
 /// </summary>
 public class ManualGameTimeComponent : LogicComponent
 {
@@ -18,6 +17,8 @@ public class ManualGameTimeComponent : LogicComponent
 
     public GraphicsCache Cache { get; set; }
     protected LiveSplitState CurrentState { get; set; }
+
+    private ManualGameTimeWindow _entryWindow;
 
     public override string ComponentName => "Manual Game Time";
 
@@ -38,16 +39,59 @@ public class ManualGameTimeComponent : LogicComponent
 
     private void state_OnReset(object sender, TimerPhase e)
     {
-        // Popup-close was here; no-op without a WinForms popup.
+        CloseWindow();
     }
 
     private void state_OnStart(object sender, EventArgs e)
     {
         CurrentState.IsGameTimePaused = true;
         CurrentState.SetGameTime(TimeSpan.Zero);
+
+        // Open the entry window on the UI thread; OnStart fires from whatever thread the timer
+        // model invokes Start() on (usually the UI thread, but the control server and ASR
+        // runtime can drive it from worker threads).
+        Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                _entryWindow ??= new ManualGameTimeWindow(CurrentState);
+                if (!_entryWindow.IsVisible)
+                {
+                    _entryWindow.Show();
+                }
+            }
+            catch (Exception ex)
+            {
+                Options.Log.Error(ex);
+            }
+        });
     }
 
-    public override Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
+    private void CloseWindow()
+    {
+        if (_entryWindow is null)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                _entryWindow?.Close();
+            }
+            catch (Exception ex)
+            {
+                Options.Log.Error(ex);
+            }
+            finally
+            {
+                _entryWindow = null;
+            }
+        });
+    }
+
+    public override global::Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Component");
     }
@@ -68,6 +112,7 @@ public class ManualGameTimeComponent : LogicComponent
 
     public override void Dispose()
     {
+        CloseWindow();
         CurrentState.OnStart -= state_OnStart;
         CurrentState.OnReset -= state_OnReset;
         CurrentState.OnUndoSplit -= State_OnUndoSplit;

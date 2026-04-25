@@ -39,6 +39,7 @@ public sealed class AvaloniaTimerHost : IDisposable
 
     private readonly Action _invalidateVisual;
     private readonly Task _refreshTask;
+    private readonly HotkeyService _hotkeys;
     private bool _disposed;
 
     public AvaloniaTimerHost(Action invalidateVisual, string splitsPath = null, string layoutPath = null)
@@ -85,6 +86,12 @@ public sealed class AvaloniaTimerHost : IDisposable
 
         WireStateEvents(invalidateVisual);
 
+        // System-wide split/reset/skip/undo/pause hotkey listener. Falls back silently if
+        // libuiohook can't grab globals (Wayland without portal, headless CI); the per-window
+        // KeyBindings in TimerWindow.axaml still fire when the LiveSplit window is focused.
+        _hotkeys = new HotkeyService(State, Model);
+        _hotkeys.Start();
+
         int delayMs = Math.Max(1, (int)Math.Round(1000.0 / Math.Max(1, settings.RefreshRate)));
         _refreshTask = Task.Run(async () =>
         {
@@ -126,6 +133,15 @@ public sealed class AvaloniaTimerHost : IDisposable
         catch
         {
             // Shutdown race; ignore.
+        }
+
+        try
+        {
+            _hotkeys?.Dispose();
+        }
+        catch (Exception e)
+        {
+            Options.Log.Error(e);
         }
     }
 

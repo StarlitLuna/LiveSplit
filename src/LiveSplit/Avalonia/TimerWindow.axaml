@@ -2,8 +2,16 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:LiveSplit.Avalonia"
         x:Class="LiveSplit.Avalonia.TimerWindow"
-        Title="LiveSplit (Avalonia vertical slice — Phase 5.2b)"
+        Title="LiveSplit"
         Width="300" Height="500"
-        Background="#101214">
+        Background="#101214"
+        CanResize="True">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Space" Command="{Binding SplitCommand}" />
+    <KeyBinding Gesture="R" Command="{Binding ResetCommand}" />
+    <KeyBinding Gesture="N" Command="{Binding SkipCommand}" />
+    <KeyBinding Gesture="B" Command="{Binding UndoCommand}" />
+    <KeyBinding Gesture="P" Command="{Binding PauseCommand}" />
+  </Window.KeyBindings>
   <local:SkiaRenderControl Name="Canvas" />
 </Window>

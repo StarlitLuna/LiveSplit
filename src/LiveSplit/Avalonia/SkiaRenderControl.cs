@@ -6,42 +6,52 @@ using global::Avalonia.Media;
 using global::Avalonia.Platform;
 using global::Avalonia.Rendering.SceneGraph;
 using global::Avalonia.Skia;
-using global::Avalonia.Threading;
 
+using LiveSplit.UI;
 using LiveSplit.UI.Drawing;
 using LiveSplit.UI.Drawing.Skia;
+using LiveSplit.UI.Components;
+using LiveSplit.Model;
 
 using SkiaSharp;
 
 namespace LiveSplit.Avalonia;
 
 /// <summary>
-/// Avalonia <see cref="Control"/> that invokes the shared render stack through a
-/// <see cref="SkiaDrawingContext"/>. Avalonia's desktop rendering backend is Skia-based, so we
+/// Avalonia <see cref="Control"/> that runs the LiveSplit <see cref="ComponentRenderer"/> through
+/// a <see cref="SkiaDrawingContext"/>. Avalonia's desktop rendering backend is Skia-based, so we
 /// can lease its <see cref="SKCanvas"/> directly instead of maintaining our own framebuffer.
 ///
-/// Phase 5.2b paints a placeholder marker so "F5 → window opens → rectangle visible" proves the
-/// Avalonia bootstrap, SkiaSharp lease feature, and <see cref="SkiaDrawingContext"/> all work
-/// end-to-end. Once Phase 5.3 finishes migrating components off the AsGraphics() bridge, this
-/// control will route to <c>ComponentRenderer.Render(ctx, …)</c> with a fully-populated
-/// <c>LiveSplitState</c> — at which point the window renders the real timer layout.
+/// The control is paint-driven; <see cref="AvaloniaTimerHost"/> pumps <c>InvalidateVisual</c> at
+/// ~30 Hz so the timer label updates while the user isn't interacting. When <see cref="Host"/>
+/// hasn't been assigned yet (the window is still wiring up), it draws nothing — Avalonia's window
+/// background fills the surface.
 /// </summary>
 public sealed class SkiaRenderControl : Control
 {
+    public AvaloniaTimerHost Host { get; set; }
+
     public override void Render(DrawingContext context)
     {
-        context.Custom(new RenderOp(new Rect(Bounds.Size)));
+        if (Host is null)
+        {
+            return;
+        }
 
-        // Schedule the next frame — Avalonia is repaint-on-demand by default, so for a running
-        // timer we need to pump InvalidateVisual() at the refresh rate.
-        Dispatcher.UIThread.Post(InvalidateVisual, DispatcherPriority.Background);
+        // Push the renderer Update tick so components see fresh state before being drawn.
+        Host.Renderer.CalculateOverallSize(Host.State.Layout.Mode);
+
+        context.Custom(new RenderOp(new Rect(Bounds.Size), Host));
     }
 
     private sealed class RenderOp : ICustomDrawOperation
     {
-        public RenderOp(Rect bounds)
+        private readonly AvaloniaTimerHost _host;
+
+        public RenderOp(Rect bounds, AvaloniaTimerHost host)
         {
             Bounds = bounds;
+            _host = host;
         }
 
         public Rect Bounds { get; }
@@ -57,8 +67,8 @@ public sealed class SkiaRenderControl : Control
             ISkiaSharpApiLeaseFeature leaseFeature = context.TryGetFeature<ISkiaSharpApiLeaseFeature>();
             if (leaseFeature is null)
             {
-                // Non-Skia rendering backend (e.g. software renderer without the Skia feature).
-                // Phase 5.2b vertical slice requires Avalonia.Skia, so this shouldn't normally hit.
+                // Non-Skia backend (e.g. software renderer without the Skia feature). The
+                // vertical slice requires Avalonia.Skia, so this shouldn't normally hit.
                 return;
             }
 
@@ -67,23 +77,27 @@ public sealed class SkiaRenderControl : Control
 
             IDrawingContext ctx = new SkiaDrawingContext(canvas);
 
-            // Placeholder rendering: a solid rectangle in the middle of the window, plus a
-            // smaller one in one corner. If this shows up when you run with --avalonia, the
-            // IDrawingContext.FillRectangle path works through SkiaSharp end-to-end.
-            using LiveSplit.UI.Drawing.IBrush brush = DrawingApi.Factory.CreateSolidBrush(
-                System.Drawing.Color.FromArgb(255, 60, 180, 90));
-            ctx.FillRectangle(brush, new System.Drawing.RectangleF(
-                (float)Bounds.X + 20f,
-                (float)Bounds.Y + 20f,
-                (float)Bounds.Width - 40f,
-                (float)Bounds.Height - 40f));
+            LiveSplitState state = _host.State;
+            float width = (float)Bounds.Width;
+            float height = (float)Bounds.Height;
+            LayoutMode mode = state.Layout.Mode;
 
-            using LiveSplit.UI.Drawing.IBrush corner = DrawingApi.Factory.CreateSolidBrush(
-                System.Drawing.Color.FromArgb(255, 220, 60, 60));
-            ctx.FillRectangle(corner, new System.Drawing.RectangleF(
-                (float)Bounds.X + 8f,
-                (float)Bounds.Y + 8f,
-                24f, 24f));
+            // Apply the layout's logical scale so the components paint at their natural size.
+            // Mirrors TimerForm.PaintForm's `g.ScaleTransform(scale, scale)` block, but we let the
+            // mode pick which axis is the constraint.
+            float overallSize = _host.Renderer.OverallSize;
+            float scale = mode == LayoutMode.Vertical
+                ? height / overallSize
+                : width / overallSize;
+            if (scale > 0 && !float.IsInfinity(scale) && !float.IsNaN(scale))
+            {
+                ctx.ScaleTransform(scale, scale);
+            }
+
+            float drawWidth = mode == LayoutMode.Vertical ? width / scale : overallSize;
+            float drawHeight = mode == LayoutMode.Vertical ? overallSize : height / scale;
+
+            _host.Renderer.Render(ctx, state, drawWidth, drawHeight, mode, null);
         }
     }
 }

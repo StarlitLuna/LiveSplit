@@ -106,6 +106,24 @@ internal sealed class GdiPlusFont : IFont
     public System.Drawing.FontStyle Style => Native.Style;
     public GraphicsUnit Unit => Native.Unit;
 
+    public float Ascent
+    {
+        get
+        {
+            float emHeight = Native.FontFamily.GetEmHeight(Native.Style);
+            return Native.FontFamily.GetCellAscent(Native.Style) * Native.Size / emHeight;
+        }
+    }
+
+    public float Descent
+    {
+        get
+        {
+            float emHeight = Native.FontFamily.GetEmHeight(Native.Style);
+            return Native.FontFamily.GetCellDescent(Native.Style) * Native.Size / emHeight;
+        }
+    }
+
     public void Dispose() => Native.Dispose();
 }
 

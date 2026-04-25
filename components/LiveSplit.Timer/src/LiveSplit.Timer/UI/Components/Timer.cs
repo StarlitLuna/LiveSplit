@@ -19,8 +19,8 @@ public class Timer : IComponent
     protected SimpleLabel BigMeasureLabel { get; set; }
     protected GeneralTimeFormatter Formatter { get; set; }
 
-    protected Font TimerDecimalPlacesFont { get; set; }
-    protected Font TimerFont { get; set; }
+    protected FontDescriptor TimerDecimalPlacesFont { get; set; }
+    protected FontDescriptor TimerFont { get; set; }
     protected float PreviousDecimalsSize { get; set; }
 
     public Color TimerColor = Color.Transparent;
@@ -133,10 +133,10 @@ public class Timer : IComponent
     {
         DrawBackground(ctx, TimerColor, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
 
-        if (state.LayoutSettings.TimerFont != TimerFont || Settings.DecimalsSize != PreviousDecimalsSize)
+        if (!Equals(state.LayoutSettings.TimerFont, TimerFont) || Settings.DecimalsSize != PreviousDecimalsSize)
         {
             TimerFont = state.LayoutSettings.TimerFont;
-            TimerDecimalPlacesFont = new Font(TimerFont.FontFamily.Name, TimerFont.Size / 50f * Settings.DecimalsSize, TimerFont.Style, GraphicsUnit.Pixel);
+            TimerDecimalPlacesFont = new FontDescriptor(TimerFont.FamilyName, TimerFont.Size / 50f * Settings.DecimalsSize, TimerFont.Style, GraphicsUnit.Pixel);
             PreviousDecimalsSize = Settings.DecimalsSize;
         }
 
@@ -175,13 +175,15 @@ public class Timer : IComponent
         SmallTextLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         SmallTextLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
         SmallTextLabel.HasShadow = state.LayoutSettings.DropShadows;
-        Font smallFont = TimerDecimalPlacesFont;
-        Font bigFont = TimerFont;
-        float sizeMultiplier = bigFont.Size / bigFont.FontFamily.GetEmHeight(bigFont.Style);
-        float smallSizeMultiplier = smallFont.Size / bigFont.FontFamily.GetEmHeight(bigFont.Style);
-        float ascent = sizeMultiplier * bigFont.FontFamily.GetCellAscent(bigFont.Style);
-        float descent = sizeMultiplier * bigFont.FontFamily.GetCellDescent(bigFont.Style);
-        float smallAscent = smallSizeMultiplier * smallFont.FontFamily.GetCellAscent(smallFont.Style);
+        FontDescriptor smallFont = TimerDecimalPlacesFont;
+        FontDescriptor bigFont = TimerFont;
+        // Pull metrics through the renderer so we don't depend on System.Drawing.FontFamily
+        // (Windows-only on .NET 8). The IFont impl materializes a real font handle and the
+        // ratio of small.Size / big.Size gives us the correctly-scaled small ascent.
+        using IFont bigIFont = DrawingApi.Factory.CreateFont(bigFont.FamilyName, bigFont.Size, bigFont.Style, bigFont.Unit);
+        float ascent = bigIFont.Ascent;
+        float descent = bigIFont.Descent;
+        float smallAscent = ascent * (smallFont.Size / bigFont.Size);
         float shift = (height - ascent - descent) / 2f;
 
         BigTextLabel.X = width - 499 - SmallTextLabel.ActualWidth;

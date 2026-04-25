@@ -28,7 +28,7 @@ public class LayoutSerializationFontOverridesMust
             FontOverrides = new FontOverrides
             {
                 OverrideTextFont = true,
-                TextFont = new Font("Arial", 14f)
+                TextFont = new FontDescriptor("Arial", 14f)
             }
         };
         layout.LayoutComponents.Add(layoutComponent);
@@ -80,7 +80,7 @@ public class LayoutSerializationFontOverridesMust
             FontOverrides = new FontOverrides
             {
                 OverrideTextFont = true,
-                TextFont = new Font("Arial", 14f)
+                TextFont = new FontDescriptor("Arial", 14f)
             }
         };
         layout2.LayoutComponents.Add(lcWithOverride);

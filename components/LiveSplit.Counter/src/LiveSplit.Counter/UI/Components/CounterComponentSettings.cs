@@ -26,9 +26,9 @@ public partial class CounterComponentSettings : UserControl
         Increment = 1;
 
         // Hotkey data (preserved for XML round-trip; no longer wired to live hooks).
-        IncrementKey = new KeyOrButton(Keys.Add);
-        DecrementKey = new KeyOrButton(Keys.Subtract);
-        ResetKey = new KeyOrButton(Keys.NumPad0);
+        IncrementKey = new KeyOrButton(Key.Add);
+        DecrementKey = new KeyOrButton(Key.Subtract);
+        ResetKey = new KeyOrButton(Key.NumPad0);
 
         // Set bindings.
         txtCounterText.DataBindings.Add("Text", this, "CounterText");
@@ -73,7 +73,7 @@ public partial class CounterComponentSettings : UserControl
 
     // Legacy font override — read from old configs, not written or exposed in UI
     public bool OverrideCounterFont { get; set; }
-    public Font CounterFont { get; set; }
+    public FontDescriptor CounterFont { get; set; }
 
     public KeyOrButton IncrementKey { get; set; }
     public KeyOrButton DecrementKey { get; set; }

@@ -1,48 +1,45 @@
-﻿using System;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Windows.Forms;
+using System;
+using System.Numerics;
 
 namespace LiveSplit.UI;
 
+/// <summary>
+/// Cross-platform replacement for the WinForms-bound invalidator that used to wrap a
+/// <see cref="System.Windows.Forms.Form"/> and call <c>Form.Invalidate(rect)</c>. Coordinates
+/// are tracked in <see cref="Matrix3x2"/> (cross-platform) and dirty rectangles are forwarded
+/// to a host-supplied callback so the Avalonia surface can decide between coarse
+/// <c>InvalidateVisual()</c> and granular invalidation.
+/// </summary>
 public class Invalidator : IInvalidator
 {
-    public Form Form { get; protected set; }
-    public Matrix Transform { get; set; }
-    protected const double Offset = 0.535;
+    private readonly Action<float, float, float, float> _onInvalidate;
 
-    public Invalidator(Form form)
+    private const double Offset = 0.535;
+
+    public Matrix3x2 Transform { get; set; } = Matrix3x2.Identity;
+
+    public Invalidator(Action<float, float, float, float> onInvalidate = null)
     {
-        Transform = new Matrix();
-        Form = form;
+        _onInvalidate = onInvalidate;
     }
 
     public void Restart()
     {
-        try
-        {
-            Transform?.Dispose();
-        }
-        catch { }
-
-        Transform = new Matrix();
+        Transform = Matrix3x2.Identity;
     }
 
     public void Invalidate(float x, float y, float width, float height)
     {
-        PointF[] points =
-        [
-            new PointF(x, y),
-            new PointF(x+width, y+height)
-        ];
-        Transform.TransformPoints(points);
-        double offsetX = points[0].X - Offset;
-        double offsetY = points[0].Y - Offset;
-        var rect = new Rectangle(
-            (int)Math.Ceiling(offsetX),
-            (int)Math.Ceiling(offsetY),
-            (int)Math.Ceiling(points[1].X - offsetX - Offset),
-            (int)Math.Ceiling(points[1].Y - offsetY - Offset));
-        Form.Invalidate(rect);
+        var topLeft = Vector2.Transform(new Vector2(x, y), Transform);
+        var bottomRight = Vector2.Transform(new Vector2(x + width, y + height), Transform);
+
+        double offsetX = topLeft.X - Offset;
+        double offsetY = topLeft.Y - Offset;
+        float rectX = (float)Math.Ceiling(offsetX);
+        float rectY = (float)Math.Ceiling(offsetY);
+        float rectW = (float)Math.Ceiling(bottomRight.X - offsetX - Offset);
+        float rectH = (float)Math.Ceiling(bottomRight.Y - offsetY - Offset);
+
+        _onInvalidate?.Invoke(rectX, rectY, rectW, rectH);
     }
 }

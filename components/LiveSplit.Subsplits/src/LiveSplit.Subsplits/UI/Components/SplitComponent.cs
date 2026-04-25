@@ -472,10 +472,10 @@ public class SplitComponent : IComponent
         Color originalColor = DeltaLabel.ForeColor;
         if (Settings.SectionTimer && Settings.SectionTimerGradient)
         {
-            Font bigFont = state.LayoutSettings.TimerFont;
-            float sizeMultiplier = bigFont.Size / bigFont.FontFamily.GetEmHeight(bigFont.Style);
-            float ascent = sizeMultiplier * bigFont.FontFamily.GetCellAscent(bigFont.Style);
-            float descent = sizeMultiplier * bigFont.FontFamily.GetCellDescent(bigFont.Style);
+            FontDescriptor bigFont = state.LayoutSettings.TimerFont;
+            using IFont bigIFont = DrawingApi.Factory.CreateFont(bigFont.FamilyName, bigFont.Size, bigFont.Style, bigFont.Unit);
+            float ascent = bigIFont.Ascent;
+            float descent = bigIFont.Descent;
 
             if (state.Run.IndexOf(Split) >= state.CurrentSplitIndex)
             {
@@ -542,9 +542,9 @@ public class SplitComponent : IComponent
         }
     }
 
-    private static float MeasureFontCapHeight(IDrawingContext ctx, Font font)
+    private static float MeasureFontCapHeight(IDrawingContext ctx, FontDescriptor font)
     {
-        using IFont iFont = DrawingApi.Factory.CreateFont(font.FontFamily.Name, font.Size, font.Style, font.Unit);
+        using IFont iFont = DrawingApi.Factory.CreateFont(font.FamilyName, font.Size, font.Style, font.Unit);
         ITextFormat fmt = DrawingApi.Factory.CreateTextFormat();
         return ctx.MeasureString("A", iFont, 9999, fmt).Height;
     }

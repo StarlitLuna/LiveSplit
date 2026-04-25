@@ -1,25 +1,26 @@
 using System;
-using System.Drawing;
+
+using LiveSplit.UI;
 
 namespace LiveSplit.Options;
 
-public class FontOverrides : ICloneable, IDisposable
+public class FontOverrides : ICloneable
 {
     public bool OverrideTimerFont { get; set; }
 
-    public Font TimerFont { get; set; }
+    public FontDescriptor TimerFont { get; set; }
 
     public bool OverrideTimesFont { get; set; }
 
-    public Font TimesFont { get; set; }
+    public FontDescriptor TimesFont { get; set; }
 
     public bool OverrideTextFont { get; set; }
 
-    public Font TextFont { get; set; }
+    public FontDescriptor TextFont { get; set; }
 
     public bool HasOverrides => OverrideTimerFont || OverrideTimesFont || OverrideTextFont;
 
-    public void ApplyTo(LayoutSettings settings, out Font origTimer, out Font origTimes, out Font origText)
+    public void ApplyTo(LayoutSettings settings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText)
     {
         if (settings == null)
         {
@@ -46,7 +47,7 @@ public class FontOverrides : ICloneable, IDisposable
         }
     }
 
-    public static void Restore(LayoutSettings settings, Font origTimer, Font origTimes, Font origText)
+    public static void Restore(LayoutSettings settings, FontDescriptor origTimer, FontDescriptor origTimes, FontDescriptor origText)
     {
         if (settings == null)
         {
@@ -63,18 +64,11 @@ public class FontOverrides : ICloneable, IDisposable
         return new FontOverrides()
         {
             OverrideTimerFont = OverrideTimerFont,
-            TimerFont = TimerFont?.Clone() as Font,
+            TimerFont = TimerFont?.Clone(),
             OverrideTimesFont = OverrideTimesFont,
-            TimesFont = TimesFont?.Clone() as Font,
+            TimesFont = TimesFont?.Clone(),
             OverrideTextFont = OverrideTextFont,
-            TextFont = TextFont?.Clone() as Font
+            TextFont = TextFont?.Clone(),
         };
-    }
-
-    public void Dispose()
-    {
-        TimerFont?.Dispose();
-        TimesFont?.Dispose();
-        TextFont?.Dispose();
     }
 }

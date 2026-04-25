@@ -263,9 +263,9 @@ public class SplitComponent : IComponent
         DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }
 
-    private static float MeasureFontCapHeight(IDrawingContext ctx, Font font)
+    private static float MeasureFontCapHeight(IDrawingContext ctx, FontDescriptor font)
     {
-        using IFont iFont = DrawingApi.Factory.CreateFont(font.FontFamily.Name, font.Size, font.Style, font.Unit);
+        using IFont iFont = DrawingApi.Factory.CreateFont(font.FamilyName, font.Size, font.Style, font.Unit);
         ITextFormat fmt = DrawingApi.Factory.CreateTextFormat();
         return ctx.MeasureString("A", iFont, 9999, fmt).Height;
     }

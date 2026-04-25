@@ -104,6 +104,13 @@ public interface IFont : IDisposable
     float Size { get; }
     FontStyle Style { get; }
     GraphicsUnit Unit { get; }
+
+    /// <summary>Distance from the baseline to the top of the tallest glyph, in pixels at the
+    /// font's current size. Replaces the GDI-only <c>FontFamily.GetCellAscent</c> path.</summary>
+    float Ascent { get; }
+    /// <summary>Distance from the baseline to the bottom of the lowest glyph, in pixels at the
+    /// font's current size. Replaces the GDI-only <c>FontFamily.GetCellDescent</c> path.</summary>
+    float Descent { get; }
 }
 
 public interface IImage : IDisposable

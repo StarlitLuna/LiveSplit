@@ -107,6 +107,9 @@ internal sealed class SkiaFont : IFont
     public System.Drawing.FontStyle Style { get; }
     public GraphicsUnit Unit { get; }
 
+    public float Ascent => -Font.Metrics.Ascent;
+    public float Descent => Font.Metrics.Descent;
+
     public SkiaFont(string familyName, float size, System.Drawing.FontStyle style, GraphicsUnit unit)
     {
         FamilyName = familyName;

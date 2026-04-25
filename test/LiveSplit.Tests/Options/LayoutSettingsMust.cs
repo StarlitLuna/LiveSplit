@@ -1,6 +1,7 @@
 ﻿using System.Drawing;
 
 using LiveSplit.Options;
+using LiveSplit.UI;
 
 using Xunit;
 
@@ -26,7 +27,7 @@ public class LayoutSettingsMust
             AntiAliasing = true,
             BackgroundColor = Color.Red,
             BackgroundColor2 = Color.Transparent,
-            BackgroundImage = new Bitmap(10, 10),
+            BackgroundImage = new byte[] { 1, 2, 3 },
             BackgroundType = BackgroundType.HorizontalGradient,
             BehindGainingTimeColor = Color.Magenta,
             BehindLosingTimeColor = Color.IndianRed,
@@ -44,11 +45,11 @@ public class LayoutSettingsMust
             SeparatorsColor = Color.White,
             ShadowsColor = Color.Brown,
             ShowBestSegments = true,
-            TextFont = new Font("Arial", 8.0F),
+            TextFont = new FontDescriptor("Arial", 8.0F),
             TextOutlineColor = Color.CadetBlue,
             ThinSeparatorsColor = Color.Chartreuse,
-            TimerFont = new Font("Arial", 9.0F),
-            TimesFont = new Font("Arial", 10.0F)
+            TimerFont = new FontDescriptor("Arial", 9.0F),
+            TimesFont = new FontDescriptor("Arial", 10.0F)
         };
     }
 
@@ -62,8 +63,7 @@ public class LayoutSettingsMust
         Assert.Equal(Color.Red, sut.BackgroundColor);
         Assert.Equal(Color.Transparent, sut.BackgroundColor2);
         Assert.NotNull(sut.BackgroundImage);
-        Assert.Equal(10, sut.BackgroundImage.Width);
-        Assert.Equal(10, sut.BackgroundImage.Height);
+        Assert.Equal(3, sut.BackgroundImage.Length);
         Assert.Equal(BackgroundType.HorizontalGradient, sut.BackgroundType);
         Assert.Equal(Color.Magenta, sut.BehindGainingTimeColor);
         Assert.Equal(Color.IndianRed, sut.BehindLosingTimeColor);

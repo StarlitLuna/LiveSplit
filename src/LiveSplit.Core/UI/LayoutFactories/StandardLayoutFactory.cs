@@ -28,7 +28,7 @@ public class StandardLayoutFactory : ILayoutFactory
     {
         if (layout.Settings.TimerFont.Name != "Century Gothic")
         {
-            layout.Settings.TimerFont = new Font("Calibri", layout.Settings.TimerFont.Size, FontStyle.Bold, GraphicsUnit.Pixel);
+            layout.Settings.TimerFont = new FontDescriptor("Calibri", layout.Settings.TimerFont.Size, FontStyle.Bold, GraphicsUnit.Pixel);
         }
     }
 }

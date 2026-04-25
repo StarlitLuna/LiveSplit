@@ -1,9 +1,6 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Globalization;
-using System.IO;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.Windows.Forms;
 using System.Xml;
 
 namespace LiveSplit.UI;
@@ -13,13 +10,13 @@ public class SettingsHelper
     // No-op kept only to satisfy designer-generated click handlers in component
     // ComponentSettings.cs classes that reference it. The Avalonia settings UI does
     // not invoke this path; the WinForms UserControl code path is dead at runtime.
-    public static void ColorButtonClick(Button button, Control control)
+    public static void ColorButtonClick(object button, object control)
     {
     }
 
-    public static string FormatFont(Font font)
+    public static string FormatFont(FontDescriptor font)
     {
-        return $"{font.FontFamily.Name} {font.Style}";
+        return $"{font.FamilyName} {font.Style}";
     }
 
     public static Color ParseColor(XmlElement colorElement, Color defaultColor = default)
@@ -29,22 +26,36 @@ public class SettingsHelper
             : defaultColor;
     }
 
-    public static Font GetFontFromElement(XmlElement element)
+    /// <summary>
+    /// Read a font descriptor from XML. The current format stores nested
+    /// <c>&lt;FamilyName&gt;</c>/<c>&lt;Size&gt;</c>/<c>&lt;Style&gt;</c>/<c>&lt;Unit&gt;</c> elements.
+    /// Older <c>.lss</c> / <c>.lsl</c> files stored a base64'd <c>BinaryFormatter</c> blob of a
+    /// <see cref="System.Drawing.Font"/>; that path needs Windows-only types and is dropped on the
+    /// linux-port — old custom fonts fall back to defaults from <c>StandardLayoutSettingsFactory</c>.
+    /// </summary>
+    public static FontDescriptor GetFontFromElement(XmlElement element)
     {
-        if (element != null && !element.IsEmpty)
+        if (element == null || element.IsEmpty)
         {
-            var bf = new BinaryFormatter();
-
-            string base64String = element.InnerText;
-            byte[] data = Convert.FromBase64String(base64String);
-            var ms = new MemoryStream(data);
-            return (Font)bf.Deserialize(ms);
+            return null;
         }
 
+        XmlElement familyEl = element["FamilyName"];
+        if (familyEl != null)
+        {
+            return new FontDescriptor(
+                familyName: familyEl.InnerText,
+                size: ParseFloat(element["Size"], 12f),
+                style: ParseEnum(element["Style"], FontStyle.Regular),
+                unit: ParseEnum(element["Unit"], GraphicsUnit.Point));
+        }
+
+        // Legacy binary-blob format — unreadable without System.Drawing.Font. Returning null
+        // makes the caller fall through to the default font from StandardLayoutSettingsFactory.
         return null;
     }
 
-    public static int CreateSetting(XmlDocument document, XmlElement parent, string elementName, Font font)
+    public static int CreateSetting(XmlDocument document, XmlElement parent, string elementName, FontDescriptor font)
     {
         if (document != null)
         {
@@ -52,71 +63,50 @@ public class SettingsHelper
 
             if (font != null)
             {
-                using var ms = new MemoryStream();
-                var bf = new BinaryFormatter();
+                XmlElement family = document.CreateElement("FamilyName");
+                family.InnerText = font.FamilyName;
+                element.AppendChild(family);
 
-                bf.Serialize(ms, font);
-                byte[] data = ms.ToArray();
-                XmlCDataSection cdata = document.CreateCDataSection(Convert.ToBase64String(data));
-                element.InnerXml = cdata.OuterXml;
+                XmlElement size = document.CreateElement("Size");
+                size.InnerText = font.Size.ToString(CultureInfo.InvariantCulture);
+                element.AppendChild(size);
+
+                XmlElement style = document.CreateElement("Style");
+                style.InnerText = font.Style.ToString();
+                element.AppendChild(style);
+
+                XmlElement unit = document.CreateElement("Unit");
+                unit.InnerText = font.Unit.ToString();
+                element.AppendChild(unit);
             }
 
             parent.AppendChild(element);
         }
 
-        return getFontHashCode(font);
+        return font?.GetHashCode() ?? 0;
     }
 
-    private static int getFontHashCode(Font font)
-    {
-        int hash = 17;
-        unchecked
-        {
-            hash = (hash * 23) + font.Name.GetHashCode();
-            hash = (hash * 23) + font.FontFamily.GetHashCode();
-            hash = (hash * 23) + font.Size.GetHashCode();
-            hash = (hash * 23) + font.Style.GetHashCode();
-        }
-
-        return hash;
-    }
-
-    public static int CreateSetting(XmlDocument document, XmlElement parent, string elementName, Image image)
+    /// <summary>
+    /// Background-image storage was a base64'd <c>BinaryFormatter</c> blob of
+    /// <see cref="System.Drawing.Image"/>, also Windows-only. We now write empty image elements
+    /// to preserve the layout schema; reintroducing custom backgrounds requires a SkiaSharp-backed
+    /// image surface, which is out of scope for the linux-port migration.
+    /// </summary>
+    public static int CreateSetting(XmlDocument document, XmlElement parent, string elementName, byte[] image)
     {
         if (document != null)
         {
             XmlElement element = document.CreateElement(elementName);
-
-            if (image != null)
-            {
-                using var ms = new MemoryStream();
-                var bf = new BinaryFormatter();
-
-                bf.Serialize(ms, image);
-                byte[] data = ms.ToArray();
-                XmlCDataSection cdata = document.CreateCDataSection(Convert.ToBase64String(data));
-                element.InnerXml = cdata.OuterXml;
-            }
-
             parent.AppendChild(element);
         }
 
-        return image != null ? image.GetHashCode() : 0;
+        return image?.GetHashCode() ?? 0;
     }
 
-    public static Image GetImageFromElement(XmlElement element)
+    public static byte[] GetImageFromElement(XmlElement element)
     {
-        if (element != null && !element.IsEmpty)
-        {
-            var bf = new BinaryFormatter();
-
-            string base64String = element.InnerText;
-            byte[] data = Convert.FromBase64String(base64String);
-
-            using var ms = new MemoryStream(data);
-            return (Image)bf.Deserialize(ms);
-        }
-
+        // See CreateSetting(..., byte[] image). Old binary-blob images can't be decoded on .NET 8
+        // Linux; return null and let the layout render without a custom background.
         return null;
     }
 

@@ -158,10 +158,10 @@ public class InfoTextComponent : IComponent
     // Measure the visual height of a single capital letter in <paramref name="font"/>, used for
     // the row-height heuristics above. Replaces the old `g.MeasureString("A", font).Height`
     // now that InfoTextComponent routes through IDrawingContext.
-    private static float MeasureCapLetterHeight(IDrawingContext ctx, Font font)
+    private static float MeasureCapLetterHeight(IDrawingContext ctx, FontDescriptor font)
     {
         using IFont iFont = DrawingApi.Factory.CreateFont(
-            font.FontFamily.Name, font.Size, font.Style, font.Unit);
+            font.FamilyName, font.Size, font.Style, font.Unit);
         ITextFormat iFormat = DrawingApi.Factory.CreateTextFormat();
         return ctx.MeasureString("A", iFont, 9999, iFormat).Height;
     }

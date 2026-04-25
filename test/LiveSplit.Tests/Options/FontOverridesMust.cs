@@ -1,6 +1,5 @@
-using System.Drawing;
-
 using LiveSplit.Options;
+using LiveSplit.UI;
 
 using Xunit;
 
@@ -14,16 +13,16 @@ public class FontOverridesMust
         var sut = new FontOverrides
         {
             OverrideTimerFont = true,
-            TimerFont = new Font("Arial", 12f)
+            TimerFont = new FontDescriptor("Arial", 12f)
         };
         var settings = new LayoutSettings
         {
-            TimerFont = new Font("Segoe UI", 16f),
-            TimesFont = new Font("Segoe UI", 16f),
-            TextFont = new Font("Segoe UI", 16f)
+            TimerFont = new FontDescriptor("Segoe UI", 16f),
+            TimesFont = new FontDescriptor("Segoe UI", 16f),
+            TextFont = new FontDescriptor("Segoe UI", 16f)
         };
 
-        sut.ApplyTo(settings, out Font origTimer, out Font origTimes, out Font origText);
+        sut.ApplyTo(settings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText);
 
         Assert.Equal("Arial", settings.TimerFont.Name);
         Assert.Equal(12f, settings.TimerFont.Size);
@@ -38,16 +37,16 @@ public class FontOverridesMust
         var sut = new FontOverrides
         {
             OverrideTimesFont = true,
-            TimesFont = new Font("Consolas", 10f)
+            TimesFont = new FontDescriptor("Consolas", 10f)
         };
         var settings = new LayoutSettings
         {
-            TimerFont = new Font("Segoe UI", 16f),
-            TimesFont = new Font("Segoe UI", 16f),
-            TextFont = new Font("Segoe UI", 16f)
+            TimerFont = new FontDescriptor("Segoe UI", 16f),
+            TimesFont = new FontDescriptor("Segoe UI", 16f),
+            TextFont = new FontDescriptor("Segoe UI", 16f)
         };
 
-        sut.ApplyTo(settings, out Font origTimer, out Font origTimes, out Font origText);
+        sut.ApplyTo(settings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText);
 
         Assert.Equal("Segoe UI", settings.TimerFont.Name);
         Assert.Equal("Consolas", settings.TimesFont.Name);
@@ -62,16 +61,16 @@ public class FontOverridesMust
         var sut = new FontOverrides
         {
             OverrideTextFont = true,
-            TextFont = new Font("Courier New", 14f)
+            TextFont = new FontDescriptor("Courier New", 14f)
         };
         var settings = new LayoutSettings
         {
-            TimerFont = new Font("Segoe UI", 16f),
-            TimesFont = new Font("Segoe UI", 16f),
-            TextFont = new Font("Segoe UI", 16f)
+            TimerFont = new FontDescriptor("Segoe UI", 16f),
+            TimesFont = new FontDescriptor("Segoe UI", 16f),
+            TextFont = new FontDescriptor("Segoe UI", 16f)
         };
 
-        sut.ApplyTo(settings, out Font origTimer, out Font origTimes, out Font origText);
+        sut.ApplyTo(settings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText);
 
         Assert.Equal("Segoe UI", settings.TimerFont.Name);
         Assert.Equal("Segoe UI", settings.TimesFont.Name);
@@ -86,20 +85,20 @@ public class FontOverridesMust
         var sut = new FontOverrides
         {
             OverrideTimerFont = true,
-            TimerFont = new Font("Arial", 12f),
+            TimerFont = new FontDescriptor("Arial", 12f),
             OverrideTimesFont = true,
-            TimesFont = new Font("Consolas", 10f),
+            TimesFont = new FontDescriptor("Consolas", 10f),
             OverrideTextFont = true,
-            TextFont = new Font("Courier New", 14f)
+            TextFont = new FontDescriptor("Courier New", 14f)
         };
         var settings = new LayoutSettings
         {
-            TimerFont = new Font("Segoe UI", 16f),
-            TimesFont = new Font("Segoe UI", 16f),
-            TextFont = new Font("Segoe UI", 16f)
+            TimerFont = new FontDescriptor("Segoe UI", 16f),
+            TimesFont = new FontDescriptor("Segoe UI", 16f),
+            TextFont = new FontDescriptor("Segoe UI", 16f)
         };
 
-        sut.ApplyTo(settings, out Font origTimer, out Font origTimes, out Font origText);
+        sut.ApplyTo(settings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText);
 
         Assert.Equal("Arial", settings.TimerFont.Name);
         Assert.Equal("Consolas", settings.TimesFont.Name);
@@ -115,12 +114,12 @@ public class FontOverridesMust
         var sut = new FontOverrides();
         var settings = new LayoutSettings
         {
-            TimerFont = new Font("Segoe UI", 16f),
-            TimesFont = new Font("Segoe UI", 16f),
-            TextFont = new Font("Segoe UI", 16f)
+            TimerFont = new FontDescriptor("Segoe UI", 16f),
+            TimesFont = new FontDescriptor("Segoe UI", 16f),
+            TextFont = new FontDescriptor("Segoe UI", 16f)
         };
 
-        sut.ApplyTo(settings, out Font origTimer, out Font origTimes, out Font origText);
+        sut.ApplyTo(settings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText);
 
         Assert.Equal("Segoe UI", settings.TimerFont.Name);
         Assert.Equal(16f, settings.TimerFont.Size);
@@ -134,20 +133,20 @@ public class FontOverridesMust
         var sut = new FontOverrides
         {
             OverrideTimerFont = true,
-            TimerFont = new Font("Arial", 12f),
+            TimerFont = new FontDescriptor("Arial", 12f),
             OverrideTimesFont = true,
-            TimesFont = new Font("Consolas", 10f),
+            TimesFont = new FontDescriptor("Consolas", 10f),
             OverrideTextFont = true,
-            TextFont = new Font("Courier New", 14f)
+            TextFont = new FontDescriptor("Courier New", 14f)
         };
         var settings = new LayoutSettings
         {
-            TimerFont = new Font("Segoe UI", 16f),
-            TimesFont = new Font("Segoe UI", 16f),
-            TextFont = new Font("Segoe UI", 16f)
+            TimerFont = new FontDescriptor("Segoe UI", 16f),
+            TimesFont = new FontDescriptor("Segoe UI", 16f),
+            TextFont = new FontDescriptor("Segoe UI", 16f)
         };
 
-        sut.ApplyTo(settings, out Font origTimer, out Font origTimes, out Font origText);
+        sut.ApplyTo(settings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText);
 
         Assert.Equal("Arial", settings.TimerFont.Name);
 
@@ -173,12 +172,12 @@ public class FontOverridesMust
         };
         var settings = new LayoutSettings
         {
-            TimerFont = new Font("Segoe UI", 16f),
-            TimesFont = new Font("Segoe UI", 16f),
-            TextFont = new Font("Segoe UI", 16f)
+            TimerFont = new FontDescriptor("Segoe UI", 16f),
+            TimesFont = new FontDescriptor("Segoe UI", 16f),
+            TextFont = new FontDescriptor("Segoe UI", 16f)
         };
 
-        sut.ApplyTo(settings, out Font origTimer, out Font origTimes, out Font origText);
+        sut.ApplyTo(settings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText);
 
         Assert.Equal("Segoe UI", settings.TimerFont.Name);
         Assert.Equal("Segoe UI", settings.TimesFont.Name);
@@ -191,10 +190,10 @@ public class FontOverridesMust
         var sut = new FontOverrides
         {
             OverrideTimerFont = true,
-            TimerFont = new Font("Arial", 12f),
+            TimerFont = new FontDescriptor("Arial", 12f),
             OverrideTimesFont = false,
             OverrideTextFont = true,
-            TextFont = new Font("Courier New", 14f)
+            TextFont = new FontDescriptor("Courier New", 14f)
         };
 
         var clone = (FontOverrides)sut.Clone();
@@ -208,8 +207,7 @@ public class FontOverridesMust
         Assert.Equal("Courier New", clone.TextFont.Name);
 
         clone.OverrideTimerFont = false;
-        clone.TimerFont.Dispose();
-        clone.TimerFont = new Font("Verdana", 20f);
+        clone.TimerFont = new FontDescriptor("Verdana", 20f);
 
         Assert.True(sut.OverrideTimerFont);
         Assert.Equal("Arial", sut.TimerFont.Name);

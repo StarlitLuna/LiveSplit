@@ -59,7 +59,7 @@ public class Title : IComponent
     protected SimpleLabel CategoryNameLabel = new();
     protected SimpleLabel AttemptCountLabel = new();
 
-    protected Font TitleFont { get; set; }
+    protected FontDescriptor TitleFont { get; set; }
 
     public float MinimumHeight { get; set; }
 
@@ -80,7 +80,7 @@ public class Title : IComponent
         TitleFont = Settings.OverrideTitleFont ? Settings.TitleFont : state.LayoutSettings.TextFont;
 
         using IFont titleIFont = DrawingApi.Factory.CreateFont(
-            TitleFont.FontFamily.Name, TitleFont.Size, TitleFont.Style, TitleFont.Unit);
+            TitleFont.FamilyName, TitleFont.Size, TitleFont.Style, TitleFont.Unit);
         ITextFormat measureFormat = DrawingApi.Factory.CreateTextFormat();
         float capHeight = ctx.MeasureString("A", titleIFont, 9999, measureFormat).Height;
         MinimumHeight = capHeight * 1.7f;
@@ -305,7 +305,7 @@ public class Title : IComponent
         if (Settings.OverrideTitleFont && Settings.TitleFont != null)
         {
             overrides.OverrideTextFont = true;
-            overrides.TextFont = (Font)Settings.TitleFont.Clone();
+            overrides.TextFont = Settings.TitleFont.Clone();
             Settings.OverrideTitleFont = false;
         }
     }

@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
@@ -18,12 +17,12 @@ public class StandardSettingsFactory : ISettingsFactory
             {
                 {HotkeyProfile.DefaultHotkeyProfileName, new HotkeyProfile()
                     {
-                        SplitKey = new KeyOrButton(Keys.NumPad1),
-                        ResetKey = new KeyOrButton(Keys.NumPad3),
-                        UndoKey = new KeyOrButton(Keys.NumPad8),
-                        SkipKey = new KeyOrButton(Keys.NumPad2),
-                        SwitchComparisonPrevious = new KeyOrButton(Keys.NumPad4),
-                        SwitchComparisonNext = new KeyOrButton(Keys.NumPad6),
+                        SplitKey = new KeyOrButton(Key.NumPad1),
+                        ResetKey = new KeyOrButton(Key.NumPad3),
+                        UndoKey = new KeyOrButton(Key.NumPad8),
+                        SkipKey = new KeyOrButton(Key.NumPad2),
+                        SwitchComparisonPrevious = new KeyOrButton(Key.NumPad4),
+                        SwitchComparisonNext = new KeyOrButton(Key.NumPad6),
                         PauseKey = null,
                         ToggleGlobalHotkeys = null,
                         GlobalHotkeysEnabled = false,

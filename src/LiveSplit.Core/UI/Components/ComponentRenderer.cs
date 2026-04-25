@@ -186,7 +186,7 @@ public class ComponentRenderer
                 {
                     try
                     {
-                        ApplyFontOverrides(overrideLookup, component, state.LayoutSettings, out Font origTimer, out Font origTimes, out Font origText);
+                        ApplyFontOverrides(overrideLookup, component, state.LayoutSettings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText);
                         try
                         {
                             // Per-component Save so each component's IntersectClip is isolated
@@ -258,7 +258,7 @@ public class ComponentRenderer
         float bottomPadding = Math.Min(GetPaddingBelow(index), component.PaddingBottom) / 2f;
         float totalHeight = scaleFactor * (component.VerticalHeight - topPadding - bottomPadding);
         component.Update(invalidator, state, width, totalHeight, LayoutMode.Vertical);
-        invalidator.Transform.Translate(0.0f, totalHeight);
+        invalidator.Transform *= System.Numerics.Matrix3x2.CreateTranslation(0.0f, totalHeight);
     }
 
     protected void InvalidateHorizontalComponent(int index, LiveSplitState state, IInvalidator invalidator, float width, float height, float scaleFactor)
@@ -268,12 +268,12 @@ public class ComponentRenderer
         float rightPadding = Math.Min(GetPaddingToRight(index), component.PaddingRight) / 2f;
         float totalWidth = scaleFactor * (component.HorizontalWidth - leftPadding - rightPadding);
         component.Update(invalidator, state, totalWidth, height, LayoutMode.Horizontal);
-        invalidator.Transform.Translate(totalWidth, 0.0f);
+        invalidator.Transform *= System.Numerics.Matrix3x2.CreateTranslation(totalWidth, 0.0f);
     }
 
     public void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode)
     {
-        System.Drawing.Drawing2D.Matrix oldTransform = invalidator.Transform.Clone();
+        System.Numerics.Matrix3x2 oldTransform = invalidator.Transform;
         float scaleFactor = mode == LayoutMode.Vertical
                 ? height / OverallSize
                 : width / OverallSize;
@@ -282,7 +282,7 @@ public class ComponentRenderer
         for (int ind = 0; ind < VisibleComponents.Count(); ind++)
         {
             IComponent component = VisibleComponents.ElementAt(ind);
-            ApplyFontOverrides(overrideLookup, component, state.LayoutSettings, out Font origTimer, out Font origTimes, out Font origText);
+            ApplyFontOverrides(overrideLookup, component, state.LayoutSettings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText);
             try
             {
                 if (mode == LayoutMode.Vertical)
@@ -318,7 +318,7 @@ public class ComponentRenderer
         return _overrideLookup;
     }
 
-    private static void ApplyFontOverrides(Dictionary<IComponent, FontOverrides> lookup, IComponent component, LayoutSettings settings, out Font origTimer, out Font origTimes, out Font origText)
+    private static void ApplyFontOverrides(Dictionary<IComponent, FontOverrides> lookup, IComponent component, LayoutSettings settings, out FontDescriptor origTimer, out FontDescriptor origTimes, out FontDescriptor origText)
     {
         if (lookup.TryGetValue(component, out FontOverrides overrides))
         {

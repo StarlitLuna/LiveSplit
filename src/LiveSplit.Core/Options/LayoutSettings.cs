@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Drawing;
 
+using LiveSplit.UI;
+
 namespace LiveSplit.Options;
 
 public class LayoutSettings : ICloneable
@@ -23,13 +25,15 @@ public class LayoutSettings : ICloneable
 
     public BackgroundType BackgroundType { get; set; }
 
-    public Image BackgroundImage { get; set; }
+    /// <summary>Encoded image bytes (PNG/JPEG). Stored opaquely so the data type stays cross-platform;
+    /// rendering decodes via SkiaSharp when the layout draws.</summary>
+    public byte[] BackgroundImage { get; set; }
     public float ImageOpacity { get; set; }
     public float ImageBlur { get; set; }
 
-    public Font TimerFont { get; set; }
-    public Font TimesFont { get; set; }
-    public Font TextFont { get; set; }
+    public FontDescriptor TimerFont { get; set; }
+    public FontDescriptor TimesFont { get; set; }
+    public FontDescriptor TextFont { get; set; }
 
     public bool ShowBestSegments { get; set; }
     public bool AlwaysOnTop { get; set; }
@@ -67,9 +71,9 @@ public class LayoutSettings : ICloneable
         PausedColor = settings.PausedColor;
         TextOutlineColor = settings.TextOutlineColor;
         ShadowsColor = settings.ShadowsColor;
-        TimerFont = settings.TimerFont.Clone() as Font;
-        TimesFont = settings.TimesFont.Clone() as Font;
-        TextFont = settings.TextFont.Clone() as Font;
+        TimerFont = settings.TimerFont?.Clone();
+        TimesFont = settings.TimesFont?.Clone();
+        TextFont = settings.TextFont?.Clone();
         ShowBestSegments = settings.ShowBestSegments;
         AlwaysOnTop = settings.AlwaysOnTop;
         AntiAliasing = settings.AntiAliasing;

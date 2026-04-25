@@ -28,9 +28,9 @@ public partial class TextComponentSettings : UserControl
 
     // Legacy font overrides — read from old configs, not written or exposed in UI
     public bool OverrideFont1 { get; set; }
-    public Font Font1 { get; set; }
+    public FontDescriptor Font1 { get; set; }
     public bool OverrideFont2 { get; set; }
-    public Font Font2 { get; set; }
+    public FontDescriptor Font2 { get; set; }
 
     public LayoutMode Mode { get; set; }
     public bool Display2Rows { get; set; }

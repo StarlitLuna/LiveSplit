@@ -1,5 +1,7 @@
 ﻿using System.Drawing;
 
+using LiveSplit.UI;
+
 using static System.Drawing.Color;
 
 namespace LiveSplit.Options.SettingsFactories;
@@ -25,9 +27,9 @@ public class StandardLayoutSettingsFactory : ILayoutSettingsFactory
             PausedColor = FromArgb(122, 122, 122),
             TextOutlineColor = FromArgb(0, 0, 0, 0),
             ShadowsColor = FromArgb(128, 0, 0, 0),
-            TimerFont = new Font("Century Gothic", 43.75f, FontStyle.Bold, GraphicsUnit.Pixel),
-            TimesFont = new Font("Segoe UI", 16, FontStyle.Bold, GraphicsUnit.Pixel),
-            TextFont = new Font("Segoe UI", 16, FontStyle.Regular, GraphicsUnit.Pixel),
+            TimerFont = new FontDescriptor("Century Gothic", 43.75f, FontStyle.Bold, GraphicsUnit.Pixel),
+            TimesFont = new FontDescriptor("Segoe UI", 16, FontStyle.Bold, GraphicsUnit.Pixel),
+            TextFont = new FontDescriptor("Segoe UI", 16, FontStyle.Regular, GraphicsUnit.Pixel),
             ShowBestSegments = true,
             UseRainbowColor = false,
             AlwaysOnTop = true,

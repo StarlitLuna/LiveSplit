@@ -1,5 +1,4 @@
 using System;
-using System.Windows.Forms;
 
 namespace LiveSplit.Model.Input;
 
@@ -47,10 +46,10 @@ public class KeyOrButton
     public bool IsButton { get; protected set; }
     public bool IsKey { get => !IsButton; set => IsButton = !value; }
 
-    public Keys Key { get; protected set; }
+    public Key Key { get; protected set; }
     public GamepadButton Button { get; protected set; }
 
-    public KeyOrButton(Keys key)
+    public KeyOrButton(Key key)
     {
         Key = key;
         IsKey = true;
@@ -72,7 +71,7 @@ public class KeyOrButton
         }
         else
         {
-            Key = (Keys)Enum.Parse(typeof(Keys), stringRepresentation, true);
+            Key = (Key)Enum.Parse(typeof(Key), stringRepresentation, true);
             IsKey = true;
         }
     }

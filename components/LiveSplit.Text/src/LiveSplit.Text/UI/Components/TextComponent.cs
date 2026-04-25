@@ -113,7 +113,7 @@ public class TextComponent : IComponent
         if (Settings.OverrideFont1 && Settings.Font1 != null)
         {
             overrides.OverrideTextFont = true;
-            overrides.TextFont = (Font)Settings.Font1.Clone();
+            overrides.TextFont = Settings.Font1.Clone();
             Settings.OverrideFont1 = false;
         }
     }

@@ -93,11 +93,11 @@ public partial class DetailedTimerSettings : UserControl
         Accuracy = TimeAccuracy.Hundredths
     };
     public string SegmentLabelsFontString => SettingsHelper.FormatFont(SegmentLabelsFont);
-    public Font SegmentLabelsFont { get; set; }
+    public FontDescriptor SegmentLabelsFont { get; set; }
     public string SegmentTimesFontString => SettingsHelper.FormatFont(SegmentTimesFont);
-    public Font SegmentTimesFont { get; set; }
+    public FontDescriptor SegmentTimesFont { get; set; }
     public string SplitNameFontString => SettingsHelper.FormatFont(SplitNameFont);
-    public Font SplitNameFont { get; set; }
+    public FontDescriptor SplitNameFont { get; set; }
 
     public string Comparison { get; set; }
     public string Comparison2 { get; set; }
@@ -131,9 +131,9 @@ public partial class DetailedTimerSettings : UserControl
         SegmentAccuracy = ".23";
         SegmentTimesAccuracy = TimeAccuracy.Hundredths;
 
-        SegmentLabelsFont = new Font("Segoe UI", 13, FontStyle.Regular, GraphicsUnit.Pixel);
-        SegmentTimesFont = new Font("Segoe UI", 13, FontStyle.Bold, GraphicsUnit.Pixel);
-        SplitNameFont = new Font("Segoe UI", 15, FontStyle.Regular, GraphicsUnit.Pixel);
+        SegmentLabelsFont = new FontDescriptor("Segoe UI", 13, FontStyle.Regular, GraphicsUnit.Pixel);
+        SegmentTimesFont = new FontDescriptor("Segoe UI", 13, FontStyle.Bold, GraphicsUnit.Pixel);
+        SplitNameFont = new FontDescriptor("Segoe UI", 15, FontStyle.Regular, GraphicsUnit.Pixel);
 
         BackgroundColor = Color.Transparent;
         BackgroundColor2 = Color.Transparent;
@@ -325,9 +325,9 @@ public partial class DetailedTimerSettings : UserControl
         else
         {
             OverrideTimerColors = !SettingsHelper.ParseBool(element["TimerUseSplitColors"]);
-            SegmentLabelsFont = new Font("Segoe UI", 13, FontStyle.Regular, GraphicsUnit.Pixel);
-            SegmentTimesFont = new Font("Segoe UI", 13, FontStyle.Bold, GraphicsUnit.Pixel);
-            SplitNameFont = new Font("Segoe UI", 15, FontStyle.Regular, GraphicsUnit.Pixel);
+            SegmentLabelsFont = new FontDescriptor("Segoe UI", 13, FontStyle.Regular, GraphicsUnit.Pixel);
+            SegmentTimesFont = new FontDescriptor("Segoe UI", 13, FontStyle.Bold, GraphicsUnit.Pixel);
+            SplitNameFont = new FontDescriptor("Segoe UI", 15, FontStyle.Regular, GraphicsUnit.Pixel);
         }
 
         if (version >= new Version(1, 5))

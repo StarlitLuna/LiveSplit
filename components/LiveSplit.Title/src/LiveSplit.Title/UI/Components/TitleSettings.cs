@@ -25,7 +25,7 @@ public partial class TitleSettings : UserControl
 
     // Legacy font override — read from old configs, not written or exposed in UI
     public bool OverrideTitleFont { get; set; }
-    public Font TitleFont { get; set; }
+    public FontDescriptor TitleFont { get; set; }
 
     public Color BackgroundColor { get; set; }
     public Color BackgroundColor2 { get; set; }

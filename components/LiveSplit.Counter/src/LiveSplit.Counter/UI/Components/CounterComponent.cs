@@ -46,7 +46,7 @@ public class CounterComponent : IComponent
     protected SimpleLabel CounterNameLabel = new();
     protected SimpleLabel CounterValueLabel = new();
 
-    protected Font CounterFont { get; set; }
+    protected FontDescriptor CounterFont { get; set; }
 
     private LiveSplitState state;
 
@@ -61,7 +61,7 @@ public class CounterComponent : IComponent
 
         // Calculate Height from Font.
         using IFont counterIFont = DrawingApi.Factory.CreateFont(
-            CounterFont.FontFamily.Name, CounterFont.Size, CounterFont.Style, CounterFont.Unit);
+            CounterFont.FamilyName, CounterFont.Size, CounterFont.Style, CounterFont.Unit);
         ITextFormat measureFormat = DrawingApi.Factory.CreateTextFormat();
         float textHeight = ctx.MeasureString("A", counterIFont, 9999, measureFormat).Height;
         VerticalHeight = 1.2f * textHeight;
@@ -143,7 +143,7 @@ public class CounterComponent : IComponent
         if (Settings.OverrideCounterFont && Settings.CounterFont != null)
         {
             overrides.OverrideTextFont = true;
-            overrides.TextFont = (Font)Settings.CounterFont.Clone();
+            overrides.TextFont = Settings.CounterFont.Clone();
             Settings.OverrideCounterFont = false;
         }
     }

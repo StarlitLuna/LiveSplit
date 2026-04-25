@@ -18,7 +18,7 @@ public class SimpleLabel
     public float Y { get; set; }
     public float Width { get; set; }
     public float Height { get; set; }
-    public Font Font { get; set; }
+    public FontDescriptor Font { get; set; }
     public Brush Brush { get; set; }
     public StringAlignment HorizontalAlignment { get; set; }
     public StringAlignment VerticalAlignment { get; set; }
@@ -58,7 +58,7 @@ public class SimpleLabel
     public SimpleLabel(
         string text = "",
         float x = 0.0f, float y = 0.0f,
-        Font font = null, Brush brush = null,
+        FontDescriptor font = null, Brush brush = null,
         float width = float.MaxValue, float height = float.MaxValue,
         StringAlignment horizontalAlignment = StringAlignment.Near,
         StringAlignment verticalAlignment = StringAlignment.Near,
@@ -67,7 +67,7 @@ public class SimpleLabel
         Text = text;
         X = x;
         Y = y;
-        Font = font ?? new Font("Arial", 1.0f);
+        Font = font ?? new FontDescriptor("Arial", 1.0f);
         Brush = brush ?? new SolidBrush(Color.Black);
         Width = width;
         Height = height;
@@ -306,7 +306,7 @@ public class SimpleLabel
     private IFont WrapFont()
     {
         return DrawingApi.Factory.CreateFont(
-            Font.FontFamily.Name, Font.Size, Font.Style, Font.Unit);
+            Font.FamilyName, Font.Size, Font.Style, Font.Unit);
     }
 
     private IBrush WrapBrush()

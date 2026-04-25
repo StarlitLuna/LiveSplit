@@ -67,37 +67,23 @@ public class DeltaComponent : IComponent
         InternalComponent.NameLabel.ForeColor = Settings.OverrideTextColor ? Settings.TextColor : state.LayoutSettings.TextColor;
     }
 
-    private void DrawBackground(Graphics g, LiveSplitState state, float width, float height)
+    private void DrawBackground(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
-        if (Settings.BackgroundColor.A > 0
-            || (Settings.BackgroundGradient != GradientType.Plain
-            && Settings.BackgroundColor2.A > 0))
-        {
-            var gradientBrush = new LinearGradientBrush(
-                        new PointF(0, 0),
-                        Settings.BackgroundGradient == GradientType.Horizontal
-                        ? new PointF(width, 0)
-                        : new PointF(0, height),
-                        Settings.BackgroundColor,
-                        Settings.BackgroundGradient == GradientType.Plain
-                        ? Settings.BackgroundColor
-                        : Settings.BackgroundColor2);
-            g.FillRectangle(gradientBrush, 0, 0, width, height);
-        }
+        LiveSplit.UI.Drawing.BackgroundHelper.DrawBackground(ctx,
+            Settings.BackgroundColor, Settings.BackgroundColor2,
+            width, height, Settings.BackgroundGradient);
     }
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        DrawBackground(g, state, width, VerticalHeight);
+        DrawBackground(ctx, state, width, VerticalHeight);
         PrepareDraw(state);
         InternalComponent.DrawVertical(ctx, state, width, clipRegion);
     }
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
-        DrawBackground(g, state, HorizontalWidth, height);
+        DrawBackground(ctx, state, HorizontalWidth, height);
         PrepareDraw(state);
         InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
     }

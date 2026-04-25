@@ -93,6 +93,7 @@ if [[ "$MAKE_APPIMAGE" == "true" ]]; then
     rm -rf "$APPDIR"
     mkdir -p "$APPDIR/usr/bin"
     cp -r "$PUBLISH_DIR"/* "$APPDIR/usr/bin/"
+    rm -f "$APPDIR/usr/bin/libcoreclrtraceptprovider.so"
 
     # Minimal .desktop entry that AppImage's runtime expects.
     cat > "$APPDIR/livesplit.desktop" <<EOF

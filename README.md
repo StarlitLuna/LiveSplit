@@ -194,6 +194,22 @@ The documentation for how to develop, test, and submit an Auto Splitter can be f
 
 [Auto Splitters Documentation](https://github.com/LiveSplit/LiveSplit.AutoSplitters/blob/master/README.md)
 
+### Writing ASL scripts that work under Wine/Proton
+
+When LiveSplit runs on Linux against a Wine'd Windows game, .NET's stock `Process.GetProcessesByName` matches against `/proc/<pid>/comm` (capped at 15 chars), and Wine's choice of comm string varies by version — sometimes `Game.exe`, sometimes `Game`, sometimes truncated. To paper over that, the Linux port ships [WineAwareProcess](src/LiveSplit.Core/ComponentUtil/WineAwareProcess.cs), a wrapper that tries the bare name, the `.exe`-suffixed name, then walks `/proc/*/maps` looking for the loaded PE.
+
+You don't need to do anything for the **primary** game-attach lookup — the `state("ProcessName") { … }` block at the top of every ASL routes through `WineAwareProcess` automatically. The case that matters for script authors is **auxiliary** process probes inside `update {}` / `start {}` / etc. blocks, which compile against `System.Diagnostics.Process` directly:
+
+```csharp
+// Doesn't reliably find the Wine'd helper on Linux:
+vars.companion = Process.GetProcessesByName("OtherProcess");
+
+// Reliable on Windows and on Linux/Wine:
+vars.companion = WineAwareProcess.GetProcessesByName("OtherProcess");
+```
+
+The `LiveSplit.ComponentUtil` namespace is already imported into the ASL compilation context, so `WineAwareProcess` is in scope without any extra `using` directive in your script. On Windows the wrapper is a thin pass-through, so swapping the call is safe for cross-platform splitters.
+
 ## The LiveSplit Server
 
 The internal LiveSplit Server allows for other programs and other computers to control LiveSplit. The server can accept connections over either a named pipe located at `\\<hostname>\pipe\LiveSplit` (`.` is the hostname if the client and server are on the same computer), raw TCP/IP, or a WebSocket (WS) server, located at `ws://<hostname>:port/livesplit`.

@@ -122,8 +122,7 @@ public static class AvaloniaSettingsBuilder
     private static bool IsFrameworkBase(Type t)
     {
         string ns = t.Namespace ?? string.Empty;
-        return ns.StartsWith("System.Windows.Forms", StringComparison.Ordinal)
-            || ns.StartsWith("System.ComponentModel", StringComparison.Ordinal)
+        return ns.StartsWith("System.ComponentModel", StringComparison.Ordinal)
             || t == typeof(object)
             || t == typeof(MarshalByRefObject);
     }

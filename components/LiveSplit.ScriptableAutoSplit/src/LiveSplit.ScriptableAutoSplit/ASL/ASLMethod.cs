@@ -93,7 +93,6 @@ public class CompiledScript
         parameters.ReferencedAssemblies.Add("System.Drawing.dll");
         parameters.ReferencedAssemblies.Add("System.Memory.dll");
         parameters.ReferencedAssemblies.Add("System.Text.Json.dll");
-        parameters.ReferencedAssemblies.Add("System.Windows.Forms.dll");
         parameters.ReferencedAssemblies.Add("System.Xml.dll");
         parameters.ReferencedAssemblies.Add("System.Xml.Linq.dll");
         parameters.ReferencedAssemblies.Add("Microsoft.CSharp.dll");

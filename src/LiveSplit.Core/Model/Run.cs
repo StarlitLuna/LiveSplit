@@ -2,10 +2,12 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Xml;
 
 using LiveSplit.Model.Comparisons;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.Model;
 
@@ -33,11 +35,51 @@ public class Run : IRun, INotifyPropertyChanged
     /// </summary>
     public Image GameIcon { get; set; }
 
+    private byte[] gameIconPng;
+    private IImage gameIconImage;
+
     /// <summary>
     /// Raw PNG/JPG bytes for <see cref="GameIcon"/>. Used by the Avalonia editor and the
     /// Linux save/reload path; survives even when the System.Drawing.Image roundtrip fails.
     /// </summary>
-    public byte[] GameIconPng { get; set; }
+    public byte[] GameIconPng
+    {
+        get => gameIconPng;
+        set
+        {
+            gameIconPng = value;
+            gameIconImage?.Dispose();
+            gameIconImage = null;
+        }
+    }
+
+    public IImage GameIconImage
+    {
+        get
+        {
+            if (gameIconImage != null)
+            {
+                return gameIconImage;
+            }
+
+            if (gameIconPng is not { Length: > 0 })
+            {
+                return null;
+            }
+
+            try
+            {
+                using var stream = new MemoryStream(gameIconPng, writable: false);
+                gameIconImage = DrawingApi.Factory.LoadImage(stream);
+            }
+            catch
+            {
+                gameIconImage = null;
+            }
+
+            return gameIconImage;
+        }
+    }
 
     /// <summary>
     /// Gets or sets the name of the game the run is for.

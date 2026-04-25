@@ -36,7 +36,7 @@ public class SplitsComponent : IComponent
     protected ITimeFormatter TimeFormatter { get; set; }
     protected ITimeFormatter DeltaTimeFormatter { get; set; }
 
-    private Dictionary<Image, Image> ShadowImages { get; set; }
+    private Dictionary<ISegment, IImage> ShadowImages { get; set; }
 
     private int visualSplitCount;
     private IRun previousRun;
@@ -198,23 +198,28 @@ public class SplitsComponent : IComponent
 
         if (OldShadowsColor != state.LayoutSettings.ShadowsColor)
         {
+            foreach (IImage cached in ShadowImages.Values)
+            {
+                cached?.Dispose();
+            }
+
             ShadowImages.Clear();
         }
 
         foreach (ISegment split in state.Run)
         {
-            if (split.Icon != null && (!ShadowImages.ContainsKey(split.Icon) || OldShadowsColor != state.LayoutSettings.ShadowsColor))
+            if (split.IconImage != null && !ShadowImages.ContainsKey(split))
             {
-                ShadowImages.Add(split.Icon, IconShadow.Generate(split.Icon, state.LayoutSettings.ShadowsColor));
+                ShadowImages[split] = IconShadow.GenerateImage(split.IconPng, state.LayoutSettings.ShadowsColor);
             }
         }
 
-        bool iconsNotBlank = state.Run.Count(x => x.Icon != null) > 0;
+        bool iconsNotBlank = state.Run.Any(x => x.IconImage != null);
 
         foreach (SplitComponent split in SplitComponents)
         {
             bool hideIconSectionSplit = !Settings.ShowIconSectionSplit && split.Split != null && state.Run.IndexOf(split.Split) == lastSplitOfSection;
-            bool shouldIndent = split.Split == null || split.Split.Icon != null || Settings.IndentBlankIcons;
+            bool shouldIndent = split.Split == null || split.Split.IconImage != null || Settings.IndentBlankIcons;
 
             if (split.Header)
             {
@@ -225,9 +230,9 @@ public class SplitsComponent : IComponent
                 split.DisplayIcon = Settings.DisplayIcons && !hideIconSectionSplit && iconsNotBlank && shouldIndent;
             }
 
-            if (split.Split != null && split.Split.Icon != null)
+            if (split.Split != null && ShadowImages.TryGetValue(split.Split, out IImage shadow))
             {
-                split.ShadowImage = ShadowImages[split.Split.Icon];
+                split.ShadowImage = shadow;
             }
             else
             {

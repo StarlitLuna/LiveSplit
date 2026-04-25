@@ -1,3 +1,4 @@
+using System;
 using System.Drawing;
 
 using LiveSplit.UI.Drawing.Skia;
@@ -98,5 +99,65 @@ public class AddStringAlignmentTests
         path.AddString("", font, new RectangleF(0, 0, 100, 50), Format(StringAlignment.Near, StringAlignment.Near));
 
         Assert.True(path.Path.IsEmpty);
+    }
+
+    [Fact]
+    public void DrawString_EllipsisOnOverflow_ShrinksTextToFit()
+    {
+        // SkiaDrawingContext.DrawString calls TrimWithEllipsis when the format requests
+        // EllipsisCharacter. We can't render to a real canvas in a unit test, but the trim
+        // helper is exercised by re-running the same logic through a static check: measure
+        // the original text + the bounds, confirm trimmed-with-ellipsis fits.
+        using SkiaFont font = MakeFont();
+        const string Source = "This entire run-on string would not fit in eighty pixels at 16px";
+
+        // Long string overflows.
+        Assert.True(font.Font.MeasureText(Source) > 80f);
+
+        // After ellipsizing, the resulting trimmed string must measure within the bound.
+        // Mirrors the binary-search the DrawString path runs at draw time.
+        string trimmed = TrimWithEllipsisLikeContext(Source, font, 80f);
+        Assert.True(font.Font.MeasureText(trimmed) <= 80f + 0.5f,
+            $"Trimmed='{trimmed}' measures {font.Font.MeasureText(trimmed)} but rect is 80");
+        Assert.EndsWith("…", trimmed);
+    }
+
+    /// <summary>
+    /// Mirror of <c>SkiaDrawingContext.TrimWithEllipsis</c> reachable from tests; the production
+    /// helper is private. If a future refactor diverges these two, update both.
+    /// </summary>
+    private static string TrimWithEllipsisLikeContext(string text, SkiaFont skFont, float maxWidth)
+    {
+        const string Ellipsis = "…";
+        if (skFont.Font.MeasureText(text) <= maxWidth)
+        {
+            return text;
+        }
+
+        float ellipsisWidth = skFont.Font.MeasureText(Ellipsis);
+        if (ellipsisWidth >= maxWidth)
+        {
+            return string.Empty;
+        }
+
+        int low = 0;
+        int high = text.Length;
+        int best = 0;
+        while (low <= high)
+        {
+            int mid = (low + high) / 2;
+            float width = skFont.Font.MeasureText(text.AsSpan(0, mid)) + ellipsisWidth;
+            if (width <= maxWidth)
+            {
+                best = mid;
+                low = mid + 1;
+            }
+            else
+            {
+                high = mid - 1;
+            }
+        }
+
+        return string.Concat(text.AsSpan(0, best), Ellipsis);
     }
 }

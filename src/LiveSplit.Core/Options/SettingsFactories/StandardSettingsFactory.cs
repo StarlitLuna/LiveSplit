@@ -1,13 +1,10 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
 using LiveSplit.Model.Input;
-using LiveSplit.UI.Components;
-using LiveSplit.Web.SRL.RaceViewers;
 
 namespace LiveSplit.Options.SettingsFactories;
 
@@ -39,11 +36,8 @@ public class StandardSettingsFactory : ISettingsFactory
             },
             WarnOnReset = true,
             LastComparison = Run.PersonalBestComparisonName,
-            RaceViewer = new SRLRaceViewer(),
-            AgreedToSRLRules = false,
             UpdateCheckEnabled = RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
             SimpleSumOfBest = false,
-            RaceProvider = ComponentManager.RaceProviderFactories.Values.ToList().Select(x => x.CreateSettings()).ToList(),
             RefreshRate = 40,
             ServerPort = 16834,
             ServerStartup = ServerStartupType.Off,

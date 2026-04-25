@@ -45,21 +45,6 @@ namespace LiveSplit.Web.Share
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]
-        public string TwitchFormat
-        {
-            get
-            {
-                return ((string)(this["TwitchFormat"]));
-            }
-            set
-            {
-                this["TwitchFormat"] = value;
-            }
-        }
-
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("")]
         public string TwitterFormatRunning
         {
             get

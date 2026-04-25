@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.Linq;
 using System.Windows.Forms;
 using System.Xml;
@@ -17,8 +16,6 @@ public class Title : IComponent
     public TitleSettings Settings { get; set; }
     public float VerticalHeight { get; set; }
     public GraphicsCache Cache { get; set; }
-    protected int FrameCount { get; set; }
-    protected Image OldImage { get; set; }
     protected int FinishedRunsInHistory { get; set; }
 
     public float MinimumWidth => GameNameLabel.X + AttemptCountLabel.ActualWidth + 5;
@@ -89,12 +86,11 @@ public class Title : IComponent
         MinimumHeight = capHeight * 1.7f;
         VerticalHeight = capHeight * 1.7f;
 
-        bool showGameIcon = state.Run.GameIcon != null && Settings.DisplayGameIcon;
+        IImage gameIconImage = state.Run.GameIconImage;
+        bool showGameIcon = gameIconImage != null && Settings.DisplayGameIcon;
         if (showGameIcon)
         {
-            // Game icon is a System.Drawing.Image from the XML loader, so DrawGameIcon
-            // requires a GDI+ backing.
-            DrawGameIcon(ctx.AsGraphics(), state, height);
+            DrawGameIcon(ctx, gameIconImage, height);
         }
 
         DrawAttemptCount(ctx, state, width, height);
@@ -210,17 +206,8 @@ public class Title : IComponent
         GameNameLabel.Draw(ctx);
     }
 
-    private void DrawGameIcon(Graphics g, LiveSplitState state, float height)
+    private static void DrawGameIcon(IDrawingContext ctx, IImage icon, float height)
     {
-        Image icon = state.Run.GameIcon;
-
-        if (OldImage != icon)
-        {
-            ImageAnimator.Animate(icon, (s, o) => { });
-            OldImage = icon;
-        }
-
-        float aspectRatio = (float)icon.Width / icon.Height;
         float drawWidth = height - 4;
         float drawHeight = height - 4;
         if (icon.Width > icon.Height)
@@ -234,14 +221,13 @@ public class Title : IComponent
             drawWidth *= ratio;
         }
 
-        ImageAnimator.UpdateFrames(icon);
-
-        g.DrawImage(
+        ctx.DrawImage(
             icon,
-            7 + ((height - 4 - drawWidth) / 2),
-            2 + ((height - 4 - drawHeight) / 2),
-            drawWidth,
-            drawHeight);
+            new RectangleF(
+                7 + ((height - 4 - drawWidth) / 2),
+                2 + ((height - 4 - drawHeight) / 2),
+                drawWidth,
+                drawHeight));
     }
 
     /*
@@ -421,25 +407,14 @@ public class Title : IComponent
         }
 
         Cache.Restart();
-        Cache["GameIcon"] = state.Run.GameIcon;
-        if (Cache.HasChanged)
-        {
-            if (state.Run.GameIcon == null)
-            {
-                FrameCount = 0;
-            }
-            else
-            {
-                FrameCount = state.Run.GameIcon.GetFrameCount(new FrameDimension(state.Run.GameIcon.FrameDimensionsList[0]));
-            }
-        }
+        Cache["GameIconPng"] = state.Run.GameIconPng;
 
         Cache["GameNameLabel"] = GameNameLabel.Text;
         Cache["CategoryNameLabel"] = CategoryNameLabel.Text;
         Cache["AttemptCountLabel"] = AttemptCountLabel.Text;
         Cache["TextAlignment"] = Settings.TextAlignment;
 
-        if (invalidator != null && (Cache.HasChanged || FrameCount > 1))
+        if (invalidator != null && Cache.HasChanged)
         {
             invalidator.Invalidate(0, 0, width, height);
         }

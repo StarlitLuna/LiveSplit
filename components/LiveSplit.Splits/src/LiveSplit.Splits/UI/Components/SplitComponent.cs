@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -19,7 +18,6 @@ public class SplitComponent : IComponent
     protected SimpleLabel NameLabel { get; set; }
     public SplitsSettings Settings { get; set; }
 
-    protected int FrameCount { get; set; }
 
     public GraphicsCache Cache { get; set; }
     protected bool NeedUpdateAll { get; set; }
@@ -36,8 +34,7 @@ public class SplitComponent : IComponent
 
     public bool DisplayIcon { get; set; }
 
-    public Image ShadowImage { get; set; }
-    protected Image OldImage { get; set; }
+    public IImage ShadowImage { get; set; }
 
     public float PaddingTop => 0f;
     public float PaddingLeft => 0f;
@@ -157,17 +154,10 @@ public class SplitComponent : IComponent
                     width, height, Settings.CurrentSplitGradient);
             }
 
-            Image icon = Split.Icon;
+            IImage icon = Split.IconImage;
             if (DisplayIcon && icon != null)
             {
-                Image shadow = ShadowImage;
-
-                if (OldImage != icon)
-                {
-                    ImageAnimator.Animate(icon, (s, o) => { });
-                    ImageAnimator.Animate(shadow, (s, o) => { });
-                    OldImage = icon;
-                }
+                IImage shadow = ShadowImage;
 
                 float drawWidth = Settings.IconSize;
                 float drawHeight = Settings.IconSize;
@@ -186,28 +176,24 @@ public class SplitComponent : IComponent
                     shadowWidth *= ratio;
                 }
 
-                ImageAnimator.UpdateFrames(shadow);
-                // Split icons + shadow are System.Drawing.Image from the XML loader, so these
-                // draw calls require a GDI+ backing.
-                Graphics g = ctx.AsGraphics();
                 if (Settings.IconShadows && shadow != null)
                 {
-                    g.DrawImage(
+                    ctx.DrawImage(
                         shadow,
-                        7 + (((Settings.IconSize * (5 / 4f)) - shadowWidth) / 2) - 0.7f,
-                        ((height - Settings.IconSize) / 2.0f) + (((Settings.IconSize * (5 / 4f)) - shadowHeight) / 2) - 0.7f,
-                        shadowWidth,
-                        shadowHeight);
+                        new RectangleF(
+                            7 + (((Settings.IconSize * (5 / 4f)) - shadowWidth) / 2) - 0.7f,
+                            ((height - Settings.IconSize) / 2.0f) + (((Settings.IconSize * (5 / 4f)) - shadowHeight) / 2) - 0.7f,
+                            shadowWidth,
+                            shadowHeight));
                 }
 
-                ImageAnimator.UpdateFrames(icon);
-
-                g.DrawImage(
+                ctx.DrawImage(
                     icon,
-                    7 + ((Settings.IconSize - drawWidth) / 2),
-                    ((height - Settings.IconSize) / 2.0f) + ((Settings.IconSize - drawHeight) / 2),
-                    drawWidth,
-                    drawHeight);
+                    new RectangleF(
+                        7 + ((Settings.IconSize - drawWidth) / 2),
+                        ((height - Settings.IconSize) / 2.0f) + ((Settings.IconSize - drawHeight) / 2),
+                        drawWidth,
+                        drawHeight));
             }
 
             NameLabel.Font = state.LayoutSettings.TextFont;
@@ -552,18 +538,7 @@ public class SplitComponent : IComponent
                                                 state.CurrentSplit == Split;
 
             Cache.Restart();
-            Cache["Icon"] = Split.Icon;
-            if (Cache.HasChanged)
-            {
-                if (Split.Icon == null)
-                {
-                    FrameCount = 0;
-                }
-                else
-                {
-                    FrameCount = Split.Icon.GetFrameCount(new FrameDimension(Split.Icon.FrameDimensionsList[0]));
-                }
-            }
+            Cache["IconPng"] = Split.IconPng;
 
             Cache["DisplayIcon"] = DisplayIcon;
             Cache["SplitName"] = NameLabel.Text;
@@ -581,7 +556,7 @@ public class SplitComponent : IComponent
                 }
             }
 
-            if (invalidator != null && (Cache.HasChanged || FrameCount > 1))
+            if (invalidator != null && Cache.HasChanged)
             {
                 invalidator.Invalidate(0, 0, width, height);
             }

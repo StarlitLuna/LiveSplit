@@ -110,6 +110,67 @@ public class StandardFormatsRunFactory : IRunFactory
         return null;
     }
 
+    /// <summary>
+    /// Reads per-segment &lt;IconPng&gt; elements from the .lss XML directly (livesplit_core
+    /// strips the Skia-friendly sibling, mirroring the GameIconPng case). Returns one entry
+    /// per segment in document order; entries are null/empty when the segment has no IconPng.
+    /// </summary>
+    private static byte[][] TryReadSegmentIconPngsFromStream(System.IO.Stream stream)
+    {
+        if (stream is null || !stream.CanSeek)
+        {
+            return null;
+        }
+
+        try
+        {
+            long pos = stream.Position;
+            stream.Position = 0;
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.Load(stream);
+                System.Xml.XmlNodeList segments = doc.GetElementsByTagName("Segment");
+                if (segments.Count == 0)
+                {
+                    return null;
+                }
+
+                var result = new byte[segments.Count][];
+                for (int i = 0; i < segments.Count; i++)
+                {
+                    if (segments[i] is System.Xml.XmlElement segmentEl)
+                    {
+                        System.Xml.XmlElement iconPng = segmentEl["IconPng"];
+                        if (iconPng != null && !string.IsNullOrEmpty(iconPng.InnerText))
+                        {
+                            try
+                            {
+                                result[i] = Convert.FromBase64String(iconPng.InnerText.Trim());
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Error(ex);
+                            }
+                        }
+                    }
+                }
+
+                return result;
+            }
+            finally
+            {
+                stream.Position = pos;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
+
+        return null;
+    }
+
     private static Image ParseImage(byte[] buffer)
     {
         if (buffer == null || buffer.Length == 0)
@@ -241,12 +302,24 @@ public class StandardFormatsRunFactory : IRunFactory
         }
 
         ulong segmentCount = lscRun.Len();
+        byte[][] xmlIconPngs = null;
         for (ulong i = 0ul; i < segmentCount; ++i)
         {
             LiveSplitCore.SegmentRef segment = lscRun.Segment(i);
+            byte[] iconBytes = CopyImageBytes(segment.IconPtr(), segment.IconLen());
+            if (iconBytes == null || iconBytes.Length == 0)
+            {
+                xmlIconPngs ??= TryReadSegmentIconPngsFromStream(Stream);
+                if (xmlIconPngs != null && (int)i < xmlIconPngs.Length)
+                {
+                    iconBytes = xmlIconPngs[(int)i];
+                }
+            }
+
             var split = new Segment(segment.Name())
             {
-                Icon = ParseImage(CopyImageBytes(segment.IconPtr(), segment.IconLen())),
+                Icon = ParseImage(iconBytes),
+                IconPng = iconBytes,
                 BestSegmentTime = ParseTime(segment.BestSegmentTime()),
             };
 

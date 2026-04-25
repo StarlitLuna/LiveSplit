@@ -137,12 +137,16 @@ public sealed class SkiaDrawingContext : IDrawingContext
         var skFont = (SkiaFont)font;
         using SKPaint paint = CreateFillPaint(brush);
 
-        // TODO: honor ITextFormat.Trimming (EllipsisCharacter) and FormatFlags (NoWrap).
-        // GDI+ handles ellipsis trimming automatically when the string exceeds the layout rect;
-        // Skia requires manual measure + trim. SimpleLabel does its own cutoff logic, so most
-        // call sites are unaffected.
         var skFormat = (SkiaTextFormat)format;
         SKFontMetrics metrics = skFont.Font.Metrics;
+
+        // Honor StringTrimming.EllipsisCharacter: GDI+ trims automatically when the string
+        // overflows the layout rect; Skia needs an explicit measure + truncate. Other trimming
+        // modes are not currently used by any component, so they fall through to plain draw.
+        if (skFormat.Trimming == StringTrimming.EllipsisCharacter && bounds.Width > 0)
+        {
+            text = TrimWithEllipsis(text, skFont, bounds.Width);
+        }
 
         float textWidth = skFont.Font.MeasureText(text);
         float textHeight = metrics.Descent - metrics.Ascent;
@@ -177,6 +181,50 @@ public sealed class SkiaDrawingContext : IDrawingContext
         SKFontMetrics metrics = skFont.Font.Metrics;
         float height = metrics.Descent - metrics.Ascent;
         return new SizeF(width, height);
+    }
+
+    /// <summary>
+    /// Truncate <paramref name="text"/> with a single ellipsis character when its measured
+    /// width exceeds <paramref name="maxWidth"/>. Binary-search the longest prefix that fits
+    /// with "…" appended; matches GDI+ <see cref="StringTrimming.EllipsisCharacter"/> output
+    /// closely enough for the layout-driven components that already pre-cut at the SimpleLabel
+    /// level.
+    /// </summary>
+    private static string TrimWithEllipsis(string text, SkiaFont skFont, float maxWidth)
+    {
+        const string Ellipsis = "…";
+        if (skFont.Font.MeasureText(text) <= maxWidth)
+        {
+            return text;
+        }
+
+        float ellipsisWidth = skFont.Font.MeasureText(Ellipsis);
+        if (ellipsisWidth >= maxWidth)
+        {
+            // The ellipsis itself doesn't fit — fall back to drawing nothing rather than
+            // emitting a glyph that overflows the bounds.
+            return string.Empty;
+        }
+
+        int low = 0;
+        int high = text.Length;
+        int best = 0;
+        while (low <= high)
+        {
+            int mid = (low + high) / 2;
+            float width = skFont.Font.MeasureText(text.AsSpan(0, mid)) + ellipsisWidth;
+            if (width <= maxWidth)
+            {
+                best = mid;
+                low = mid + 1;
+            }
+            else
+            {
+                high = mid - 1;
+            }
+        }
+
+        return string.Concat(text.AsSpan(0, best), Ellipsis);
     }
 
     public void FillPath(IBrush brush, IGraphicsPath path)

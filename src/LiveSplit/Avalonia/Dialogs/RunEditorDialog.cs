@@ -16,6 +16,8 @@ using global::Avalonia.Platform.Storage;
 using LiveSplit.Model;
 using LiveSplit.Model.RunSavers;
 using LiveSplit.TimeFormatters;
+using LiveSplit.UI;
+using LiveSplit.UI.Components;
 
 using SkiaSharp;
 
@@ -56,6 +58,11 @@ public sealed class RunEditorDialog : Window
     private readonly DataGrid _historyGrid;
     private readonly StackPanel _variablesPanel;
     private readonly StackPanel _customComparisonsPanel;
+
+    private TextBlock _autoSplitterDescription;
+    private Button _autoSplitterActivateBtn;
+    private Button _autoSplitterSettingsBtn;
+    private Button _autoSplitterWebsiteBtn;
 
     private ObservableCollection<AttemptRow> _attemptRows;
 
@@ -164,8 +171,15 @@ public sealed class RunEditorDialog : Window
                 new TabItem { Header = "Game Time", Content = BuildTimingTab(TimingMethod.GameTime, _gameTimeRows) },
                 new TabItem { Header = "History", Content = BuildHistoryTab() },
                 new TabItem { Header = "Variables", Content = BuildVariablesTab() },
+                new TabItem { Header = "Auto Splitter", Content = BuildAutoSplitterTab() },
             },
         };
+
+        // Game-name → autosplitter lookup mirrors the original WinForms cbxGameName_TextChanged:
+        // create the matching AutoSplitter from AutoSplitterFactory and auto-activate when the
+        // game appears in Settings.ActiveAutoSplitters.
+        _gameBox.TextChanged += (_, _) => RefreshAutoSplitterFromGameName();
+        RefreshAutoSplitterFromGameName();
 
         // Footer
         var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
@@ -264,6 +278,8 @@ public sealed class RunEditorDialog : Window
         target.AttemptCount = source.AttemptCount;
         target.GameIcon = source.GameIcon;
         target.GameIconPng = source.GameIconPng;
+        target.AutoSplitter = source.AutoSplitter;
+        target.AutoSplitterSettings = source.AutoSplitterSettings;
         target.AttemptHistory = new List<Attempt>(source.AttemptHistory);
         target.CustomComparisons = new List<string>(source.CustomComparisons);
         target.Clear();
@@ -292,6 +308,218 @@ public sealed class RunEditorDialog : Window
             new XMLRunSaver().Save(_original, stream);
             _original.HasChanged = false;
             State.Settings.AddToRecentSplits(_original.FilePath, _original, State.CurrentTimingMethod, State.CurrentHotkeyProfile);
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Auto Splitter tab — activate/deactivate + per-component settings
+    // ------------------------------------------------------------------------
+
+    private Control BuildAutoSplitterTab()
+    {
+        _autoSplitterDescription = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12),
+        };
+
+        _autoSplitterActivateBtn = new Button { Content = "Activate", Width = 120 };
+        _autoSplitterActivateBtn.Click += (_, _) => ToggleAutoSplitterActivation();
+
+        _autoSplitterSettingsBtn = new Button { Content = "Settings…", Width = 120 };
+        _autoSplitterSettingsBtn.Click += async (_, _) => await OpenAutoSplitterSettings();
+
+        _autoSplitterWebsiteBtn = new Button { Content = "Website", Width = 120 };
+        _autoSplitterWebsiteBtn.Click += (_, _) => OpenAutoSplitterWebsite();
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children = { _autoSplitterActivateBtn, _autoSplitterSettingsBtn, _autoSplitterWebsiteBtn },
+        };
+
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(20),
+            Spacing = 8,
+            Children = { _autoSplitterDescription, buttons },
+        };
+
+        RefreshAutoSplitterUI();
+        return panel;
+    }
+
+    /// <summary>
+    /// Re-resolve <see cref="IRun.AutoSplitter"/> from the current Game Name. Mirrors the
+    /// original cbxGameName_TextChanged handler: the lookup runs on every text change, the
+    /// previous splitter is deactivated, and the new one auto-activates iff the game name is
+    /// already in <see cref="ISettings.ActiveAutoSplitters"/>.
+    /// </summary>
+    private void RefreshAutoSplitterFromGameName()
+    {
+        if (Run.AutoSplitter is { IsActivated: true } previous)
+        {
+            previous.Deactivate();
+        }
+
+        string gameName = _gameBox?.Text ?? string.Empty;
+        AutoSplitter splitter = null;
+        try
+        {
+            splitter = AutoSplitterFactory.Instance?.Create(gameName);
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+        }
+
+        Run.AutoSplitter = splitter;
+        if (splitter != null && State.Settings.ActiveAutoSplitters.Contains(gameName))
+        {
+            splitter.Activate(State);
+            ApplyPersistedAutoSplitterSettings(gameName);
+        }
+
+        RefreshAutoSplitterUI();
+    }
+
+    private void RefreshAutoSplitterUI()
+    {
+        if (_autoSplitterDescription is null)
+        {
+            return;
+        }
+
+        AutoSplitter splitter = Run.AutoSplitter;
+        if (splitter is null)
+        {
+            _autoSplitterDescription.Text = "There is no Auto Splitter available for this game.";
+            _autoSplitterActivateBtn.Content = "Activate";
+            _autoSplitterActivateBtn.IsEnabled = false;
+            _autoSplitterSettingsBtn.IsEnabled = false;
+            _autoSplitterWebsiteBtn.IsVisible = false;
+            return;
+        }
+
+        _autoSplitterDescription.Text = string.IsNullOrEmpty(splitter.Description)
+            ? "Auto Splitter available."
+            : splitter.Description;
+        _autoSplitterActivateBtn.IsEnabled = true;
+        _autoSplitterActivateBtn.Content = splitter.IsActivated ? "Deactivate" : "Activate";
+        _autoSplitterSettingsBtn.IsEnabled = splitter.IsActivated && SplitterHasSettings(splitter);
+        _autoSplitterWebsiteBtn.IsVisible = !string.IsNullOrEmpty(splitter.Website);
+    }
+
+    private static bool SplitterHasSettings(AutoSplitter splitter)
+    {
+        try
+        {
+            return splitter.Component?.GetSettingsControlAvalonia(LayoutMode.Vertical) != null
+                || splitter.Component?.GetSettingsControl(LayoutMode.Vertical) != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void ToggleAutoSplitterActivation()
+    {
+        AutoSplitter splitter = Run.AutoSplitter;
+        if (splitter is null)
+        {
+            return;
+        }
+
+        string gameName = _gameBox?.Text ?? string.Empty;
+        if (splitter.IsActivated)
+        {
+            State.Settings.ActiveAutoSplitters.Remove(gameName);
+            splitter.Deactivate();
+        }
+        else
+        {
+            State.Settings.ActiveAutoSplitters.Add(gameName);
+            splitter.Activate(State);
+            ApplyPersistedAutoSplitterSettings(gameName);
+        }
+
+        RefreshAutoSplitterUI();
+    }
+
+    private void ApplyPersistedAutoSplitterSettings(string gameName)
+    {
+        AutoSplitter splitter = Run.AutoSplitter;
+        if (splitter is not { IsActivated: true } || Run.AutoSplitterSettings is null)
+        {
+            return;
+        }
+
+        string persistedGame = Run.AutoSplitterSettings.GetAttribute("gameName");
+        if (!string.Equals(persistedGame, gameName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            splitter.Component?.SetSettings(Run.AutoSplitterSettings);
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+        }
+    }
+
+    private async Task OpenAutoSplitterSettings()
+    {
+        AutoSplitter splitter = Run.AutoSplitter;
+        if (splitter?.Component is not IComponent component)
+        {
+            return;
+        }
+
+        var dlg = new ComponentSettingsDialog(component);
+        if (await dlg.ShowDialogAsync(this))
+        {
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                System.Xml.XmlElement element = doc.CreateElement("AutoSplitterSettings");
+                element.InnerXml = component.GetSettings(doc).InnerXml;
+                System.Xml.XmlAttribute gameAttr = doc.CreateAttribute("gameName");
+                gameAttr.Value = _gameBox?.Text ?? string.Empty;
+                element.Attributes.Append(gameAttr);
+                Run.AutoSplitterSettings = element;
+                Run.HasChanged = true;
+            }
+            catch (Exception ex)
+            {
+                LiveSplit.Options.Log.Error(ex);
+            }
+        }
+    }
+
+    private void OpenAutoSplitterWebsite()
+    {
+        string url = Run.AutoSplitter?.Website;
+        if (string.IsNullOrEmpty(url))
+        {
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
         }
         catch (Exception ex)
         {

@@ -47,7 +47,6 @@ public sealed partial class TimerWindow : Window
     public ICommand SettingsCommand { get; }
     public ICommand SetSizeCommand { get; }
     public ICommand ShareCommand { get; }
-    public ICommand RaceProvidersCommand { get; }
     public ICommand AboutCommand { get; }
     public ICommand CloseCommand { get; }
 
@@ -81,7 +80,6 @@ public sealed partial class TimerWindow : Window
         SettingsCommand = new RelayCommand(async () => await OpenSettings());
         SetSizeCommand = new RelayCommand(async () => await OpenSetSize());
         ShareCommand = new RelayCommand(async () => await OpenShare());
-        RaceProvidersCommand = new RelayCommand(async () => await OpenRaceProviders());
         AboutCommand = new RelayCommand(async () => await OpenAbout());
         CloseCommand = new RelayCommand(Close);
 
@@ -311,12 +309,6 @@ public sealed partial class TimerWindow : Window
         await dlg.ShowDialogAsync(this);
     }
 
-    private async Task OpenRaceProviders()
-    {
-        var dlg = new RaceProviderManagingDialog(Host.State.Settings);
-        await dlg.ShowDialogAsync(this);
-    }
-
     private async Task OpenAbout()
     {
         var dlg = new AboutBox();
@@ -355,6 +347,11 @@ public sealed partial class TimerWindow : Window
         if (this.FindControl<MenuItem>("ServerMenu") is MenuItem serverMenu)
         {
             serverMenu.SubmenuOpened += (_, _) => PopulateServerMenu(serverMenu);
+        }
+
+        if (this.FindControl<MenuItem>("LanguageMenu") is MenuItem languageMenu)
+        {
+            languageMenu.SubmenuOpened += (_, _) => PopulateLanguageMenu(languageMenu);
         }
     }
 
@@ -441,6 +438,47 @@ public sealed partial class TimerWindow : Window
         gameTime.Click += (_, _) => { Host.State.CurrentTimingMethod = TimingMethod.GameTime; InvalidateVisual(); };
 
         parent.ItemsSource = new[] { realTime, gameTime };
+    }
+
+    private void PopulateLanguageMenu(MenuItem parent)
+    {
+        var children = new List<MenuItem>();
+        string current = LiveSplit.Localization.LanguageResolver.NormalizeSettingValue(Host.State.Settings.UILanguage);
+
+        var auto = new MenuItem
+        {
+            Header = "Auto (System Default)",
+            Icon = string.IsNullOrEmpty(current) ? new TextBlock { Text = "•" } : null,
+        };
+        auto.Click += async (_, _) => await ApplyLanguage(string.Empty);
+        children.Add(auto);
+        children.Add(new MenuItem { Header = "-" });
+
+        foreach (LiveSplit.Localization.AppLanguage language in LiveSplit.Localization.UiTextCatalog.Languages)
+        {
+            string captured = language.Code;
+            var item = new MenuItem
+            {
+                Header = language.DisplayName,
+                Icon = string.Equals(captured, current, StringComparison.OrdinalIgnoreCase)
+                    ? new TextBlock { Text = "•" }
+                    : null,
+            };
+            item.Click += async (_, _) => await ApplyLanguage(captured);
+            children.Add(item);
+        }
+
+        parent.ItemsSource = children;
+    }
+
+    private async Task ApplyLanguage(string code)
+    {
+        Host.State.Settings.UILanguage = code;
+        LiveSplit.Localization.LanguageResolver.SetCurrentLanguageSetting(code);
+        var dlg = new MessageDialog(
+            "Language",
+            "The language change applies the next time LiveSplit starts.");
+        await dlg.ShowDialogAsync(this);
     }
 
     private void PopulateServerMenu(MenuItem parent)

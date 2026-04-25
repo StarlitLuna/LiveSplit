@@ -96,6 +96,14 @@ public class XMLRunSaver : IRunSaver
 
             CreateSetting(document, splitElement, "Name", segment.Name);
             CreateSetting(document, splitElement, "Icon", segment.Icon);
+            // IconPng is the Skia-friendly counterpart to the BinaryFormatter <Icon> blob;
+            // see the GameIconPng note above for the roundtrip rationale.
+            if (segment.IconPng is { Length: > 0 })
+            {
+                XmlElement iconPng = document.CreateElement("IconPng");
+                iconPng.InnerText = Convert.ToBase64String(segment.IconPng);
+                splitElement.AppendChild(iconPng);
+            }
 
             XmlElement splitTimes = document.CreateElement("SplitTimes");
             foreach (string comparison in run.CustomComparisons)

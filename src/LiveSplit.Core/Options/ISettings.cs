@@ -1,9 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Input;
-using LiveSplit.Web.SRL;
 
 namespace LiveSplit.Options;
 
@@ -22,13 +21,10 @@ public interface ISettings : ICloneable
     int ServerPort { get; set; }
     ServerStartupType ServerStartup { get; set; }
     ServerStateType ServerState { get; set; }
-    IRaceViewer RaceViewer { get; set; }
-    IList<RaceProviderSettings> RaceProvider { get; set; }
 
     IList<string> ActiveAutoSplitters { get; set; }
     IDictionary<string, bool> ComparisonGeneratorStates { get; set; }
 
-    bool AgreedToSRLRules { get; set; }
     bool UpdateCheckEnabled { get; set; }
 
     void AddToRecentSplits(string path, IRun run, TimingMethod lastTimingMethod, string lastHotkeyProfile);

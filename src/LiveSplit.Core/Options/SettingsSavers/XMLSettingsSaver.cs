@@ -36,8 +36,6 @@ public class XMLSettingsSaver : ISettingsSaver
         parent.AppendChild(hotkeyProfiles);
 
         CreateSetting(document, parent, "WarnOnReset", settings.WarnOnReset);
-        CreateSetting(document, parent, "RaceViewer", settings.RaceViewer.Name);
-        CreateSetting(document, parent, "AgreedToSRLRules", settings.AgreedToSRLRules);
         CreateSetting(document, parent, "UpdateCheckEnabled", settings.UpdateCheckEnabled);
 
         if (Environment.OSVersion.Version.Major >= Settings.DPI_AWARENESS_OS_MIN_VERSION)
@@ -102,15 +100,6 @@ public class XMLSettingsSaver : ISettingsSaver
         }
 
         parent.AppendChild(generatorStates);
-
-        XmlElement raceProviderPlugins = document.CreateElement("RaceProviderPlugins");
-        foreach (RaceProviderSettings raceProvider in settings.RaceProvider)
-        {
-            XmlElement raceProviderElement = raceProvider.ToXml(document);
-            raceProviderPlugins.AppendChild(raceProviderElement);
-        }
-
-        parent.AppendChild(raceProviderPlugins);
 
         XmlElement autoSplittersActive = document.CreateElement("ActiveAutoSplitters");
         foreach (string splitter in settings.ActiveAutoSplitters)

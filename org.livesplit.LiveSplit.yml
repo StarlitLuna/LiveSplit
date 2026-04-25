@@ -8,11 +8,23 @@ sdk-extensions:
 command: LiveSplit
 finish-args:
   - --share=ipc
-  - --share=network            # speedrun.com / racetime / SRL / update checks
+  - --share=network            # speedrun.com / update checks
   - --socket=fallback-x11
   - --socket=wayland
   - --device=dri
   - --filesystem=home          # so users can save splits/layouts wherever
+  # Autosplitter support: --allow=devel lifts the seccomp filter that blocks
+  # ptrace / process_vm_readv against host processes. Without it, every attempt
+  # to read game memory (ASL or WASM) silently fails with EPERM. The host
+  # kernel still enforces yama ptrace_scope on top of this; see the README for
+  # the sysctl drop-in users need on Ubuntu/Fedora.
+  - --allow=devel
+  # Steam keeps its libraries under XDG_DATA_HOME, but Proton prefixes for
+  # games installed to a secondary library (e.g. /mnt/games) live outside
+  # $HOME. Without filesystem visibility we can't resolve the PE paths Wine
+  # reports in /proc/<pid>/maps, which breaks module-name lookups.
+  - --filesystem=xdg-data/Steam:ro
+  - --filesystem=/run/media:ro
 modules:
   - name: livesplit
     buildsystem: simple

@@ -7,6 +7,7 @@ using System.Text;
 using System.Xml;
 
 using LiveSplit.Model.Comparisons;
+using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.Model;
 
@@ -21,6 +22,12 @@ public interface IRun : IList<ISegment>, ICloneable, INotifyPropertyChanged
     /// Linux-only save/reload cycle even when the BinaryFormatter &lt;GameIcon&gt; path fails.
     /// </summary>
     byte[] GameIconPng { get; set; }
+    /// <summary>
+    /// Lazy <see cref="IImage"/> decoded from <see cref="GameIconPng"/> via the active drawing
+    /// factory; null when no icon bytes are present. The live render path uses this so it works
+    /// on Skia (no libgdiplus dependency); the cache invalidates whenever GameIconPng is set.
+    /// </summary>
+    IImage GameIconImage { get; }
     string GameName { get; set; }
     string CategoryName { get; set; }
     TimeSpan Offset { get; set; }

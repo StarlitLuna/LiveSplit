@@ -36,8 +36,6 @@ public class DetailedTimer : IComponent
 
     protected int IconWidth { get; set; }
 
-    public Image ShadowImage { get; set; }
-    protected Image OldImage { get; set; }
 
     public float PaddingTop => 0f;
     public float PaddingLeft => 7f;
@@ -97,15 +95,9 @@ public class DetailedTimer : IComponent
         int lastSplitOffset = state.CurrentSplitIndex == state.Run.Count ? -1 : 0;
 
         float originalDrawSize = Math.Min(Settings.IconSize, width - 14);
-        Image icon = state.CurrentSplitIndex >= 0 ? state.Run[state.CurrentSplitIndex + lastSplitOffset].Icon : null;
+        IImage icon = state.CurrentSplitIndex >= 0 ? state.Run[state.CurrentSplitIndex + lastSplitOffset].IconImage : null;
         if (Settings.DisplayIcon && icon != null)
         {
-            if (OldImage != icon)
-            {
-                ImageAnimator.Animate(icon, (s, o) => { });
-                OldImage = icon;
-            }
-
             float drawWidth = originalDrawSize;
             float drawHeight = originalDrawSize;
             if (icon.Width > icon.Height)
@@ -119,16 +111,13 @@ public class DetailedTimer : IComponent
                 drawWidth *= ratio;
             }
 
-            ImageAnimator.UpdateFrames(icon);
-
-            // Split icon is a System.Drawing.Image from the XML loader, so this draw call
-            // requires a GDI+ backing.
-            ctx.AsGraphics().DrawImage(
+            ctx.DrawImage(
                 icon,
-                7 + ((originalDrawSize - drawWidth) / 2),
-                ((height - originalDrawSize) / 2.0f) + ((originalDrawSize - drawHeight) / 2),
-                drawWidth,
-                drawHeight);
+                new RectangleF(
+                    7 + ((originalDrawSize - drawWidth) / 2),
+                    ((height - originalDrawSize) / 2.0f) + ((originalDrawSize - drawHeight) / 2),
+                    drawWidth,
+                    drawHeight));
 
             IconWidth = (int)(originalDrawSize + 7.5f);
         }

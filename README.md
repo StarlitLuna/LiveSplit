@@ -12,7 +12,7 @@ LiveSplit is a timer program for speedrunners that is both easy to use and full 
 
 ## Features
 
-**Speedrun.com Integration:** [Speedrun.com](http://speedrun.com) is fully integrated into LiveSplit. You can browse their leaderboards, download splits, and even submit your own runs directly from LiveSplit. You can also show the World Records for the games you run with the World Record Component.
+**Speedrun.com Integration:** [Speedrun.com](http://speedrun.com) is integrated into LiveSplit. You can browse their leaderboards and download splits directly from LiveSplit. You can also show the World Records for the games you run with the World Record Component.
 
 **Accurate Timing:** LiveSplit automatically synchronizes with an atomic clock over the Internet to estimate inaccuracies of the local timer in the PC. LiveSplit's timer automatically adjusts the local timer to fix those inaccuracies.
 
@@ -20,15 +20,13 @@ LiveSplit is a timer program for speedrunners that is both easy to use and full 
 
 **Video Component:** With the Video Component, you can play a video from a local file alongside your run. The video will start when you start your run and stop whenever you reset. You can also specify at what point the video should start at.
 
-**Racing:** In LiveSplit, you are able to start and join races on [SpeedRunsLive](http://www.speedrunslive.com/) or [racetime.gg](https://racetime.gg/) within LiveSplit itself. The timer automatically starts when the race begins and automatically writes ``.done`` whenever you complete the race. Also, you are able to compare your current run with the other runners during the race, as long as they use LiveSplit as well.
-
-**Comparisons:** In LiveSplit, you are able to dynamically switch between multiple comparisons, even mid-run. You can either compare your run to comparisons that you define yourself or compare it to multiple automatically generated comparisons, like your Sum of Best Segments or your average run. While racing on [SpeedRunsLive](http://www.speedrunslive.com/), comparisons for the other runners are automatically generated as well.
+**Comparisons:** In LiveSplit, you are able to dynamically switch between multiple comparisons, even mid-run. You can either compare your run to comparisons that you define yourself or compare it to multiple automatically generated comparisons, like your Sum of Best Segments or your average run.
 
 **Layout System:** Users can modify every part of LiveSplit’s appearance using Layouts. Every user has the ability to add or remove parts along with being able to rearrange and customize each part of LiveSplit. You can even use your own background images.
 
 **Dynamic Resizing:** LiveSplit can be resized to any size so that it looks good on stream. As LiveSplit’s size is changed, all of its parts are automatically scaled up in order to preserve its appearance.
 
-**Sharing Runs:** Any run can be shared to [Speedrun.com](http://speedrun.com/) and [X (Twitter)](https://twitter.com/). You can also share a screenshot of your splits to [Imgur](http://imgur.com/) or save it as a file. Your [Twitch](http://www.twitch.tv/) title can be updated as well based on the game you are playing.
+**Sharing Runs:** Any run can be shared via a tweet on [X (Twitter)](https://twitter.com/) or as a screenshot uploaded to [Imgur](http://imgur.com/) or saved as a file.
 
 **Component Development:** Anyone can develop their own components that can easily be shared and used with LiveSplit. Additional downloadable components can be found in the [Components Section](https://livesplit.org/components/).
 
@@ -44,16 +42,6 @@ You can browse the [Issues](https://github.com/LiveSplit/LiveSplit/issues) to fi
  4. Commit your changes to your new branch: `git commit -am 'Add a new feature'`
  5. Push to the branch: `git push origin new-feature`
  6. Create a new Pull Request!
-
-## Compiling
-
-LiveSplit uses .NET Framework 4.8.1. To compile LiveSplit, you need the following components installed:
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
-- [.NET Framework 4.8.1 Developer Pack](https://dotnet.microsoft.com/en-us/download/dotnet-framework/thank-you/net481-developer-pack-offline-installer)
-
-After cloning, simply run `dotnet build LiveSplit.sln` from the root of the repository.
-
-To use Visual Studio, you must install a version that supports the .NET SDK version you installed. At the time of writing, the most recent version is [Visual Studio 2022](https://visualstudio.microsoft.com/vs/community).
 
 ## Building on Linux
 
@@ -177,6 +165,24 @@ The bundle installs on any distro with `flatpak install ./livesplit.flatpak`.
 
 Note: the manifest sets `--share=network` during the build phase so cargo and `dotnet restore` can fetch packages — fine for personal use, but Flathub doesn't allow it. Submitting upstream needs NuGet packages and Cargo crates vendored ahead of time and listed under `sources:` in the manifest.
 
+#### Autosplitter support
+
+Autosplitters work inside the Flatpak sandbox out of the box, but most distros also enforce a kernel-side gate (yama LSM) that Flatpak permissions can't override.
+Ubuntu and Fedora for example default to `kernel.yama.ptrace_scope = 1`, which only permits parent→child ptrace. Steam launches the game, not LiveSplit, so they're siblings and reads silently fail with EPERM. Drop `ptrace_scope` to `0` to fix it:
+
+   ```sh
+   # one-shot (resets on reboot):
+   sudo sysctl kernel.yama.ptrace_scope=0
+
+   # permanent: install the drop-in shipped with the source tree
+   sudo cp scripts/99-livesplit-ptrace.conf /etc/sysctl.d/
+   sudo sysctl --system
+   ```
+
+   Arch and most rolling distros already default to `0`, so no action needed there. SteamOS-3 (Deck) likewise defaults to `0`.
+
+Once both are in place, the modern WASM autosplitter runtime (`livesplit_auto_splitting`) detects Wine processes, exposes the PE name to the splitter, and reads the game's address space exactly as it would natively. Old `.asl` scripts work too for the read-only memory case; scripts that inject code (`WriteDetour` etc.) are not supported on Linux regardless of permissions.
+
 ## Common Compiling Issues
 1. No submodules pulled in when you fork/clone the repo which causes the project not to build. There are two ways to remedy this:
  - Cloning for the first time: `git clone --recursive https://github.com/LiveSplit/LiveSplit.git`
@@ -261,18 +267,18 @@ Commands that return a time:
 
 Commands that return an int:
 
-- getsplitindex  
+- getsplitindex
 (returns -1 if the timer is not running)
 - getattemptcount
 - getcompletedcount
 
 Commands that return a string:
 
-- getcurrentsplitname  
+- getcurrentsplitname
 - getprevioussplitname
 - getcurrenttimerphase
 - getcustomvariablevalue NAME
-- ping  
+- ping
 (always returns `pong`)
 
 Commands are defined at `ProcessMessage` in "CommandServer.cs".

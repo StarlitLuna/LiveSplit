@@ -47,7 +47,7 @@ public static class JSON
         }
 
         // Match JavaScriptSerializer's lenient parsing: tolerate trailing commas and JS
-        // comments. Speedrun.com / SRL responses are well-formed today, but autosplitter
+        // comments. Speedrun.com responses are well-formed today, but autosplitter
         // configs in the wild rely on these affordances and would silently fail otherwise.
         var options = new JsonDocumentOptions
         {

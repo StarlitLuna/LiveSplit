@@ -13,7 +13,6 @@ public class ComponentManager
     public const string PATH_COMPONENTS = "Components\\";
     public static string BasePath { get; set; }
     public static IDictionary<string, IComponentFactory> ComponentFactories { get; protected set; }
-    public static IDictionary<string, IRaceProviderFactory> RaceProviderFactories { get; set; }
 
     public static ILayoutComponent LoadLayoutComponent(string path, LiveSplitState state)
     {

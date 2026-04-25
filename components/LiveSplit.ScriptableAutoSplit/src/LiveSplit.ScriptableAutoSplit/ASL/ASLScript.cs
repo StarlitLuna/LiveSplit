@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Dynamic;
 using System.Linq;
 
+using LiveSplit.ComponentUtil;
 using LiveSplit.Model;
 using LiveSplit.Options;
 
@@ -232,7 +233,7 @@ public class ASLScript
         {
             // default to the state with no version specified, if it exists
             State = _states[proccessName].FirstOrDefault(s => s.GameVersion == "") ?? _states[proccessName].First(),
-            Process = Process.GetProcessesByName(proccessName).OrderByDescending(x => x.StartTime)
+            Process = WineAwareProcess.GetProcessesByName(proccessName).OrderByDescending(x => x.StartTime)
                 .FirstOrDefault(x => !x.HasExited)
         }).FirstOrDefault(x => x.Process != null);
 

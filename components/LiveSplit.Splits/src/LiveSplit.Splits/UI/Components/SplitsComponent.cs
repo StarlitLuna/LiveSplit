@@ -324,23 +324,29 @@ public class SplitsComponent : IComponent
         ScrollOffset++;
     }
 
-    private void DrawBackground(Graphics g, float width, float height)
+    private void DrawBackground(IDrawingContext ctx, float width, float height)
     {
-        if (Settings.BackgroundGradient != ExtendedGradientType.Alternating
-            && (Settings.BackgroundColor.A > 0
-            || (Settings.BackgroundGradient != ExtendedGradientType.Plain
-            && Settings.BackgroundColor2.A > 0)))
+        if (Settings.BackgroundGradient == ExtendedGradientType.Alternating
+            || (Settings.BackgroundColor.A == 0
+            && (Settings.BackgroundGradient == ExtendedGradientType.Plain
+            || Settings.BackgroundColor2.A == 0)))
         {
-            var gradientBrush = new LinearGradientBrush(
-                        new PointF(0, 0),
-                        Settings.BackgroundGradient == ExtendedGradientType.Horizontal
-                        ? new PointF(width, 0)
-                        : new PointF(0, height),
-                        Settings.BackgroundColor,
-                        Settings.BackgroundGradient == ExtendedGradientType.Plain
-                        ? Settings.BackgroundColor
-                        : Settings.BackgroundColor2);
-            g.FillRectangle(gradientBrush, 0, 0, width, height);
+            return;
+        }
+
+        if (Settings.BackgroundGradient == ExtendedGradientType.Plain)
+        {
+            using ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(Settings.BackgroundColor);
+            ctx.FillRectangle(brush, 0, 0, width, height);
+        }
+        else
+        {
+            PointF endPoint = Settings.BackgroundGradient == ExtendedGradientType.Horizontal
+                ? new PointF(width, 0)
+                : new PointF(0, height);
+            using ILinearGradientBrush brush = DrawingApi.Factory.CreateLinearGradientBrush(
+                new PointF(0, 0), endPoint, Settings.BackgroundColor, Settings.BackgroundColor2);
+            ctx.FillRectangle(brush, 0, 0, width, height);
         }
     }
 
@@ -366,7 +372,7 @@ public class SplitsComponent : IComponent
     {
         Graphics g = ctx.AsGraphics();
         Prepare(state);
-        DrawBackground(g, width, VerticalHeight);
+        DrawBackground(ctx, width, VerticalHeight);
         SetMeasureLabels(g, state);
         InternalComponent.DrawVertical(ctx, state, width, clipRegion);
     }
@@ -375,7 +381,7 @@ public class SplitsComponent : IComponent
     {
         Graphics g = ctx.AsGraphics();
         Prepare(state);
-        DrawBackground(g, HorizontalWidth, height);
+        DrawBackground(ctx, HorizontalWidth, height);
         SetMeasureLabels(g, state);
         InternalComponent.DrawHorizontal(ctx, state, height, clipRegion);
     }

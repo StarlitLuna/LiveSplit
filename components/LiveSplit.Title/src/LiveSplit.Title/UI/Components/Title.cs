@@ -80,7 +80,7 @@ public class Title : IComponent
     private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
         Graphics g = ctx.AsGraphics();
-        DrawBackground(g, width, height);
+        DrawBackground(ctx, width, height);
 
         TitleFont = Settings.OverrideTitleFont ? Settings.TitleFont : state.LayoutSettings.TextFont;
 
@@ -100,23 +100,11 @@ public class Title : IComponent
         DrawCategoryName(g, state, width, height, showGameIcon, startPadding, categoryEndPadding);
     }
 
-    private void DrawBackground(Graphics g, float width, float height)
+    private void DrawBackground(IDrawingContext ctx, float width, float height)
     {
-        if (Settings.BackgroundColor.A > 0
-            || (Settings.BackgroundGradient != GradientType.Plain
-            && Settings.BackgroundColor2.A > 0))
-        {
-            var gradientBrush = new LinearGradientBrush(
-                        new PointF(0, 0),
-                        Settings.BackgroundGradient == GradientType.Horizontal
-                        ? new PointF(width, 0)
-                        : new PointF(0, height),
-                        Settings.BackgroundColor,
-                        Settings.BackgroundGradient == GradientType.Plain
-                        ? Settings.BackgroundColor
-                        : Settings.BackgroundColor2);
-            g.FillRectangle(gradientBrush, 0, 0, width, height);
-        }
+        LiveSplit.UI.Drawing.BackgroundHelper.DrawBackground(ctx,
+            Settings.BackgroundColor, Settings.BackgroundColor2,
+            width, height, Settings.BackgroundGradient);
     }
 
     private void CalculatePadding(float height, LayoutMode mode, bool showGameIcon, out float startPadding, out float titleEndPadding, out float categoryEndPadding)

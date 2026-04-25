@@ -1,86 +1,9 @@
 name: CI
 
 on:
-  pull_request:
-  push:
-    branches:
-      - 'master'
-    tags:
-      - '*'
+  workflow_dispatch:
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout LiveSplit
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Fetch history
-        run: git fetch --prune --unshallow --no-recurse-submodules
-
-      - name: Checkout head_ref
-        if: ${{ github.head_ref != '' }}
-        run: git checkout -b ${{ github.head_ref }} || git checkout ${{ github.head_ref }}
-
-      - name: Set up .NET environment
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.x'
-
-      - name: Build LiveSplit
-        run: >
-          dotnet build
-          -v m
-          -c Release
-          -p:DebugType=None
-          .\LiveSplit.sln
-
-      - name: Build UpdateManager.exe
-        run: >
-          dotnet build
-          -v m
-          -c UpdateManagerExe
-          -p:DebugType=None
-          .\src\UpdateManager\UpdateManager.csproj
-
-      - name: Run tests
-        run: >
-          dotnet test
-          -v m
-          -c Release
-          --no-restore --no-build
-          .\LiveSplit.sln
-
-      - name: Upload build as an artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: LiveSplit_Build
-          path: .\bin\Release
-
-      - name: Upload UpdateManager.exe as an artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: UpdateManagerExe
-          path: .\bin\UpdateManagerExe
-
-      - name: Upload build to LiveSplit.github.io
-        if: github.repository == 'LiveSplit/LiveSplit' && github.ref == 'refs/heads/master'
-        run: |
-          7z a LiveSplitDevBuild.zip .\bin\Release\*
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-          git clone -q --branch master --single-branch "https://github.com/LiveSplit/LiveSplit.github.io.git"
-          cd LiveSplit.github.io
-          git checkout -q --orphan artifacts
-          git reset
-          mv ../LiveSplitDevBuild.zip . -force
-          git add LiveSplitDevBuild.zip
-          git commit -m "Add Development Build"
-          git push -q --force https://action:${{ secrets.DEV_BUILD_UPLOAD }}@github.com/LiveSplit/LiveSplit.github.io.git
-
   build-linux:
     runs-on: ubuntu-22.04
     needs: []
@@ -123,3 +46,46 @@ jobs:
         with:
           name: LiveSplit_Linux_x64
           path: ./bin/release
+
+      # ---------------------------------------------------------------------
+      # Packaging — produces the three release-style artifacts (tar.gz,
+      # AppImage, Flatpak) for whichever branch was picked in the Actions UI.
+      # ---------------------------------------------------------------------
+
+      - name: Install linuxdeploy (AppImage tooling)
+        run: |
+          curl -sSL -o /tmp/linuxdeploy \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x /tmp/linuxdeploy
+          sudo mv /tmp/linuxdeploy /usr/local/bin/linuxdeploy
+          # ubuntu-22.04 runners ship without libfuse2; tell every AppImage we
+          # invoke (linuxdeploy + the appimagetool it shells out to) to extract
+          # itself instead of mounting via FUSE.
+          echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
+
+      - name: Package tarball + AppImage
+        run: bash scripts/package-linux.sh --appimage
+
+      - name: Upload tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveSplit_Linux_Tarball
+          path: dist/livesplit-linux-x64.tar.gz
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveSplit_Linux_AppImage
+          path: dist/LiveSplit-*.AppImage
+
+      # The Flatpak action runs in its own container with flatpak-builder +
+      # the freedesktop runtime preinstalled, downloads the SDK extensions the
+      # manifest declares (dotnet8 + rust-stable), builds inside the sandbox,
+      # bundles the result, and uploads it as a workflow artifact named after
+      # the bundle file.
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: livesplit.flatpak
+          manifest-path: org.livesplit.LiveSplit.yml
+          cache-key: flatpak-builder-${{ github.sha }}

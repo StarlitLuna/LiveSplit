@@ -15,8 +15,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="x86\livesplit_core.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="x64\livesplit_core.dll" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Native runtime layout: runtimes/{rid}/native/{file}. Phase 6 replaced the legacy
+         x86/ + x64/ flat layout with this RID-qualified tree so Linux-native builds
+         (liblivesplit_core.so, libasr_capi.so) can ship alongside the Windows DLLs.
+         NativeLibraryResolver.cs handles the per-process RID selection.
+         Copied preserving relative path so the output layout mirrors the source. -->
+    <Content Include="runtimes\**\*.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="runtimes\**\*.so" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="runtimes\**\*.dylib" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Resources\DefaultLayout.lsl" />
   </ItemGroup>
 

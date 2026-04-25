@@ -8,8 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="x64\asr_capi.dll" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="x86\asr_capi.dll" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="runtimes\**\*.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="runtimes\**\*.so" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="runtimes\**\*.dylib" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

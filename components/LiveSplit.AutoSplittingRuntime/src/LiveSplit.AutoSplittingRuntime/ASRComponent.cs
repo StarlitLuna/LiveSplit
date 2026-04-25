@@ -17,15 +17,6 @@ public class ASRComponent : LogicComponent
     private readonly Form parentForm;
     private Timer updateTimer;
 
-    static ASRComponent()
-    {
-        try
-        {
-            ASRLoader.LoadASR();
-        }
-        catch { }
-    }
-
     public ASRComponent(LiveSplitState state)
     {
         parentForm = state.Form;

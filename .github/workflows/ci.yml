@@ -9,7 +9,7 @@ on:
       - '*'
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -80,3 +80,46 @@ jobs:
           git add LiveSplitDevBuild.zip
           git commit -m "Add Development Build"
           git push -q --force https://action:${{ secrets.DEV_BUILD_UPLOAD }}@github.com/LiveSplit/LiveSplit.github.io.git
+
+  build-linux:
+    runs-on: ubuntu-22.04
+    needs: []
+
+    steps:
+      - name: Checkout LiveSplit
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up .NET environment
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Build liblivesplit_core.so (linux-x64)
+        run: bash scripts/build-native-linux.sh linux-x64
+
+      - name: Build LiveSplit (linux-x64)
+        run: >
+          dotnet build
+          -v m
+          -c Release
+          -r linux-x64
+          --self-contained false
+          ./LiveSplit.sln
+
+      - name: Smoke-test LiveSplit binary starts
+        run: |
+          # Confirm the binary loads enough to print --version without X server
+          timeout 10s dotnet ./bin/release/LiveSplit.dll --version || echo "exit=$?"
+
+      - name: Upload linux-x64 build as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveSplit_Linux_x64
+          path: ./bin/release

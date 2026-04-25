@@ -83,7 +83,7 @@ public class Timer : IComponent
         TimerColor = Color.Transparent;
     }
 
-    public static void DrawBackground(Graphics g, Color timerColor, Color settingsColor1, Color settingsColor2,
+    public static void DrawBackground(IDrawingContext ctx, Color timerColor, Color settingsColor1, Color settingsColor2,
         float width, float height, DeltasGradientType gradientType)
     {
         Color background1 = settingsColor1;
@@ -106,29 +106,32 @@ public class Timer : IComponent
             }
         }
 
-        if (background1.A > 0
-        || (gradientType != DeltasGradientType.Plain
-        && background2.A > 0))
+        if (background1.A == 0
+            && (gradientType == DeltasGradientType.Plain || background2.A == 0))
         {
-            var gradientBrush = new LinearGradientBrush(
-                        new PointF(0, 0),
-                        gradientType is DeltasGradientType.Horizontal
-                        or DeltasGradientType.HorizontalWithDeltaColor
-                        ? new PointF(width, 0)
-                        : new PointF(0, height),
-                        background1,
-                        gradientType is DeltasGradientType.Plain
-                        or DeltasGradientType.PlainWithDeltaColor
-                        ? background1
-                        : background2);
-            g.FillRectangle(gradientBrush, 0, 0, width, height);
+            return;
+        }
+
+        bool isPlain = gradientType is DeltasGradientType.Plain or DeltasGradientType.PlainWithDeltaColor;
+        if (isPlain)
+        {
+            using ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(background1);
+            ctx.FillRectangle(brush, 0, 0, width, height);
+        }
+        else
+        {
+            PointF endPoint = gradientType is DeltasGradientType.Horizontal or DeltasGradientType.HorizontalWithDeltaColor
+                ? new PointF(width, 0)
+                : new PointF(0, height);
+            using ILinearGradientBrush brush = DrawingApi.Factory.CreateLinearGradientBrush(
+                new PointF(0, 0), endPoint, background1, background2);
+            ctx.FillRectangle(brush, 0, 0, width, height);
         }
     }
 
     private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
-        Graphics g = ctx.AsGraphics();
-        DrawBackground(g, TimerColor, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
+        DrawBackground(ctx, TimerColor, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
 
         if (state.LayoutSettings.TimerFont != TimerFont || Settings.DecimalsSize != PreviousDecimalsSize)
         {
@@ -143,29 +146,29 @@ public class Timer : IComponent
         BigMeasureLabel.SetActualWidth(ctx);
         SmallTextLabel.SetActualWidth(ctx);
 
-        Matrix oldMatrix = g.Transform;
+        // Save clip + transform so the local scaled/translated coordinate frame doesn't leak
+        // into adjacent components — on Skia this is the only way to undo ScaleTransform.
+        using IDrawingState state_ = ctx.Save();
         float unscaledWidth = Math.Max(10, BigMeasureLabel.ActualWidth + SmallTextLabel.ActualWidth + 11);
         float unscaledHeight = 45f;
         float widthFactor = (width - 14) / (unscaledWidth - 14);
         float heightFactor = height / unscaledHeight;
         float adjustValue = !Settings.CenterTimer ? 7f : 0f;
         float scale = Math.Min(widthFactor, heightFactor);
-        g.TranslateTransform(width - adjustValue, height / 2);
-        g.ScaleTransform(scale, scale);
-        g.TranslateTransform(-unscaledWidth + adjustValue, -0.5f * unscaledHeight);
+        ctx.TranslateTransform(width - adjustValue, height / 2);
+        ctx.ScaleTransform(scale, scale);
+        ctx.TranslateTransform(-unscaledWidth + adjustValue, -0.5f * unscaledHeight);
         if (Settings.CenterTimer)
         {
-            g.TranslateTransform(-(width - (unscaledWidth * scale)) / 2f / scale, 0);
+            ctx.TranslateTransform(-(width - (unscaledWidth * scale)) / 2f / scale, 0);
         }
 
         DrawUnscaled(ctx, state, unscaledWidth, unscaledHeight);
         ActualWidth = scale * (SmallTextLabel.ActualWidth + BigTextLabel.ActualWidth);
-        g.Transform = oldMatrix;
     }
 
     public void DrawUnscaled(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
-        Graphics g = ctx.AsGraphics();
         BigTextLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         BigTextLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
         BigTextLabel.HasShadow = state.LayoutSettings.DropShadows;

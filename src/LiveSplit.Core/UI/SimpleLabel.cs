@@ -325,6 +325,21 @@ public class SimpleLabel
 
     private IBrush WrapBrush()
     {
+        // Consumers (Timer.DrawUnscaled in particular) sometimes assign a
+        // LinearGradientBrush to get gradient-filled text. Preserve that instead of
+        // collapsing to ForeColor, which would only read SolidBrush.
+        if (Brush is LinearGradientBrush lgb)
+        {
+            Color[] colors = lgb.LinearColors;
+            RectangleF rect = lgb.Rectangle;
+            // The LinearGradientBrush doesn't re-expose the constructor points; infer the
+            // direction from the bounding rectangle's main axis. This matches the
+            // start-and-end-point input pattern Timer uses (fixed X or fixed Y).
+            var start = new PointF(rect.X, rect.Y);
+            var end = new PointF(rect.X + rect.Width, rect.Y + rect.Height);
+            return DrawingApi.Factory.CreateLinearGradientBrush(start, end, colors[0], colors[1]);
+        }
+
         return DrawingApi.Factory.CreateSolidBrush(ForeColor);
     }
 

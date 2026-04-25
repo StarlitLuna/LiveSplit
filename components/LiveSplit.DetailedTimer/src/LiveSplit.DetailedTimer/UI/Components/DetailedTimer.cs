@@ -93,7 +93,7 @@ public class DetailedTimer : IComponent
     public void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
         Graphics g = ctx.AsGraphics();
-        Timer.DrawBackground(g, InternalComponent.TimerColor, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
+        Timer.DrawBackground(ctx, InternalComponent.TimerColor, Settings.BackgroundColor, Settings.BackgroundColor2, width, height, Settings.BackgroundGradient);
 
         int lastSplitOffset = state.CurrentSplitIndex == state.Run.Count ? -1 : 0;
 

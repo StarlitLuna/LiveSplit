@@ -38,6 +38,7 @@ public class XMLSettingsSaver : ISettingsSaver
         CreateSetting(document, parent, "WarnOnReset", settings.WarnOnReset);
         CreateSetting(document, parent, "RaceViewer", settings.RaceViewer.Name);
         CreateSetting(document, parent, "AgreedToSRLRules", settings.AgreedToSRLRules);
+        CreateSetting(document, parent, "UpdateCheckEnabled", settings.UpdateCheckEnabled);
 
         if (Environment.OSVersion.Version.Major >= Settings.DPI_AWARENESS_OS_MIN_VERSION)
         {

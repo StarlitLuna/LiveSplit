@@ -52,6 +52,7 @@ public class XMLSettingsFactory : ISettingsFactory
 
         settings.LastComparison = ParseString(parent["LastComparison"], settings.LastComparison);
         settings.AgreedToSRLRules = ParseBool(parent["AgreedToSRLRules"], settings.AgreedToSRLRules);
+        settings.UpdateCheckEnabled = ParseBool(parent["UpdateCheckEnabled"], settings.UpdateCheckEnabled);
 
         XmlElement recentLayouts = parent["RecentLayouts"];
         foreach (object layoutNode in recentLayouts.GetElementsByTagName("LayoutPath"))

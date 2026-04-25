@@ -29,6 +29,7 @@ public interface ISettings : ICloneable
     IDictionary<string, bool> ComparisonGeneratorStates { get; set; }
 
     bool AgreedToSRLRules { get; set; }
+    bool UpdateCheckEnabled { get; set; }
 
     void AddToRecentSplits(string path, IRun run, TimingMethod lastTimingMethod, string lastHotkeyProfile);
     void AddToRecentLayouts(string path);

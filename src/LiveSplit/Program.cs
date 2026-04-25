@@ -11,6 +11,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         InitializeLocalization();
+        StartupOptions.Parse(args);
         return AvaloniaProgram.Run(args);
     }
 

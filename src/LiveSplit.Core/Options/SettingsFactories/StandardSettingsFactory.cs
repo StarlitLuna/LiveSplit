@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 using LiveSplit.Model;
@@ -40,6 +41,7 @@ public class StandardSettingsFactory : ISettingsFactory
             LastComparison = Run.PersonalBestComparisonName,
             RaceViewer = new SRLRaceViewer(),
             AgreedToSRLRules = false,
+            UpdateCheckEnabled = RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
             SimpleSumOfBest = false,
             RaceProvider = ComponentManager.RaceProviderFactories.Values.ToList().Select(x => x.CreateSettings()).ToList(),
             RefreshRate = 40,

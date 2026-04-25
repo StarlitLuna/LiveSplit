@@ -37,10 +37,15 @@ public sealed partial class TimerWindow : Window
     public ICommand CloseCommand { get; }
 
     public TimerWindow()
+        : this(splitsPath: null, layoutPath: null)
+    {
+    }
+
+    public TimerWindow(string splitsPath, string layoutPath)
     {
         AvaloniaXamlLoader.Load(this);
 
-        Host = new AvaloniaTimerHost(InvalidateVisual);
+        Host = new AvaloniaTimerHost(InvalidateVisual, splitsPath, layoutPath);
 
         SplitCommand = new RelayCommand(() => Host.Model.Split());
         ResetCommand = new RelayCommand(() => Host.Model.Reset());

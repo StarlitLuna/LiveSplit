@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 
 using global::Avalonia;
@@ -7,6 +8,7 @@ using global::Avalonia.Controls;
 using global::Avalonia.Layout;
 
 using LiveSplit.Model;
+using LiveSplit.Model.RunSavers;
 using LiveSplit.UI.Components;
 
 namespace LiveSplit.Avalonia.Dialogs;
@@ -146,6 +148,27 @@ public sealed class RunEditorDialog : Window
 
         Run.HasChanged = true;
         RunEdited?.Invoke(this, EventArgs.Empty);
+        PersistIfPossible();
+    }
+
+    private void PersistIfPossible()
+    {
+        if (string.IsNullOrEmpty(Run.FilePath))
+        {
+            return;
+        }
+
+        try
+        {
+            using FileStream stream = File.Open(Run.FilePath, FileMode.Create, FileAccess.Write);
+            new XMLRunSaver().Save(Run, stream);
+            Run.HasChanged = false;
+            State.Settings.AddToRecentSplits(Run.FilePath, Run, State.CurrentTimingMethod, State.CurrentHotkeyProfile);
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+        }
     }
 
     private List<string> SegmentNames()

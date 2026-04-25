@@ -12,7 +12,7 @@ public sealed partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new TimerWindow();
+            desktop.MainWindow = new TimerWindow(StartupOptions.SplitsPath, StartupOptions.LayoutPath);
         }
 
         base.OnFrameworkInitializationCompleted();

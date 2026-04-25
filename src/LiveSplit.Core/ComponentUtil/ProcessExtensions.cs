@@ -145,6 +145,8 @@ public static class ExtensionMethods
 
         if (type == ReadStringType.AutoDetect)
         {
+            // bytes.Length == sb.Capacity here: IProcessMemory.ReadBytes returns false on
+            // partial reads, so the buffer is fully populated whenever we reach this branch.
             if (bytes.Length >= 2 && bytes[1] == '\x0')
             {
                 sb.Append(Encoding.Unicode.GetString(bytes));

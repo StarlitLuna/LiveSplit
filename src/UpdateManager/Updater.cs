@@ -172,6 +172,14 @@ public static class Updater
 
     public static void UpdateAll(IEnumerable<IUpdateable> updateables, string updateManagerDownloadURL, string updateManagerConfigDownloadUrl)
     {
+        // The updater spawns UpdateManager.exe to perform an in-place binary swap. That only
+        // works on Windows; on any other host this would either fail with file-not-found or,
+        // worse, succeed at downloading a Windows binary that won't run. Bail out quietly.
+        if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+        {
+            return;
+        }
+
         DownloadFile(updateManagerDownloadURL, "UpdateManager.exe");
         DownloadFile(updateManagerConfigDownloadUrl, "UpdateManager.exe.config");
         string arguments = updateables.Where(x => x.CheckForUpdate()).Aggregate("", (x, y) => x + "\"" + y.XMLURL + "\" \"" + y.UpdateURL + "\" " + y.Version + " ") + "\"" + Process.GetCurrentProcess().ProcessName + ".exe\"";

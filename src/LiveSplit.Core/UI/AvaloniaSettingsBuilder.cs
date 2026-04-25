@@ -24,17 +24,13 @@ namespace LiveSplit.UI;
 public static class AvaloniaSettingsBuilder
 {
     /// <summary>
-    /// Names of properties that should be excluded from the auto-generated panel — typically
-    /// internal helpers like <c>GradientString</c> that wrap a real enum, or read-only metadata
-    /// like <c>Mode</c> that the component sets, not the user.
+    /// Names of properties that wrap or shadow real settings and shouldn't surface independently
+    /// in the panel — e.g. <c>GradientString</c> wraps a real <c>BackgroundGradient</c> enum,
+    /// <c>Mode</c> is set by the component (not the user) before the panel is shown.
     /// </summary>
     private static readonly HashSet<string> ExcludedNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "GradientString", "Mode", "ComponentName", "Width", "Height", "Padding",
-        "Anchor", "Dock", "TabIndex", "Tag", "Name", "Site", "Visible",
-        "Enabled", "BackColor", "ForeColor", "Font", "Cursor", "Bounds",
-        "Size", "Location", "Margin", "MinimumSize", "MaximumSize",
-        "AutoSize", "Region", "DataContext",
+        "GradientString", "Mode", "ComponentName",
     };
 
     public static Control Build(object settings, string title = null)
@@ -66,10 +62,7 @@ public static class AvaloniaSettingsBuilder
             return new ScrollViewer { Content = stack };
         }
 
-        Type t = settings.GetType();
-        PropertyInfo[] props = t.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-        foreach (PropertyInfo prop in props)
+        foreach (PropertyInfo prop in EnumerateSettingsProperties(settings.GetType()))
         {
             if (!prop.CanRead || !prop.CanWrite)
             {
@@ -100,6 +93,40 @@ public static class AvaloniaSettingsBuilder
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = stack,
         };
+    }
+
+    /// <summary>
+    /// Walks the type hierarchy from <paramref name="t"/> upward, yielding each class's own
+    /// declared public instance properties — but stopping as soon as we hit a
+    /// <c>System.Windows.Forms</c> (or other framework) base class. That keeps inherited
+    /// <c>Control</c> noise (Width / Height / Visible / Enabled / Margin / …) off the panel
+    /// without losing settings that legitimately shadow them via <c>public new</c>.
+    /// </summary>
+    private static IEnumerable<PropertyInfo> EnumerateSettingsProperties(Type t)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (Type cur = t; cur != null && !IsFrameworkBase(cur); cur = cur.BaseType)
+        {
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+            foreach (PropertyInfo prop in cur.GetProperties(flags))
+            {
+                // De-dup on name so a `public new` shadow declared low in the hierarchy hides
+                // the inherited one from the same logical setting.
+                if (seen.Add(prop.Name))
+                {
+                    yield return prop;
+                }
+            }
+        }
+    }
+
+    private static bool IsFrameworkBase(Type t)
+    {
+        string ns = t.Namespace ?? string.Empty;
+        return ns.StartsWith("System.Windows.Forms", StringComparison.Ordinal)
+            || ns.StartsWith("System.ComponentModel", StringComparison.Ordinal)
+            || t == typeof(object)
+            || t == typeof(MarshalByRefObject);
     }
 
     private static Control BuildRowForProperty(object target, PropertyInfo prop)

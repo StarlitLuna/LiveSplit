@@ -19,6 +19,7 @@ public class Settings : ISettings
     public int HcpNBestRuns { get; set; }
     public bool WarnOnReset { get; set; }
     public bool AgreedToSRLRules { get; set; }
+    public bool UpdateCheckEnabled { get; set; }
     public bool SimpleSumOfBest { get; set; }
     public int RefreshRate { get; set; }
     public int ServerPort { get; set; }
@@ -113,6 +114,7 @@ public class Settings : ISettings
             RaceViewer = RaceViewer,
             RaceProvider = new List<RaceProviderSettings>(RaceProvider),
             AgreedToSRLRules = AgreedToSRLRules,
+            UpdateCheckEnabled = UpdateCheckEnabled,
             SimpleSumOfBest = SimpleSumOfBest,
             RefreshRate = RefreshRate,
             ServerPort = ServerPort,

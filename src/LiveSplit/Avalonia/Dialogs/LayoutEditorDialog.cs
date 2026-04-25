@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 
 using global::Avalonia;
@@ -9,6 +10,7 @@ using global::Avalonia.Layout;
 using LiveSplit.Model;
 using LiveSplit.UI;
 using LiveSplit.UI.Components;
+using LiveSplit.UI.LayoutSavers;
 
 namespace LiveSplit.Avalonia.Dialogs;
 
@@ -60,7 +62,13 @@ public sealed class LayoutEditorDialog : Window
         };
 
         var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
-        ok.Click += (_, _) => { _result.TrySetResult(true); Close(); };
+        ok.Click += (_, _) =>
+        {
+            Layout.HasChanged = true;
+            PersistIfPossible();
+            _result.TrySetResult(true);
+            Close();
+        };
         var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
         cancel.Click += (_, _) => { _result.TrySetResult(false); Close(); };
 
@@ -169,5 +177,25 @@ public sealed class LayoutEditorDialog : Window
         }
 
         return await _result.Task;
+    }
+
+    private void PersistIfPossible()
+    {
+        if (string.IsNullOrEmpty(Layout.FilePath))
+        {
+            return;
+        }
+
+        try
+        {
+            using FileStream stream = File.Open(Layout.FilePath, FileMode.Create, FileAccess.Write);
+            new XMLLayoutSaver().Save(Layout, stream);
+            Layout.HasChanged = false;
+            State.Settings.AddToRecentLayouts(Layout.FilePath);
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+        }
     }
 }

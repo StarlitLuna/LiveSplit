@@ -1,4 +1,4 @@
-﻿/*
+/*
 
 MIT License
 
@@ -25,92 +25,38 @@ SOFTWARE.
 */
 
 using System;
-using System.ComponentModel;
 using System.Runtime.InteropServices;
-using System.Text;
-
-using Microsoft.Win32.SafeHandles;
 
 namespace LiveSplit.Web;
 
+/// <summary>
+/// Cross-platform façade for the OS-level credential vault. The Windows backing uses the
+/// Win32 <c>CredReadW</c> / <c>CredWriteW</c> family (DPAPI-encrypted under the hood); the
+/// Linux backing stores AES-encrypted blobs in <c>~/.config/LiveSplit/credentials/{name}</c>
+/// with a key derived from <c>/etc/machine-id</c>. macOS isn't yet wired up — falls through
+/// to the Linux file-backed implementation when invoked there.
+/// </summary>
 public static class CredentialManager
 {
-    public static Credential ReadCredential(string applicationName)
+    private static readonly ICredentialStore Backend = SelectBackend();
+
+    private static ICredentialStore SelectBackend()
     {
-        bool read = CredRead(applicationName, CredentialType.Generic, 0, out IntPtr nCredPtr);
-        if (read)
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            using var critCred = new CriticalCredentialHandle(nCredPtr);
-            CREDENTIAL cred = critCred.GetCredential();
-            return ReadCredential(cred);
+            return new WindowsCredentialStore();
         }
 
-        return null;
+        // Default to the file-backed store for any non-Windows OS — works on Linux today and is
+        // a reasonable fallback on macOS until a proper Keychain backing is added.
+        return new LinuxCredentialStore();
     }
 
-    private static Credential ReadCredential(CREDENTIAL credential)
-    {
-        string applicationName = Marshal.PtrToStringUni(credential.TargetName);
-        string userName = Marshal.PtrToStringUni(credential.UserName);
-        string secret = null;
-        if (credential.CredentialBlob != IntPtr.Zero)
-        {
-            secret = Marshal.PtrToStringUni(credential.CredentialBlob, (int)credential.CredentialBlobSize / 2);
-        }
+    public static Credential ReadCredential(string applicationName) => Backend.Read(applicationName);
 
-        return new Credential(credential.Type, applicationName, userName, secret);
-    }
+    public static void WriteCredential(string applicationName, string userName, string secret) => Backend.Write(applicationName, userName, secret);
 
-    public static void WriteCredential(string applicationName, string userName, string secret)
-    {
-        byte[] byteArray = secret == null ? null : Encoding.Unicode.GetBytes(secret);
-        // XP and Vista: 512;
-        // 7 and above: 5*512
-        if (Environment.OSVersion.Version < new Version(6, 1) /* Windows 7 */)
-        {
-            if (byteArray != null && byteArray.Length > 512)
-            {
-                throw new ArgumentOutOfRangeException("secret", "The secret message has exceeded 512 bytes.");
-            }
-        }
-        else
-        {
-            if (byteArray != null && byteArray.Length > 512 * 5)
-            {
-                throw new ArgumentOutOfRangeException("secret", "The secret message has exceeded 2560 bytes.");
-            }
-        }
-
-        var credential = new CREDENTIAL
-        {
-            AttributeCount = 0,
-            Attributes = IntPtr.Zero,
-            Comment = IntPtr.Zero,
-            TargetAlias = IntPtr.Zero,
-            Type = CredentialType.Generic,
-            Persist = (uint)CredentialPersistence.LocalMachine,
-            CredentialBlobSize = (uint)(byteArray == null ? 0 : byteArray.Length),
-            TargetName = Marshal.StringToCoTaskMemUni(applicationName),
-            CredentialBlob = Marshal.StringToCoTaskMemUni(secret),
-            UserName = Marshal.StringToCoTaskMemUni(userName ?? Environment.UserName)
-        };
-
-        bool written = CredWrite(ref credential, 0);
-        Marshal.FreeCoTaskMem(credential.TargetName);
-        Marshal.FreeCoTaskMem(credential.CredentialBlob);
-        Marshal.FreeCoTaskMem(credential.UserName);
-
-        if (!written)
-        {
-            int lastError = Marshal.GetLastWin32Error();
-            throw new Exception(string.Format("CredWrite failed with the error code {0}.", lastError));
-        }
-    }
-
-    public static bool CredentialExists(string applicationName)
-    {
-        return ReadCredential(applicationName) != null;
-    }
+    public static bool CredentialExists(string applicationName) => Backend.Read(applicationName) != null;
 
     public static void DeleteCredential(string applicationName)
     {
@@ -119,85 +65,15 @@ public static class CredentialManager
             throw new ArgumentNullException(nameof(applicationName));
         }
 
-        if (!CredentialExists(applicationName))
-        {
-            return;
-        }
-
-        bool success = CredDelete(applicationName, CredentialType.Generic, 0);
-        if (!success)
-        {
-            int lastError = Marshal.GetLastWin32Error();
-            throw new Win32Exception(lastError);
-        }
+        Backend.Delete(applicationName);
     }
+}
 
-    [DllImport("Advapi32.dll", EntryPoint = "CredReadW", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool CredRead(string target, CredentialType type, int reservedFlag, out IntPtr credentialPtr);
-
-    [DllImport("Advapi32.dll", EntryPoint = "CredDeleteW", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool CredDelete(string target, CredentialType type, int reservedFlag);
-
-    [DllImport("Advapi32.dll", EntryPoint = "CredWriteW", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool CredWrite([In] ref CREDENTIAL userCredential, [In] uint flags);
-
-    [DllImport("Advapi32.dll", EntryPoint = "CredFree", SetLastError = true)]
-    private static extern bool CredFree([In] IntPtr cred);
-
-    private enum CredentialPersistence : uint
-    {
-        Session = 1,
-        LocalMachine,
-        Enterprise
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct CREDENTIAL
-    {
-        public uint Flags;
-        public CredentialType Type;
-        public IntPtr TargetName;
-        public IntPtr Comment;
-        public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
-        public uint CredentialBlobSize;
-        public IntPtr CredentialBlob;
-        public uint Persist;
-        public uint AttributeCount;
-        public IntPtr Attributes;
-        public IntPtr TargetAlias;
-        public IntPtr UserName;
-    }
-
-    private sealed class CriticalCredentialHandle : CriticalHandleZeroOrMinusOneIsInvalid
-    {
-        public CriticalCredentialHandle(IntPtr preexistingHandle)
-        {
-            SetHandle(preexistingHandle);
-        }
-
-        public CREDENTIAL GetCredential()
-        {
-            if (!IsInvalid)
-            {
-                var credential = (CREDENTIAL)Marshal.PtrToStructure(handle, typeof(CREDENTIAL));
-                return credential;
-            }
-
-            throw new InvalidOperationException("Invalid CriticalHandle!");
-        }
-
-        protected override bool ReleaseHandle()
-        {
-            if (!IsInvalid)
-            {
-                CredFree(handle);
-                SetHandleAsInvalid();
-                return true;
-            }
-
-            return false;
-        }
-    }
+internal interface ICredentialStore
+{
+    Credential Read(string applicationName);
+    void Write(string applicationName, string userName, string secret);
+    void Delete(string applicationName);
 }
 
 public enum CredentialType

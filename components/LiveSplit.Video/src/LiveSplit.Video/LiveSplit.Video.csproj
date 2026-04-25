@@ -5,19 +5,32 @@
 
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+
+    <!-- Excluded from non-Windows builds: VLC ActiveX COM interop bindings (AxInterop +
+         Interop.AXVLC) only exist on Windows. Linux video playback would need the libvlc
+         API directly via VideoLAN/libvlcsharp. Out of scope for the current Linux port. -->
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <UseWindowsForms>false</UseWindowsForms>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <Compile Remove="**\*.cs" />
+    <Compile Include="LinuxStub.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="$(LsSrcPath)\LiveSplit.Core\LiveSplit.Core.csproj" Private="false" ExcludeAssets="runtime" />
     <ProjectReference Include="$(LsSrcPath)\UpdateManager\UpdateManager.csproj" Private="false" ExcludeAssets="runtime" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
     <PackageReference Include="System.Resources.Extensions" Version="6.0.0" />
   </ItemGroup>
 
-  <ItemGroup>
-
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
     <Reference Include="$(LsLibPath)\VLC\AxInterop.AXVLC.dll" />
     <Reference Include="$(LsLibPath)\VLC\Interop.AXVLC.dll" />
   </ItemGroup>

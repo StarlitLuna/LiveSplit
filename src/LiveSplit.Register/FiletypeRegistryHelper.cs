@@ -5,9 +5,11 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Windows.Forms;
 
+using LiveSplit.Options;
+
 using Microsoft.Win32;
 
-namespace LiveSplit.Options;
+namespace LiveSplit.Register;
 
 public static class FiletypeRegistryHelper
 {

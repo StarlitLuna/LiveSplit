@@ -4,14 +4,27 @@
     <UseWindowsForms>true</UseWindowsForms>
 
     <EnableDynamicLoading>true</EnableDynamicLoading>
+
+    <!-- Excluded from non-Windows builds: NAudio is Windows-only. Linux audio playback would
+         need a different backend (PulseAudio / PipeWire / ALSA), out of scope for the port. -->
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <UseWindowsForms>false</UseWindowsForms>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <Compile Remove="**\*.cs" />
+    <Compile Include="LinuxStub.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="$(LsSrcPath)\LiveSplit.Core\LiveSplit.Core.csproj" Private="false" ExcludeAssets="runtime" />
     <ProjectReference Include="$(LsSrcPath)\UpdateManager\UpdateManager.csproj" Private="false" ExcludeAssets="runtime" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
     <PackageReference Include="NAudio" Version="1.7.3" />
   </ItemGroup>
 

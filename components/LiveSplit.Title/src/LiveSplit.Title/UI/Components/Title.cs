@@ -79,25 +79,32 @@ public class Title : IComponent
 
     private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
-        Graphics g = ctx.AsGraphics();
         DrawBackground(ctx, width, height);
 
         TitleFont = Settings.OverrideTitleFont ? Settings.TitleFont : state.LayoutSettings.TextFont;
 
-        MinimumHeight = g.MeasureString("A", TitleFont).Height * 1.7f;
-        VerticalHeight = g.MeasureString("A", TitleFont).Height * 1.7f;
+        using IFont titleIFont = DrawingApi.Factory.CreateFont(
+            TitleFont.FontFamily.Name, TitleFont.Size, TitleFont.Style, TitleFont.Unit);
+        ITextFormat measureFormat = DrawingApi.Factory.CreateTextFormat();
+        float capHeight = ctx.MeasureString("A", titleIFont, 9999, measureFormat).Height;
+        MinimumHeight = capHeight * 1.7f;
+        VerticalHeight = capHeight * 1.7f;
+
         bool showGameIcon = state.Run.GameIcon != null && Settings.DisplayGameIcon;
         if (showGameIcon)
         {
-            DrawGameIcon(g, state, height);
+            // DrawGameIcon still uses Graphics.DrawImage with System.Drawing.Image because
+            // run icons are loaded as System.Drawing.Image by the XML layout loader. Phase 7
+            // will migrate the image pipeline; until then, this branch gates Skia support.
+            DrawGameIcon(ctx.AsGraphics(), state, height);
         }
 
-        DrawAttemptCount(g, state, width, height);
+        DrawAttemptCount(ctx, state, width, height);
 
         CalculatePadding(height, mode, showGameIcon, out float startPadding, out float titleEndPadding, out float categoryEndPadding);
 
-        DrawGameName(g, state, width, height, showGameIcon, startPadding, titleEndPadding);
-        DrawCategoryName(g, state, width, height, showGameIcon, startPadding, categoryEndPadding);
+        DrawGameName(ctx, state, width, height, showGameIcon, startPadding, titleEndPadding);
+        DrawCategoryName(ctx, state, width, height, showGameIcon, startPadding, categoryEndPadding);
     }
 
     private void DrawBackground(IDrawingContext ctx, float width, float height)
@@ -130,11 +137,11 @@ public class Title : IComponent
         }
     }
 
-    private void DrawCategoryName(Graphics g, LiveSplitState state, float width, float height, bool showGameIcon, float startPadding, float categoryEndPadding)
+    private void DrawCategoryName(IDrawingContext ctx, LiveSplitState state, float width, float height, bool showGameIcon, float startPadding, float categoryEndPadding)
     {
         if (Settings.TextAlignment == AlignmentType.Center || (Settings.TextAlignment == AlignmentType.Auto && !showGameIcon))
         {
-            CategoryNameLabel.CalculateAlternateText(g, width - startPadding - categoryEndPadding);
+            CategoryNameLabel.CalculateAlternateText(ctx, width - startPadding - categoryEndPadding);
             float stringWidth = CategoryNameLabel.ActualWidth;
             PositionAndWidth positionAndWidth = calculateCenteredPositionAndWidth(width, stringWidth, startPadding, categoryEndPadding);
             CategoryNameLabel.X = positionAndWidth.position;
@@ -155,10 +162,10 @@ public class Title : IComponent
         CategoryNameLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         CategoryNameLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
         CategoryNameLabel.Height = height;
-        CategoryNameLabel.Draw(g);
+        CategoryNameLabel.Draw(ctx);
     }
 
-    private void DrawAttemptCount(Graphics g, LiveSplitState state, float width, float height)
+    private void DrawAttemptCount(IDrawingContext ctx, LiveSplitState state, float width, float height)
     {
         if (Settings.ShowCount)
         {
@@ -173,15 +180,15 @@ public class Title : IComponent
             AttemptCountLabel.HasShadow = state.LayoutSettings.DropShadows;
             AttemptCountLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
             AttemptCountLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
-            AttemptCountLabel.Draw(g);
+            AttemptCountLabel.Draw(ctx);
         }
     }
 
-    private void DrawGameName(Graphics g, LiveSplitState state, float width, float height, bool showGameIcon, float startPadding, float titleEndPadding)
+    private void DrawGameName(IDrawingContext ctx, LiveSplitState state, float width, float height, bool showGameIcon, float startPadding, float titleEndPadding)
     {
         if (Settings.TextAlignment == AlignmentType.Center || (Settings.TextAlignment == AlignmentType.Auto && !showGameIcon))
         {
-            GameNameLabel.CalculateAlternateText(g, width - startPadding - titleEndPadding);
+            GameNameLabel.CalculateAlternateText(ctx, width - startPadding - titleEndPadding);
             float stringWidth = GameNameLabel.ActualWidth;
             PositionAndWidth positionAndWidth = calculateCenteredPositionAndWidth(width, stringWidth, startPadding, titleEndPadding);
             GameNameLabel.X = positionAndWidth.position;
@@ -202,7 +209,7 @@ public class Title : IComponent
         GameNameLabel.HasShadow = state.LayoutSettings.DropShadows;
         GameNameLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         GameNameLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
-        GameNameLabel.Draw(g);
+        GameNameLabel.Draw(ctx);
     }
 
     private void DrawGameIcon(Graphics g, LiveSplitState state, float height)

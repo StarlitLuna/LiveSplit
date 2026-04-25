@@ -114,7 +114,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
-          flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
       # NODE_NO_WARNINGS hides the punycode DEP0040 noise emitted by the action's
       # own Node.js dependencies on Node 21+ runners — purely cosmetic, the action

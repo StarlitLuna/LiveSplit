@@ -1,7 +1,5 @@
-using System;
 using System.Diagnostics;
 using System.Reflection;
-using System.Runtime.InteropServices;
 
 using global::Avalonia;
 using global::Avalonia.Controls;

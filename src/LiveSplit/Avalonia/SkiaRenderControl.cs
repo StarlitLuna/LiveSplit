@@ -1,5 +1,3 @@
-using System;
-
 using global::Avalonia;
 using global::Avalonia.Controls;
 using global::Avalonia.Media;

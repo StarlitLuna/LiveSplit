@@ -8,6 +8,12 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <Nullable>disable</Nullable>
 
+    <!-- IDE0005 (remove unnecessary usings) only runs at build time when an XML doc file is
+         generated. Turn doc generation on, but suppress CS1591 so we don't drown in
+         missing-XML-comment warnings. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
     <!-- BinaryFormatter is disabled by default on .NET 8+; LiveSplit still uses it to (de)serialize
          Font/Image/ISegment blobs for .lss / .lsl round-trip. Opt back in at the app level; format
          migration is deferred. BinaryFormatter is removed entirely on .NET 9+, so this must be

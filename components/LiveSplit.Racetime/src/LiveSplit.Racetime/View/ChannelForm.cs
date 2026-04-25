@@ -12,8 +12,6 @@ using LiveSplit.Racetime.Model;
 
 using Microsoft.Web.WebView2.Core;
 
-using Ookii.Dialogs.WinForms;
-
 namespace LiveSplit.Racetime.View;
 
 public partial class ChannelForm : DarkForm

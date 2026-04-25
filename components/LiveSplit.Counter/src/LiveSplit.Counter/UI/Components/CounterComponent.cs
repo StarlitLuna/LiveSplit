@@ -1,12 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Linq;
 using System.Windows.Forms;
 
 using LiveSplit.Model;
-using LiveSplit.Model.Input;
 using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;

@@ -34,6 +34,12 @@ public class Run : IRun, INotifyPropertyChanged
     public Image GameIcon { get; set; }
 
     /// <summary>
+    /// Raw PNG/JPG bytes for <see cref="GameIcon"/>. Used by the Avalonia editor and the
+    /// Linux save/reload path; survives even when the System.Drawing.Image roundtrip fails.
+    /// </summary>
+    public byte[] GameIconPng { get; set; }
+
+    /// <summary>
     /// Gets or sets the name of the game the run is for.
     /// </summary>
     public string GameName
@@ -189,6 +195,7 @@ public class Run : IRun, INotifyPropertyChanged
         var newRun = new Run(this, Factory, Metadata)
         {
             GameIcon = GameIcon,
+            GameIconPng = GameIconPng?.ToArray(),
             GameName = GameName,
             CategoryName = CategoryName,
             Offset = Offset,

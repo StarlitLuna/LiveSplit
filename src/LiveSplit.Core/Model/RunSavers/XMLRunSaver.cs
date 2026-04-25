@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Xml;
 
@@ -20,6 +21,17 @@ public class XMLRunSaver : IRunSaver
         document.AppendChild(parent);
 
         CreateSetting(document, parent, "GameIcon", run.GameIcon);
+        // GameIconPng carries the raw image bytes alongside the legacy BinaryFormatter
+        // <GameIcon> element. The Avalonia editor reads/writes this on Linux because
+        // System.Drawing.Image roundtrips need libgdiplus; on Windows both elements are
+        // written so a Windows-saved file still round-trips through livesplit_core.
+        if (run.GameIconPng is { Length: > 0 })
+        {
+            XmlElement png = document.CreateElement("GameIconPng");
+            png.InnerText = Convert.ToBase64String(run.GameIconPng);
+            parent.AppendChild(png);
+        }
+
         CreateSetting(document, parent, "GameName", run.GameName);
         CreateSetting(document, parent, "CategoryName", run.CategoryName);
         CreateSetting(document, parent, "LayoutPath", run.LayoutPath);

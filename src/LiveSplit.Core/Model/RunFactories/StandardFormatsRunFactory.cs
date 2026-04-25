@@ -64,7 +64,7 @@ public class StandardFormatsRunFactory : IRunFactory
         };
     }
 
-    private static Image ParseImage(IntPtr imagePtr, ulong length)
+    private static byte[] CopyImageBytes(IntPtr imagePtr, ulong length)
     {
         if (length == 0)
         {
@@ -73,6 +73,49 @@ public class StandardFormatsRunFactory : IRunFactory
 
         byte[] buffer = new byte[length];
         Marshal.Copy(imagePtr, buffer, 0, buffer.Length);
+        return buffer;
+    }
+
+    private static byte[] TryReadGameIconPngFromStream(System.IO.Stream stream)
+    {
+        if (stream is null || !stream.CanSeek)
+        {
+            return null;
+        }
+
+        try
+        {
+            long pos = stream.Position;
+            stream.Position = 0;
+            try
+            {
+                var doc = new System.Xml.XmlDocument();
+                doc.Load(stream);
+                System.Xml.XmlNodeList matches = doc.GetElementsByTagName("GameIconPng");
+                if (matches.Count > 0 && !string.IsNullOrEmpty(matches[0].InnerText))
+                {
+                    return Convert.FromBase64String(matches[0].InnerText.Trim());
+                }
+            }
+            finally
+            {
+                stream.Position = pos;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
+
+        return null;
+    }
+
+    private static Image ParseImage(byte[] buffer)
+    {
+        if (buffer == null || buffer.Length == 0)
+        {
+            return null;
+        }
 
         // Do not dispose this memory stream, as the Image internally
         // borrows it for saving it out later on. This results in a
@@ -86,10 +129,10 @@ public class StandardFormatsRunFactory : IRunFactory
         }
         catch (Exception ex)
         {
-            // .NET Framework's Image doesn't support newer image formats
-            // such as AVIF, WEBP, and JPEG XL. These may be used in
-            // LiveSplit One. So we need to fall back to an empty image
-            // instead of erroring out.
+            // Linux runtime hits this path because System.Drawing.Image needs libgdiplus.
+            // Newer image formats (AVIF, WEBP, JPEG XL) emitted by LiveSplit One also fall
+            // through here on .NET 8's GDI+. Either way, the raw bytes are preserved on
+            // IRun.GameIconPng so the Avalonia editor can still display them via Skia.
             Log.Error(ex);
             stream.Dispose();
             return null;
@@ -143,7 +186,18 @@ public class StandardFormatsRunFactory : IRunFactory
             }
         }
 
-        run.GameIcon = ParseImage(lscRun.GameIconPtr(), lscRun.GameIconLen());
+        byte[] gameIconBytes = CopyImageBytes(lscRun.GameIconPtr(), lscRun.GameIconLen());
+        if (gameIconBytes == null || gameIconBytes.Length == 0)
+        {
+            // livesplit_core doesn't know about the <GameIconPng> sibling element this
+            // codebase writes from XMLRunSaver, so when the legacy <GameIcon>
+            // BinaryFormatter blob is missing or unparseable we re-scan the .lss XML
+            // ourselves. Lets Linux save→reload roundtrip the icon without libgdiplus.
+            gameIconBytes = TryReadGameIconPngFromStream(Stream);
+        }
+
+        run.GameIconPng = gameIconBytes;
+        run.GameIcon = ParseImage(gameIconBytes);
         run.GameName = lscRun.GameName();
         run.CategoryName = lscRun.CategoryName();
         run.Offset = ParseTimeSpan(lscRun.Offset());
@@ -192,7 +246,7 @@ public class StandardFormatsRunFactory : IRunFactory
             LiveSplitCore.SegmentRef segment = lscRun.Segment(i);
             var split = new Segment(segment.Name())
             {
-                Icon = ParseImage(segment.IconPtr(), segment.IconLen()),
+                Icon = ParseImage(CopyImageBytes(segment.IconPtr(), segment.IconLen())),
                 BestSegmentTime = ParseTime(segment.BestSegmentTime()),
             };
 

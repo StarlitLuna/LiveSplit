@@ -24,6 +24,7 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.2.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.0" />
     <PackageReference Include="Avalonia.Skia" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.0" />
   </ItemGroup>
 
   <!-- Copy Splits/Layout file-association icons next to the binary, and prune transitive

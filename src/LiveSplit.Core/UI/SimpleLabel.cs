@@ -4,12 +4,9 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Linq;
-using System.Windows.Forms;
 
 using LiveSplit.Options;
 using LiveSplit.UI.Drawing;
-
-using static System.Windows.Forms.TextRenderer;
 
 namespace LiveSplit.UI;
 

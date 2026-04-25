@@ -3,8 +3,6 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
-using LiveSplit.Options;
-
 namespace LiveSplit.Web;
 
 /// <summary>

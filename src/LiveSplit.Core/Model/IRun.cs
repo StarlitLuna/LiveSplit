@@ -13,6 +13,14 @@ namespace LiveSplit.Model;
 public interface IRun : IList<ISegment>, ICloneable, INotifyPropertyChanged
 {
     Image GameIcon { get; set; }
+    /// <summary>
+    /// Raw PNG/JPG bytes for the game icon. Populated by run factories alongside
+    /// <see cref="GameIcon"/>; the Avalonia editor uses these bytes directly so it never
+    /// has to roundtrip through System.Drawing.Image (which requires libgdiplus on Linux).
+    /// XMLRunSaver writes a sibling &lt;GameIconPng&gt; element so saved icons survive a
+    /// Linux-only save/reload cycle even when the BinaryFormatter &lt;GameIcon&gt; path fails.
+    /// </summary>
+    byte[] GameIconPng { get; set; }
     string GameName { get; set; }
     string CategoryName { get; set; }
     TimeSpan Offset { get; set; }

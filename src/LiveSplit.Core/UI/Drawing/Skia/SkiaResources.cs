@@ -177,45 +177,134 @@ internal sealed class SkiaGraphicsPath : IGraphicsPath
 
     public void Reset() => Path.Reset();
 
+    /// <summary>
+    /// Adds a single line of glyphs to the path, honoring <paramref name="layoutRect"/> for
+    /// horizontal + vertical alignment and <see cref="StringTrimming.EllipsisCharacter"/> on
+    /// overflow. Multi-line wrapping (the absence of <see cref="StringFormatFlags.NoWrap"/>)
+    /// is intentionally not implemented — the only caller is
+    /// <see cref="LiveSplit.UI.SimpleLabel"/>'s outline/shadow path, which always sets
+    /// <c>NoWrap</c>. A future caller that needs wrapping will need to extend this with an
+    /// <see cref="SkiaSharp.HarfBuzz"/>-based shaper.
+    /// </summary>
     public void AddString(string text, IFont font, RectangleF layoutRect, ITextFormat format)
     {
-        // TODO: honor layoutRect width/height + ITextFormat alignment the way GDI+'s
-        // GraphicsPath.AddString does. Currently lays out text as a single line starting at the
-        // rect's top-left, which is sufficient for SimpleLabel's shadow/outline rendering.
-        var skFont = (SkiaFont)font;
-        using SKTextBlob blob = SKTextBlob.Create(text, skFont.Font);
-        if (blob is null)
+        if (string.IsNullOrEmpty(text))
         {
             return;
         }
 
-        // Convert each glyph into a path and add to our path, positioned by the blob's layout.
-        // SkiaSharp exposes GetGlyphPath only on SKFont, so we synthesize positions with
-        // MeasureText pass.
+        var skFont = (SkiaFont)font;
+
         ushort[] glyphs = skFont.Font.GetGlyphs(text);
+        if (glyphs.Length == 0)
+        {
+            return;
+        }
+
         float[] widths = new float[glyphs.Length];
         skFont.Font.GetGlyphWidths(glyphs, widths, null);
 
-        // Skia glyph paths are in baseline-relative coordinates (y=0 == baseline). GDI+
-        // GraphicsPath.AddString places the layoutRect.Y at the top of the line box, so we
-        // shift the baseline down by -Ascent (Skia's Ascent is negative — measured up from
-        // baseline). Using CapHeight here, as the original port did, dropped lowercase
-        // ascenders out of the path and caused SimpleLabel's outlines/shadows to render
-        // visibly above the fill text.
-        float x = layoutRect.X;
-        float y = layoutRect.Y - skFont.Font.Metrics.Ascent;
-        for (int i = 0; i < glyphs.Length; i++)
+        // Trim with ellipsis if the run overflows and the format requests it. Walk left-to-right,
+        // keeping glyphs whose cumulative width plus the ellipsis still fits. Other trimming
+        // modes (Word, Character) are uncommon for SimpleLabel and fall through to clipping by
+        // the surrounding IDrawingContext clip, which is the natural Skia behavior.
+        float totalWidth = 0f;
+        for (int i = 0; i < widths.Length; i++)
         {
-            using SKPath glyphPath = skFont.Font.GetGlyphPath(glyphs[i]);
+            totalWidth += widths[i];
+        }
+
+        bool overflows = layoutRect.Width > 0f && totalWidth > layoutRect.Width;
+        ushort[] keptGlyphs = glyphs;
+        float[] keptWidths = widths;
+        float finalWidth = totalWidth;
+
+        if (overflows && format != null && format.Trimming == StringTrimming.EllipsisCharacter)
+        {
+            ushort[] ellipsisGlyphs = skFont.Font.GetGlyphs("…");
+            float[] ellipsisWidths = new float[ellipsisGlyphs.Length];
+            skFont.Font.GetGlyphWidths(ellipsisGlyphs, ellipsisWidths, null);
+            float ellipsisWidth = 0f;
+            foreach (float w in ellipsisWidths)
+            {
+                ellipsisWidth += w;
+            }
+
+            float budget = Math.Max(0f, layoutRect.Width - ellipsisWidth);
+            int keep = 0;
+            float acc = 0f;
+            while (keep < glyphs.Length && acc + widths[keep] <= budget)
+            {
+                acc += widths[keep];
+                keep++;
+            }
+
+            keptGlyphs = new ushort[keep + ellipsisGlyphs.Length];
+            keptWidths = new float[keep + ellipsisGlyphs.Length];
+            Array.Copy(glyphs, keptGlyphs, keep);
+            Array.Copy(widths, keptWidths, keep);
+            Array.Copy(ellipsisGlyphs, 0, keptGlyphs, keep, ellipsisGlyphs.Length);
+            Array.Copy(ellipsisWidths, 0, keptWidths, keep, ellipsisGlyphs.Length);
+            finalWidth = acc + ellipsisWidth;
+        }
+
+        // Horizontal alignment within layoutRect.
+        float x = layoutRect.X;
+        if (layoutRect.Width > 0f && format != null)
+        {
+            switch (format.Alignment)
+            {
+                case StringAlignment.Center:
+                    x = layoutRect.X + ((layoutRect.Width - finalWidth) / 2f);
+                    break;
+                case StringAlignment.Far:
+                    x = layoutRect.X + (layoutRect.Width - finalWidth);
+                    break;
+                case StringAlignment.Near:
+                default:
+                    x = layoutRect.X;
+                    break;
+            }
+        }
+
+        // Vertical alignment. Skia glyph paths are baseline-relative (y=0 == baseline);
+        // Ascent is negative (measured up from baseline), Descent is positive. The line-box
+        // height for a single line is (Descent - Ascent), and the baseline sits at lineTop +
+        // (-Ascent).
+        SKFontMetrics metrics = skFont.Font.Metrics;
+        float lineHeight = metrics.Descent - metrics.Ascent;
+        float lineTop = layoutRect.Y;
+        if (layoutRect.Height > 0f && format != null)
+        {
+            switch (format.LineAlignment)
+            {
+                case StringAlignment.Center:
+                    lineTop = layoutRect.Y + ((layoutRect.Height - lineHeight) / 2f);
+                    break;
+                case StringAlignment.Far:
+                    lineTop = layoutRect.Y + (layoutRect.Height - lineHeight);
+                    break;
+                case StringAlignment.Near:
+                default:
+                    lineTop = layoutRect.Y;
+                    break;
+            }
+        }
+
+        float y = lineTop - metrics.Ascent;
+
+        for (int i = 0; i < keptGlyphs.Length; i++)
+        {
+            using SKPath glyphPath = skFont.Font.GetGlyphPath(keptGlyphs[i]);
             if (glyphPath is null)
             {
-                x += widths[i];
+                x += keptWidths[i];
                 continue;
             }
 
             glyphPath.Transform(SKMatrix.CreateTranslation(x, y));
             Path.AddPath(glyphPath);
-            x += widths[i];
+            x += keptWidths[i];
         }
     }
 

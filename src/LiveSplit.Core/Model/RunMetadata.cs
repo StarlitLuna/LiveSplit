@@ -408,12 +408,11 @@ public sealed class CustomVariable
     public string Value { get; set; }
 
     /// <summary>
-    ///     Gets a value indicating whether the custom variable should be saved in the run permanently.
+    ///     Gets or sets a value indicating whether the custom variable should be saved in the run permanently.
+    ///     The setter exists so the editor can flip a variable back to non-permanent; the original
+    ///     historical contract (<see cref="AsPermanent"/> only) is preserved for legacy callers.
     /// </summary>
-    /// <value>
-    ///     <see langword="false"/> initially. Once set to <see langword="true"/>, will remain as such.
-    /// </value>
-    public bool IsPermanent { get; private set; }
+    public bool IsPermanent { get; set; }
 
     /// <summary>
     ///     Creates a new instance of the <see cref="CustomVariable"/> class

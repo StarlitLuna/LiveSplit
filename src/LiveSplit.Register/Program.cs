@@ -2,7 +2,6 @@
 using System.Diagnostics;
 
 using LiveSplit.Options;
-using LiveSplit.Register;
 
 namespace LiveSplit.Register;
 

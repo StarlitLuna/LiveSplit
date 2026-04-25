@@ -29,6 +29,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The Skia drawing-context backing types (SkiaFont/SkiaGraphicsPath/SkiaTextFormat) are
+         internal so callers go through IDrawingFactory; the test project pokes at them
+         directly to pin alignment/ellipsis behavior. -->
+    <InternalsVisibleTo Include="LiveSplit.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.2.0" />
     <PackageReference Include="Codaxy.Xlio" Version="1.0.0" />
     <PackageReference Include="IrcDotNet" Version="0.7.0" />

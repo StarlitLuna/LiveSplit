@@ -6,7 +6,6 @@ using System.Windows.Forms;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
-using LiveSplit.TimeFormatters;
 using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;

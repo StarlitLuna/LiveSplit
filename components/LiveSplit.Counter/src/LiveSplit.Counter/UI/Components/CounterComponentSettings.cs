@@ -4,7 +4,6 @@ using System.Windows.Forms;
 using System.Xml;
 
 using LiveSplit.Model.Input;
-using LiveSplit.Options;
 
 namespace LiveSplit.UI.Components;
 

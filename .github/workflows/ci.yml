@@ -16,6 +16,8 @@ jobs:
   build-linux:
     runs-on: ubuntu-22.04
     needs: []
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout LiveSplit
@@ -92,6 +94,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y --system --noninteractive flathub \
+            org.freedesktop.Platform//23.08 \
+            org.freedesktop.Sdk//23.08 \
+            org.freedesktop.Sdk.Extension.dotnet8//23.08 \
+            org.freedesktop.Sdk.Extension.rust-stable//23.08
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
@@ -99,3 +106,36 @@ jobs:
           bundle: livesplit.flatpak
           manifest-path: org.livesplit.LiveSplit.yml
           cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Compute release tag
+        id: tag
+        run: |
+          set -euo pipefail
+          git fetch --tags --quiet
+          date_tag="v$(date -u +%Y-%m-%d)"
+          if ! git rev-parse -q --verify "refs/tags/${date_tag}" >/dev/null; then
+            tag="${date_tag}"
+          else
+            n=1
+            while git rev-parse -q --verify "refs/tags/${date_tag}-${n}" >/dev/null; do
+              n=$((n+1))
+            done
+            tag="${date_tag}-${n}"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Selected release tag: ${tag}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.tag.outputs.tag }}"
+          commit="$(git rev-parse HEAD)"
+          gh release create "${tag}" \
+            --title "${tag}" \
+            --target "${commit}" \
+            --notes "Automated build of \`${{ inputs.branch }}\` at ${commit}." \
+            dist/livesplit-linux-x64.tar.gz \
+            dist/LiveSplit-*.AppImage \
+            livesplit.flatpak

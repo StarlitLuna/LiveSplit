@@ -55,30 +55,18 @@ public class CounterComponent : IComponent
 
     private void DrawGeneral(IDrawingContext ctx, LiveSplitState state, float width, float height, LayoutMode mode)
     {
-        Graphics g = ctx.AsGraphics();
-        // Set Background colour.
-        if (Settings.BackgroundColor.A > 0
-            || (Settings.BackgroundGradient != GradientType.Plain
-            && Settings.BackgroundColor2.A > 0))
-        {
-            var gradientBrush = new LinearGradientBrush(
-                        new PointF(0, 0),
-                        Settings.BackgroundGradient == GradientType.Horizontal
-                        ? new PointF(width, 0)
-                        : new PointF(0, height),
-                        Settings.BackgroundColor,
-                        Settings.BackgroundGradient == GradientType.Plain
-                        ? Settings.BackgroundColor
-                        : Settings.BackgroundColor2);
-
-            g.FillRectangle(gradientBrush, 0, 0, width, height);
-        }
+        BackgroundHelper.DrawBackground(ctx,
+            Settings.BackgroundColor, Settings.BackgroundColor2,
+            width, height, Settings.BackgroundGradient);
 
         // Set Font.
         CounterFont = Settings.OverrideCounterFont ? Settings.CounterFont : state.LayoutSettings.TextFont;
 
         // Calculate Height from Font.
-        float textHeight = g.MeasureString("A", CounterFont).Height;
+        using IFont counterIFont = DrawingApi.Factory.CreateFont(
+            CounterFont.FontFamily.Name, CounterFont.Size, CounterFont.Style, CounterFont.Unit);
+        ITextFormat measureFormat = DrawingApi.Factory.CreateTextFormat();
+        float textHeight = ctx.MeasureString("A", counterIFont, 9999, measureFormat).Height;
         VerticalHeight = 1.2f * textHeight;
         MinimumHeight = MinimumHeight;
 
@@ -86,7 +74,7 @@ public class CounterComponent : IComponent
         PaddingBottom = PaddingTop;
 
         // Assume most users won't count past four digits (will cause a layout resize in Horizontal Mode).
-        float fourCharWidth = g.MeasureString("1000", CounterFont).Width;
+        float fourCharWidth = ctx.MeasureString("1000", counterIFont, 9999, measureFormat).Width;
         HorizontalWidth = CounterNameLabel.X + CounterNameLabel.ActualWidth + (fourCharWidth > CounterValueLabel.ActualWidth ? fourCharWidth : CounterValueLabel.ActualWidth) + 5;
 
         // Set Counter Name Label
@@ -120,13 +108,11 @@ public class CounterComponent : IComponent
 
     public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         DrawGeneral(ctx, state, HorizontalWidth, height, LayoutMode.Horizontal);
     }
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width, Region clipRegion)
     {
-        Graphics g = ctx.AsGraphics();
         DrawGeneral(ctx, state, width, VerticalHeight, LayoutMode.Vertical);
     }
 

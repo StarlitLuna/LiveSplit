@@ -90,13 +90,10 @@ jobs:
           ref: ${{ inputs.branch }}
           submodules: recursive
 
-      # Cache the freedesktop runtimes (~3-4 GB worth of Platform/Sdk + the dotnet8
-      # and rust-stable extensions) so we don't redownload them every run. Per-user
-      # install path is writable without sudo, which is what actions/cache needs.
-      - name: Cache flatpak runtimes
+      - name: Cache flatpak system runtimes
         uses: actions/cache@v4
         with:
-          path: ~/.local/share/flatpak
+          path: ~/.local/share/flatpak-system
           key: flatpak-runtimes-${{ hashFiles('org.livesplit.LiveSplit.yml') }}
           restore-keys: flatpak-runtimes-
 
@@ -105,9 +102,13 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
-          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          # Idempotent: a warm cache makes this a no-op.
-          flatpak install --user -y --noninteractive flathub \
+          # Bridge /var/lib/flatpak to the cached user-owned path (see comment above).
+          mkdir -p "$HOME/.local/share/flatpak-system"
+          sudo rm -rf /var/lib/flatpak
+          sudo ln -s "$HOME/.local/share/flatpak-system" /var/lib/flatpak
+          # Idempotent: a warm cache makes this near-instant.
+          flatpak remote-add --system --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --system -y --noninteractive flathub \
             org.freedesktop.Platform//24.08 \
             org.freedesktop.Sdk//24.08 \
             org.freedesktop.Sdk.Extension.dotnet8//24.08 \

@@ -48,7 +48,10 @@ modules:
       # Stage into the Flatpak prefix.
       - mkdir -p /app/bin
       - cp -r publish/. /app/bin/
-      - install -Dm644 res/Icon.png /app/share/icons/hicolor/256x256/apps/org.livesplit.LiveSplit.png
+      # Use the SVG, not the PNG: flatpak build-export rejects PNG icons larger than
+      # 512x512, and res/Icon.png is 1000x950. The SVG goes into hicolor/scalable/apps/
+      # which is exempt from the size cap and renders crisp at any UI scale.
+      - install -Dm644 res/Icon.svg /app/share/icons/hicolor/scalable/apps/org.livesplit.LiveSplit.svg
       - install -Dm644 org.livesplit.LiveSplit.desktop /app/share/applications/org.livesplit.LiveSplit.desktop
     sources:
       - type: dir

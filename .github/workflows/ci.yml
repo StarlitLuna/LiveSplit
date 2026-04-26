@@ -15,9 +15,8 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-22.04
-    needs: []
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Checkout LiveSplit
@@ -36,26 +35,19 @@ jobs:
         with:
           targets: x86_64-unknown-linux-gnu
 
-      - name: Build liblivesplit_core.so (linux-x64)
-        run: bash scripts/build-native-linux.sh linux-x64
-
-      - name: Build LiveSplit (linux-x64)
-        run: >
-          dotnet build
-          -v m
-          -c Release
-          ./LiveSplit.sln
-
-      - name: Smoke-test LiveSplit binary starts
-        run: |
-          # Confirm the binary loads enough to print --version without X server
-          timeout 10s dotnet ./bin/release/LiveSplit.dll --version || echo "exit=$?"
-
-      - name: Upload linux-x64 build as an artifact
-        uses: actions/upload-artifact@v4
+      - name: Cache Cargo registry + Rust target dirs
+        uses: Swatinem/rust-cache@v2
         with:
-          name: LiveSplit_Linux_x64
-          path: ./bin/release
+          workspaces: |
+            lib/livesplit-core
+            components/LiveSplit.AutoSplittingRuntime/src/asr-capi
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Build.props', '**/Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
 
       - name: Install linuxdeploy (AppImage tooling)
         run: |
@@ -76,13 +68,46 @@ jobs:
       - name: Package tarball + AppImage
         run: bash scripts/package-linux.sh --appimage
 
-      - name: Install flatpak-builder
+      - name: Stash dist for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-dist
+          path: |
+            dist/livesplit-linux-x64.tar.gz
+            dist/LiveSplit.AppImage
+          retention-days: 1
+          if-no-files-found: error
+
+  build-flatpak:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout LiveSplit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          submodules: recursive
+
+      # Cache the freedesktop runtimes (~3-4 GB worth of Platform/Sdk + the dotnet8
+      # and rust-stable extensions) so we don't redownload them every run. Per-user
+      # install path is writable without sudo, which is what actions/cache needs.
+      - name: Cache flatpak runtimes
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/flatpak
+          key: flatpak-runtimes-${{ hashFiles('org.livesplit.LiveSplit.yml') }}
+          restore-keys: flatpak-runtimes-
+
+      - name: Install flatpak-builder + runtimes
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
-          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak install -y --system --noninteractive flathub \
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          # Idempotent: a warm cache makes this a no-op.
+          flatpak install --user -y --noninteractive flathub \
             org.freedesktop.Platform//24.08 \
             org.freedesktop.Sdk//24.08 \
             org.freedesktop.Sdk.Extension.dotnet8//24.08 \
@@ -93,7 +118,42 @@ jobs:
         with:
           bundle: LiveSplit.flatpak
           manifest-path: org.livesplit.LiveSplit.yml
-          cache-key: flatpak-builder-${{ github.sha }}
+          # Content-addressed cache key — hits whenever Cargo.lock files and the
+          # manifest are unchanged, so the inner Rust + dotnet builds reuse state.
+          cache-key: flatpak-builder-${{ hashFiles('**/Cargo.lock', 'org.livesplit.LiveSplit.yml') }}
+
+      - name: Stash bundle for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-flatpak
+          path: LiveSplit.flatpak
+          retention-days: 1
+          if-no-files-found: error
+
+  release:
+    needs: [build-linux, build-flatpak]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout LiveSplit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-dist
+          path: dist
+
+      - name: Download Flatpak bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-flatpak
+          path: .
 
       - name: Compute release tag
         id: tag

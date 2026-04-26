@@ -4,7 +4,6 @@ using System.Dynamic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -17,12 +16,6 @@ namespace LiveSplit.Web;
 
 public static class JSON
 {
-    public static dynamic FromResponse(WebResponse response)
-    {
-        using Stream stream = response.GetResponseStream();
-        return FromStream(stream);
-    }
-
     public static dynamic FromStream(Stream stream)
     {
         var reader = new StreamReader(stream);
@@ -121,48 +114,6 @@ public static class JSON
         return null;
     }
 
-    public static dynamic FromUri(Uri uri)
-    {
-        var request = WebRequest.Create(uri);
-
-        using WebResponse response = request.GetResponse();
-        return FromResponse(response);
-    }
-
-    public static string Escape(string value)
-    {
-        return HttpUtility.JavaScriptStringEncode(value);
-    }
-
-    public static dynamic FromUriPost(Uri uri, params string[] postValues)
-    {
-        var request = (HttpWebRequest)WebRequest.Create(uri);
-        request.Method = "POST";
-        request.ContentType = "application/json";
-
-        var parameters = new StringBuilder();
-
-        parameters.Append("{");
-
-        for (int i = 0; i < postValues.Length; i += 2)
-        {
-            parameters.AppendFormat("\"{0}\": \"{1}\", ",
-                Escape(postValues[i]),
-                Escape(postValues[i + 1]));
-        }
-
-        parameters.Length -= 2;
-
-        parameters.Append("}");
-
-        using (var writer = new StreamWriter(request.GetRequestStream()))
-        {
-            writer.Write(parameters.ToString());
-        }
-
-        using WebResponse response = request.GetResponse();
-        return FromResponse(response);
-    }
 }
 
 public sealed class DynamicJsonObject : DynamicObject

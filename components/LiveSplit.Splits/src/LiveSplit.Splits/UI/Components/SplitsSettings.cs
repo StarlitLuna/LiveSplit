@@ -77,8 +77,6 @@ public class SplitsSettings
         set => CurrentSplitGradient = (GradientType)Enum.Parse(typeof(GradientType), value);
     }
 
-    public event EventHandler SplitLayoutChanged;
-
     public LayoutMode Mode { get; set; }
 
     public IList<ColumnSettings> ColumnsList { get; set; }

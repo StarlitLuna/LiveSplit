@@ -393,7 +393,7 @@ public class CollectorComponent : LogicComponent
         return Settings.GetSettings(document);
     }
 
-    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
+    public override Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         Settings.Mode = mode;
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Component");

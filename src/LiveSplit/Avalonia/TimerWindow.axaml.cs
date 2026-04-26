@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows.Input;
 
@@ -200,6 +200,7 @@ public sealed partial class TimerWindow : Window
         }
     }
 
+#pragma warning disable CS0618 // Avalonia 11 marks FileDialogFilter / OpenFileDialog obsolete in favor of StorageProvider; migration is tracked separately.
     private async Task OpenSplits()
     {
         string path = await PickFile("Open Splits", new[]
@@ -270,14 +271,16 @@ public sealed partial class TimerWindow : Window
         string[] paths = await picker.ShowAsync(this);
         return paths is { Length: > 0 } ? paths[0] : null;
     }
+#pragma warning restore CS0618
+
+    private static readonly HttpClient HttpClient = new();
 
     private async Task<string> DownloadToTempFile(string url, string fileName)
     {
         try
         {
-            using var client = new WebClient();
             string tempPath = Path.Combine(Path.GetTempPath(), fileName);
-            byte[] data = await Task.Run(() => client.DownloadData(url));
+            byte[] data = await HttpClient.GetByteArrayAsync(url);
             await File.WriteAllBytesAsync(tempPath, data);
             return tempPath;
         }
@@ -831,6 +834,6 @@ public sealed partial class TimerWindow : Window
             }
         }
 
-        public event EventHandler CanExecuteChanged;
+        public event EventHandler CanExecuteChanged { add { } remove { } }
     }
 }

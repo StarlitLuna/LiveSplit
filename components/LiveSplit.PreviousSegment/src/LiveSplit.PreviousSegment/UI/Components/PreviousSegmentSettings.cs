@@ -1,10 +1,8 @@
 using System;
 using System.Drawing;
-using System.Linq;
 using System.Xml;
 
 using LiveSplit.Model;
-using LiveSplit.Model.Comparisons;
 using LiveSplit.TimeFormatters;
 
 namespace LiveSplit.UI.Components;

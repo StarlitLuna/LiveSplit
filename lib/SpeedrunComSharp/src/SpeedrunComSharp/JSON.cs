@@ -4,22 +4,19 @@ using System.Dynamic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Web;
 
 namespace SpeedrunComSharp;
 
 internal static class JSON
 {
-    public static dynamic FromResponse(WebResponse response)
-    {
-        using Stream stream = response.GetResponseStream();
-        return FromStream(stream);
-    }
+    private static readonly HttpClient HttpClient = new();
 
     public static dynamic FromStream(Stream stream)
     {
@@ -110,16 +107,8 @@ internal static class JSON
 
     public static dynamic FromUri(Uri uri, string userAgent, string accessToken, TimeSpan timeout)
     {
-        var request = (HttpWebRequest)WebRequest.Create(uri);
-        request.Timeout = (int)timeout.TotalMilliseconds;
-        request.UserAgent = userAgent;
-        if (!string.IsNullOrEmpty(accessToken))
-        {
-            request.Headers.Add("X-API-Key", accessToken.ToString());
-        }
-
-        WebResponse response = request.GetResponse();
-        return FromResponse(response);
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        return Send(request, userAgent, accessToken, timeout);
     }
 
     public static string Escape(string value)
@@ -129,25 +118,59 @@ internal static class JSON
 
     public static dynamic FromUriPost(Uri uri, string userAgent, string accessToken, TimeSpan timeout, string postBody)
     {
-        var request = (HttpWebRequest)WebRequest.Create(uri);
-        request.Timeout = (int)timeout.TotalMilliseconds;
-        request.Method = "POST";
-        request.UserAgent = userAgent;
+        using var request = new HttpRequestMessage(HttpMethod.Post, uri)
+        {
+            Content = new StringContent(postBody, Encoding.UTF8, "application/json"),
+        };
+        return Send(request, userAgent, accessToken, timeout);
+    }
+
+    private static dynamic Send(HttpRequestMessage request, string userAgent, string accessToken, TimeSpan timeout)
+    {
+        request.Headers.UserAgent.Clear();
+        request.Headers.UserAgent.ParseAdd(userAgent);
         if (!string.IsNullOrEmpty(accessToken))
         {
-            request.Headers.Add("X-API-Key", accessToken.ToString());
+            request.Headers.Add("X-API-Key", accessToken);
         }
 
-        request.ContentType = "application/json";
+        using var cts = new CancellationTokenSource(timeout);
+        using HttpResponseMessage response = HttpClient.Send(request, HttpCompletionOption.ResponseContentRead, cts.Token);
 
-        using (var writer = new StreamWriter(request.GetRequestStream()))
+        if (!response.IsSuccessStatusCode)
         {
-            writer.Write(postBody);
+            using Stream errorBody = response.Content.ReadAsStream();
+            throw ParseException(errorBody, response.StatusCode);
         }
 
-        WebResponse response = request.GetResponse();
+        using Stream stream = response.Content.ReadAsStream();
+        return FromStream(stream);
+    }
 
-        return FromResponse(response);
+    private static Exception ParseException(Stream stream, System.Net.HttpStatusCode status)
+    {
+        try
+        {
+            dynamic json = FromStream(stream);
+            var properties = json?.Properties as IDictionary<string, dynamic>;
+            if (properties != null && properties.ContainsKey("errors"))
+            {
+                var errors = json.errors as IList<dynamic>;
+                return new APIException(json.message as string, errors.Select(x => x as string));
+            }
+
+            if (properties != null && properties.ContainsKey("message"))
+            {
+                return new APIException(json.message as string);
+            }
+        }
+        catch
+        {
+            // Body wasn't valid JSON or didn't match the expected error shape; fall through to a
+            // generic HttpRequestException so the caller still sees the HTTP failure.
+        }
+
+        return new HttpRequestException($"HTTP {(int)status} {status}");
     }
 }
 

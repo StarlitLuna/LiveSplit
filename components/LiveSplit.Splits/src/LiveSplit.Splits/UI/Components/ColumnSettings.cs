@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using LiveSplit.Localization;
 using LiveSplit.Model;
-using LiveSplit.Model.Comparisons;
 
 namespace LiveSplit.UI.Components;
 
@@ -26,10 +24,6 @@ public class ColumnSettings
 
     protected int ColumnIndex => ColumnsList.IndexOf(this);
     protected int TotalColumns => ColumnsList.Count;
-
-    public event EventHandler ColumnRemoved;
-    public event EventHandler MovedUp;
-    public event EventHandler MovedDown;
 
     public ColumnSettings(LiveSplitState state, string columnName, IList<ColumnSettings> columnsList)
     {

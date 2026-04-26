@@ -259,7 +259,7 @@ public static class ExtensionMethods
         if (x64)
         {
             instruction.AddRange(new byte[] { 0x48, 0xB8 }); // mov rax immediate
-            instruction.AddRange(BitConverter.GetBytes((long)dest));
+            instruction.AddRange(BitConverter.GetBytes(dest));
             instruction.AddRange(new byte[] { 0xFF, call ? (byte)0xD0 : (byte)0xE0 }); // jmp/call rax
         }
         else

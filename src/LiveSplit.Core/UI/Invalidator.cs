@@ -5,7 +5,7 @@ namespace LiveSplit.UI;
 
 /// <summary>
 /// Cross-platform replacement for the WinForms-bound invalidator that used to wrap a
-/// <see cref="System.Windows.Forms.Form"/> and call <c>Form.Invalidate(rect)</c>. Coordinates
+/// <c>System.Windows.Forms.Form</c> and call <c>Form.Invalidate(rect)</c>. Coordinates
 /// are tracked in <see cref="Matrix3x2"/> (cross-platform) and dirty rectangles are forwarded
 /// to a host-supplied callback so the Avalonia surface can decide between coarse
 /// <c>InvalidateVisual()</c> and granular invalidation.

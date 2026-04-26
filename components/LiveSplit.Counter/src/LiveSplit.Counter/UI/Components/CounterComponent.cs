@@ -17,8 +17,6 @@ public class CounterComponent : IComponent
         CounterNameLabel = new SimpleLabel();
         Counter = new Counter();
         this.state = state;
-        Settings.CounterReinitialiseRequired += Settings_CounterReinitialiseRequired;
-        Settings.IncrementUpdateRequired += Settings_IncrementUpdateRequired;
     }
 
     public ICounter Counter { get; set; }
@@ -166,18 +164,4 @@ public class CounterComponent : IComponent
     {
         return Settings.GetSettingsHashCode();
     }
-
-    /// <summary>
-    /// Handles the CounterReinitialiseRequired event of the Settings control.
-    /// </summary>
-    private void Settings_CounterReinitialiseRequired(object sender, EventArgs e)
-    {
-        Counter = new Counter(Settings.InitialValue, Settings.Increment);
-    }
-
-    private void Settings_IncrementUpdateRequired(object sender, EventArgs e)
-    {
-        Counter.SetIncrement(Settings.Increment);
-    }
-
 }

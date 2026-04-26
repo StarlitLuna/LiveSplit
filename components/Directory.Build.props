@@ -7,6 +7,13 @@
     <LsLibPath>$(RootPath)\lib</LsLibPath>
 
     <OutputPath>$(BuildPath)\Components</OutputPath>
+
+    <!-- CA1416: System.Drawing.Common is marked Windows-only on .NET 7+, but components only
+         consume cross-platform-safe enum types (StringAlignment, FontStyle, LineCap, ...) and
+         primitive structs (Color, RectangleF, ...). The SolidBrush/StringFormat instances stored
+         on labels are converted to Skia equivalents at draw time via SimpleLabel.Wrap*; the
+         Windows-only GDI+ surface is never reached. Mirrors the suppression in LiveSplit.Core. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
 </Project>

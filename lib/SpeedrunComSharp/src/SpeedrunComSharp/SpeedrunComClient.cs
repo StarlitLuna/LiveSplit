@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
+using System.Threading;
+#if DEBUG
+using System.Diagnostics;
+#endif
 
 namespace SpeedrunComSharp;
 
@@ -140,14 +142,18 @@ public class SpeedrunComClient
         return GetAPIUri(string.Format("profile{0}", subUri));
     }
 
+    private static readonly HttpClient HttpClient = new();
+
     public ElementDescription GetElementDescriptionFromSiteUri(string siteUri)
     {
         try
         {
-            var request = WebRequest.Create(siteUri);
-            request.Timeout = (int)Timeout.TotalMilliseconds;
-            WebResponse response = request.GetResponse();
-            string linksString = response.Headers["Link"];
+            using var request = new HttpRequestMessage(HttpMethod.Get, siteUri);
+            using var cts = new CancellationTokenSource(Timeout);
+            using HttpResponseMessage response = HttpClient.Send(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            string linksString = response.Headers.TryGetValues("Link", out IEnumerable<string> values)
+                ? string.Join(",", values)
+                : null;
             ReadOnlyCollection<HttpWebLink> links = HttpWebLink.ParseLinks(linksString);
             HttpWebLink link = links.FirstOrDefault(x => x.Relation == APIHttpHeaderRelation);
 
@@ -187,43 +193,9 @@ public class SpeedrunComClient
         return enumerable.OfType<T>().ToList().AsReadOnly();
     }
 
-    internal APIException ParseException(Stream stream)
-    {
-        dynamic json = JSON.FromStream(stream);
-        var properties = json.Properties as IDictionary<string, dynamic>;
-        if (properties.ContainsKey("errors"))
-        {
-            var errors = json.errors as IList<dynamic>;
-            return new APIException(json.message as string, errors.Select(x => x as string));
-        }
-        else
-        {
-            return new APIException(json.message as string);
-        }
-    }
-
     internal dynamic DoPostRequest(Uri uri, string postBody)
     {
-        try
-        {
-            return JSON.FromUriPost(uri, UserAgent, AccessToken, Timeout, postBody);
-        }
-        catch (WebException ex)
-        {
-            try
-            {
-                using Stream stream = ex.Response.GetResponseStream();
-                throw ParseException(stream);
-            }
-            catch (APIException ex2)
-            {
-                throw ex2;
-            }
-            catch
-            {
-                throw ex;
-            }
-        }
+        return JSON.FromUriPost(uri, UserAgent, AccessToken, Timeout, postBody);
     }
 
     internal dynamic DoRequest(Uri uri)
@@ -245,26 +217,7 @@ public class SpeedrunComClient
 #if DEBUG
                 Debug.WriteLine($"Uncached API Call: {uri.AbsoluteUri}");
 #endif
-                try
-                {
-                    result = JSON.FromUri(uri, UserAgent, AccessToken, Timeout);
-                }
-                catch (WebException ex)
-                {
-                    try
-                    {
-                        using Stream stream = ex.Response.GetResponseStream();
-                        throw ParseException(stream);
-                    }
-                    catch (APIException ex2)
-                    {
-                        throw ex2;
-                    }
-                    catch
-                    {
-                        throw ex;
-                    }
-                }
+                result = JSON.FromUri(uri, UserAgent, AccessToken, Timeout);
             }
 
             Cache.Add(uri, result);

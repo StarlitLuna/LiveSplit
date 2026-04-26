@@ -208,7 +208,7 @@ public class StandardFormatsRunFactory : IRunFactory
             Microsoft.Win32.SafeHandles.SafeFileHandle handle = (Stream as FileStream).SafeFileHandle;
             if (!handle.IsInvalid)
             {
-                result = LiveSplitCore.Run.ParseFileHandle((long)handle.DangerousGetHandle(), FilePath);
+                result = LiveSplitCore.Run.ParseFileHandle(handle.DangerousGetHandle(), FilePath);
             }
         }
 

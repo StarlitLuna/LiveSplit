@@ -186,8 +186,8 @@ internal sealed class SkiaGraphicsPath : IGraphicsPath
     /// overflow. Multi-line wrapping (the absence of <see cref="StringFormatFlags.NoWrap"/>)
     /// is intentionally not implemented — the only caller is
     /// <see cref="LiveSplit.UI.SimpleLabel"/>'s outline/shadow path, which always sets
-    /// <c>NoWrap</c>. A future caller that needs wrapping will need to extend this with an
-    /// <see cref="SkiaSharp.HarfBuzz"/>-based shaper.
+    /// <c>NoWrap</c>. A future caller that needs wrapping will need to extend this with a
+    /// <c>SkiaSharp.HarfBuzz</c>-based shaper.
     /// </summary>
     public void AddString(string text, IFont font, RectangleF layoutRect, ITextFormat format)
     {

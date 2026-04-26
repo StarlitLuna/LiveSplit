@@ -1,7 +1,7 @@
 namespace LiveSplit.Model.Input;
 
 /// <summary>
-/// Mirror of <see cref="System.Windows.Forms.Keys"/> by name and integer value. Exists so the
+/// Mirror of <c>System.Windows.Forms.Keys</c> by name and integer value. Exists so the
 /// hotkey-storage path doesn't depend on WinForms (which is Windows-only on .NET 8). Names match
 /// WinForms one-for-one so existing <c>.lss</c> files — which serialize the key as
 /// <c>key.ToString()</c> — round-trip unchanged.

@@ -62,9 +62,6 @@ public class CounterComponentSettings
     public KeyOrButton DecrementKey { get; set; }
     public KeyOrButton ResetKey { get; set; }
 
-    public event EventHandler CounterReinitialiseRequired;
-    public event EventHandler IncrementUpdateRequired;
-
     public void SetSettings(XmlNode node)
     {
         var element = (XmlElement)node;

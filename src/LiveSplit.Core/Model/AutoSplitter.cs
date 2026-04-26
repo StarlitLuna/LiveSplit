@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
 
 using LiveSplit.Options;
 using LiveSplit.UI.Components;
@@ -67,10 +67,10 @@ public class AutoSplitter : ICloneable
         }
     }
 
+    private static readonly HttpClient HttpClient = new();
+
     private void DownloadFiles()
     {
-        var client = new WebClient();
-
         foreach (string url in URLs)
         {
             string fileName = url[(url.LastIndexOf('/') + 1)..];
@@ -80,8 +80,12 @@ public class AutoSplitter : ICloneable
 
             try
             {
-                // Download to temp file so the original file is kept if it fails downloading
-                client.DownloadFile(new Uri(url), tempLocalPath);
+                using (Stream source = HttpClient.GetStreamAsync(url).GetAwaiter().GetResult())
+                using (var dest = File.Create(tempLocalPath))
+                {
+                    source.CopyTo(dest);
+                }
+
                 File.Copy(tempLocalPath, localPath, true);
 
                 if (url != URLs.First() && localPath.EndsWith(".dll"))
@@ -93,20 +97,18 @@ public class AutoSplitter : ICloneable
                     }
                 }
             }
-            catch (WebException)
+            catch (HttpRequestException)
             {
                 Log.Error("Error downloading file from " + url);
             }
             catch (Exception ex)
             {
-                // Catch errors of File.Copy() if necessary
                 Log.Error(ex);
             }
             finally
             {
                 try
                 {
-                    // This is not required to run the AutoSplitter, but should still try to clean up
                     File.Delete(tempLocalPath);
                 }
                 catch (Exception)

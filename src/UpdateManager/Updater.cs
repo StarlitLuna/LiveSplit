@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
 using System.Xml;
 
 namespace UpdateManager;
@@ -159,6 +159,8 @@ public static class Updater
 
     #region Static Methods
 
+    private static readonly HttpClient HttpClient = new();
+
     private static void DownloadFile(string url, string path)
     {
         string dir = Path.GetDirectoryName(Path.Combine(Directory.GetCurrentDirectory(), path));
@@ -167,7 +169,9 @@ public static class Updater
             Directory.CreateDirectory(dir);
         }
 
-        new WebClient().DownloadFile(url, path);
+        using Stream source = HttpClient.GetStreamAsync(url).GetAwaiter().GetResult();
+        using var dest = File.Create(path);
+        source.CopyTo(dest);
     }
 
     public static void UpdateAll(IEnumerable<IUpdateable> updateables, string updateManagerDownloadURL, string updateManagerConfigDownloadUrl)

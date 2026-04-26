@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Xml;
 
@@ -23,8 +23,10 @@ public class AutoSplitterXML
         // for testing a specific XML.
         if (!File.Exists(xmlPath))
         {
-            using var client = new WebClient();
-            client.DownloadFile(AutoSplitterFactory.AutoSplittersXmlUrl, xmlPath);
+            using var client = new HttpClient();
+            using Stream source = client.GetStreamAsync(AutoSplitterFactory.AutoSplittersXmlUrl).GetAwaiter().GetResult();
+            using var dest = File.Create(xmlPath);
+            source.CopyTo(dest);
         }
 
         Assert.True(File.Exists(xmlPath), "The Auto Splitters XML is missing");

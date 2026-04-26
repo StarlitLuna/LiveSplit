@@ -12,7 +12,7 @@ namespace LiveSplit.UI;
 /// Generates a soft drop-shadow image from an icon. The implementation reads/writes raw PNG
 /// bytes via SkiaSharp so it works on every backing (no System.Drawing.Bitmap dependency,
 /// no libgdiplus on Linux). The result is loaded back through <see cref="DrawingApi.Factory"/>
-/// so callers can draw it via <see cref="IDrawingContext.DrawImage(IImage, RectangleF)"/>.
+/// so callers can draw it via <c>IDrawingContext.DrawImage</c>.
 /// </summary>
 public static class IconShadow
 {
@@ -41,10 +41,10 @@ public static class IconShadow
         }
 
         // Downsample to a fixed size so the kernel produces a consistent shadow regardless of
-        // the source icon resolution. Uses High quality Lanczos-style resampling.
+        // the source icon resolution. Mitchell cubic resampling matches the prior High filter.
         var scaledInfo = new SKImageInfo(ScaledSize, ScaledSize, SKColorType.Bgra8888, SKAlphaType.Unpremul);
         using var scaled = new SKBitmap(scaledInfo);
-        source.ScalePixels(scaled, SKFilterQuality.High);
+        source.ScalePixels(scaled, new SKSamplingOptions(SKCubicResampler.Mitchell));
 
         byte[] sourceAlpha = ExtractAlpha(scaled, ScaledSize, ScaledSize);
 

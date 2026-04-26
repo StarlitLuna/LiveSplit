@@ -199,7 +199,7 @@ public class SettingsMapRef
             return 0;
         }
 
-        return (ulong)ASRNative.SettingsMap_len(ptr);
+        return ASRNative.SettingsMap_len(ptr);
     }
     public string GetKey(ulong index)
     {
@@ -303,7 +303,7 @@ public class SettingsListRef
             return 0;
         }
 
-        return (ulong)ASRNative.SettingsList_len(ptr);
+        return ASRNative.SettingsList_len(ptr);
     }
     public SettingValueRef Get(ulong index)
     {
@@ -553,7 +553,7 @@ public class WidgetsRef
             return 0;
         }
 
-        return (ulong)ASRNative.Widgets_len(ptr);
+        return ASRNative.Widgets_len(ptr);
     }
 
     public string GetKey(ulong index)
@@ -641,7 +641,7 @@ public class WidgetsRef
             return 0;
         }
 
-        return (ulong)ASRNative.Widgets_get_choice_current_index(ptr, (UIntPtr)index, settingsMap.ptr);
+        return ASRNative.Widgets_get_choice_current_index(ptr, (UIntPtr)index, settingsMap.ptr);
     }
 
     public ulong GetChoiceOptionsLength(ulong index)
@@ -651,7 +651,7 @@ public class WidgetsRef
             return 0;
         }
 
-        return (ulong)ASRNative.Widgets_get_choice_options_len(ptr, (UIntPtr)index);
+        return ASRNative.Widgets_get_choice_options_len(ptr, (UIntPtr)index);
     }
 
     public string GetChoiceOptionKey(ulong index, ulong optionIndex)
@@ -852,7 +852,7 @@ public class ASRString : SafeHandle
 {
     private bool needToFree;
 
-    public ASRString() : base((IntPtr)0, false) { }
+    public ASRString() : base(IntPtr.Zero, false) { }
 
     public override bool IsInvalid => false;
 

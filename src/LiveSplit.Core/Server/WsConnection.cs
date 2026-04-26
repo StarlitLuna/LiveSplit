@@ -4,16 +4,11 @@ namespace LiveSplit.Server;
 
 internal class WsConnection : WebSocketBehavior, IConnection
 {
-    private readonly MessageEventHandler _eventHandler;
-
-    internal WsConnection(MessageEventHandler eventHandler) : base()
-    {
-        _eventHandler = eventHandler;
-    }
+    internal MessageEventHandler EventHandler { get; set; }
 
     protected override void OnMessage(WebSocketSharp.MessageEventArgs e)
     {
-        _eventHandler.Invoke(this, new MessageEventArgs(this, e.Data));
+        EventHandler?.Invoke(this, new MessageEventArgs(this, e.Data));
     }
 
     public void SendMessage(string message)

@@ -59,7 +59,7 @@ public class CommandServer
     {
         StopWs();
         WsServer = new WebSocketServer(State.Settings.ServerPort);
-        WsServer.AddWebSocketService("/livesplit", () => new WsConnection(connection_MessageReceived));
+        WsServer.AddWebSocketService<WsConnection>("/livesplit", ws => ws.EventHandler = connection_MessageReceived);
         WsServer.Start();
         ServerState = ServerStateType.Websocket;
     }

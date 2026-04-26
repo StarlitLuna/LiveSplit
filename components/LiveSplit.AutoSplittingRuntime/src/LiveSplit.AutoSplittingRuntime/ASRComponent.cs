@@ -55,7 +55,7 @@ public class ASRComponent : LogicComponent
         return settings.GetSettings(document);
     }
 
-    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
+    public override Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(settings, "Component");
     }

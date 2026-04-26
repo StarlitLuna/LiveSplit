@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using LiveSplit.Model;
 using LiveSplit.TimeFormatters;
 using LiveSplit.UI.Drawing;

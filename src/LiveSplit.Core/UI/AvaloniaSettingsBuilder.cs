@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Threading.Tasks;
 
 using global::Avalonia;
 using global::Avalonia.Controls;
@@ -60,7 +59,7 @@ public static class AvaloniaSettingsBuilder
             stack.Children.Add(new TextBlock
             {
                 Text = "(no settings)",
-                Foreground = global::Avalonia.Media.Brushes.Gray as IBrush,
+                Foreground = global::Avalonia.Media.Brushes.Gray,
             });
             return new ScrollViewer { Content = stack };
         }

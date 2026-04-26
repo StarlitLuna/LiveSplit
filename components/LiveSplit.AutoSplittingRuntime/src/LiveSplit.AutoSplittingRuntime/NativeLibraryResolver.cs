@@ -15,11 +15,13 @@ namespace LiveSplit.AutoSplittingRuntime;
 /// </summary>
 internal static class NativeLibraryResolver
 {
+#pragma warning disable CA2255 // Resolver must register before any [DllImport("asr_capi")] is bound; that's exactly what ModuleInitializer is for here.
     [ModuleInitializer]
     internal static void Register()
     {
         NativeLibrary.SetDllImportResolver(typeof(NativeLibraryResolver).Assembly, Resolve);
     }
+#pragma warning restore CA2255
 
     private static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {

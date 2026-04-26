@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using LiveSplit.Localization;
 using LiveSplit.Model;
 using LiveSplit.UI.Drawing;

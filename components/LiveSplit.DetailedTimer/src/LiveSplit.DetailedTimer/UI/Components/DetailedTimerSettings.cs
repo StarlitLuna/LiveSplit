@@ -1,11 +1,9 @@
 using System;
 using System.Drawing;
-using System.Linq;
 using System.Xml;
 
 using LiveSplit.Localization;
 using LiveSplit.Model;
-using LiveSplit.Model.Comparisons;
 using LiveSplit.TimeFormatters;
 
 namespace LiveSplit.UI.Components;
@@ -14,8 +12,8 @@ public class DetailedTimerSettings
 {
     private static string T(string source) => UiLocalizer.Translate(source, LanguageResolver.ResolveCurrentCultureLanguage());
 
-    public new float Height { get; set; }
-    public new float Width { get; set; }
+    public float Height { get; set; }
+    public float Width { get; set; }
     public float SegmentTimerSizeRatio { get; set; }
     public LiveSplitState CurrentState { get; set; }
 

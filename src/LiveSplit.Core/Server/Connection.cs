@@ -86,10 +86,10 @@ public class Connection : IConnection, IDisposable
 
     public virtual void Dispose()
     {
-        ReaderThread.Abort();
         Stream.Dispose();
         Reader.Dispose();
         Writer.Dispose();
+        ReaderThread.Join(TimeSpan.FromMilliseconds(500));
     }
 }
 

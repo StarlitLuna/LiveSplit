@@ -57,7 +57,7 @@ public sealed class TextInputDialog : Window
         };
     }
 
-    public new async Task<string> ShowDialogAsync(Window owner)
+    public async Task<string> ShowDialogAsync(Window owner)
     {
         if (owner is not null)
         {

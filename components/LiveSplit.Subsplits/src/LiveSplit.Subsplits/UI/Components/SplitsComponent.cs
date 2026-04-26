@@ -85,7 +85,6 @@ public class SplitsComponent : IComponent
 
         ShadowImages = [];
         visualSplitCount = Settings.VisualSplitCount;
-        Settings.SplitLayoutChanged += Settings_SplitLayoutChanged;
         ColumnWidths = Settings.ColumnsList.Select(_ => (0, 0f, 0f)).ToList();
         ScrollOffset = 0;
         RebuildVisualSplits();
@@ -112,10 +111,6 @@ public class SplitsComponent : IComponent
         }
     }
 
-    private void Settings_SplitLayoutChanged(object sender, EventArgs e)
-    {
-        RebuildVisualSplits();
-    }
 
     private void RebuildVisualSplits()
     {

@@ -78,7 +78,7 @@ public class ASLComponent : LogicComponent
         _update_timer?.Dispose();
     }
 
-    public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
+    public override Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         return LiveSplit.UI.AvaloniaSettingsBuilder.Build(_settings, "Component");
     }

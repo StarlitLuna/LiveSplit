@@ -6,7 +6,6 @@ using System.Xml;
 
 using LiveSplit.Localization;
 using LiveSplit.Model;
-using LiveSplit.Model.Comparisons;
 using LiveSplit.TimeFormatters;
 
 namespace LiveSplit.UI.Components;
@@ -120,8 +119,6 @@ public class SplitsSettings
         get => CurrentSplitGradient.ToString();
         set => CurrentSplitGradient = (GradientType)Enum.Parse(typeof(GradientType), value);
     }
-
-    public event EventHandler SplitLayoutChanged;
 
     public LayoutMode Mode { get; set; }
 

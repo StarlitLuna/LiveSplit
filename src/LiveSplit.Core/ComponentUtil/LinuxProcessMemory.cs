@@ -22,7 +22,7 @@ namespace LiveSplit.ComponentUtil;
 internal sealed class LinuxProcessMemory : IProcessMemory
 {
     [StructLayout(LayoutKind.Sequential)]
-    private struct iovec
+    private struct IoVec
     {
         public IntPtr iov_base;
         public UIntPtr iov_len;
@@ -30,14 +30,14 @@ internal sealed class LinuxProcessMemory : IProcessMemory
 
     [DllImport("libc", SetLastError = true)]
     private static extern IntPtr process_vm_readv(int pid,
-        [In] iovec[] local_iov, UIntPtr liovcnt,
-        [In] iovec[] remote_iov, UIntPtr riovcnt,
+        [In] IoVec[] local_iov, UIntPtr liovcnt,
+        [In] IoVec[] remote_iov, UIntPtr riovcnt,
         UIntPtr flags);
 
     [DllImport("libc", SetLastError = true)]
     private static extern IntPtr process_vm_writev(int pid,
-        [In] iovec[] local_iov, UIntPtr liovcnt,
-        [In] iovec[] remote_iov, UIntPtr riovcnt,
+        [In] IoVec[] local_iov, UIntPtr liovcnt,
+        [In] IoVec[] remote_iov, UIntPtr riovcnt,
         UIntPtr flags);
 
     [DllImport("libc", SetLastError = true)]
@@ -291,16 +291,16 @@ internal sealed class LinuxProcessMemory : IProcessMemory
         {
             var local = new[]
             {
-                new iovec { iov_base = (IntPtr)bufPtr, iov_len = (UIntPtr)count },
+                new IoVec { iov_base = (IntPtr)bufPtr, iov_len = (UIntPtr)count },
             };
             var remote = new[]
             {
-                new iovec { iov_base = addr, iov_len = (UIntPtr)count },
+                new IoVec { iov_base = addr, iov_len = (UIntPtr)count },
             };
 
             IntPtr ret = write
-                ? process_vm_writev(pid, local, (UIntPtr)1, remote, (UIntPtr)1, UIntPtr.Zero)
-                : process_vm_readv(pid, local, (UIntPtr)1, remote, (UIntPtr)1, UIntPtr.Zero);
+                ? process_vm_writev(pid, local, 1, remote, 1, UIntPtr.Zero)
+                : process_vm_readv(pid, local, 1, remote, 1, UIntPtr.Zero);
 
             return ret.ToInt64() == count;
         }

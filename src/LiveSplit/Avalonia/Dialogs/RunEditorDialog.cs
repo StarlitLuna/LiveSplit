@@ -358,7 +358,7 @@ public sealed class RunEditorDialog : Window
     /// Re-resolve <see cref="IRun.AutoSplitter"/> from the current Game Name. Mirrors the
     /// original cbxGameName_TextChanged handler: the lookup runs on every text change, the
     /// previous splitter is deactivated, and the new one auto-activates iff the game name is
-    /// already in <see cref="ISettings.ActiveAutoSplitters"/>.
+    /// already in <c>ISettings.ActiveAutoSplitters</c>.
     /// </summary>
     private void RefreshAutoSplitterFromGameName()
     {

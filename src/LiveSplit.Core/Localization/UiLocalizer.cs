@@ -4,8 +4,8 @@ namespace LiveSplit.Localization;
 /// String-translation lookup. The original WinForms-targeted version also walked
 /// <c>Form</c>/<c>Control</c> hierarchies and applied translations to inherited
 /// <c>Text</c>/<c>HeaderText</c> properties. The Avalonia front-end binds via XAML
-/// resources, so the only surviving members are the lookup helpers (<see cref="Translate"/>,
-/// <see cref="TranslateKey"/>) used by component code.
+/// resources, so the only surviving members are the lookup helpers (<see cref="Translate(string)"/>,
+/// <see cref="TranslateKey(string, string)"/>) used by component code.
 /// </summary>
 public static class UiLocalizer
 {

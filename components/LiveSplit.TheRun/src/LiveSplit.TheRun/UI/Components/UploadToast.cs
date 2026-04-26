@@ -1,7 +1,5 @@
 using System;
 
-using LiveSplit.UI;
-
 namespace LiveSplit.UI.Components;
 
 /// <summary>

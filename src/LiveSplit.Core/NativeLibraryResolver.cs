@@ -14,11 +14,13 @@ namespace LiveSplit;
 /// </summary>
 internal static class NativeLibraryResolver
 {
+#pragma warning disable CA2255 // Resolver must register before any [DllImport("livesplit_core")] is bound; that's exactly what ModuleInitializer is for here.
     [ModuleInitializer]
     internal static void Register()
     {
         NativeLibrary.SetDllImportResolver(typeof(NativeLibraryResolver).Assembly, Resolve);
     }
+#pragma warning restore CA2255
 
     private static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
@@ -33,7 +35,7 @@ internal static class NativeLibraryResolver
     /// <summary>
     /// Walks <c>runtimes/{rid}/native/{prefix}{name}{ext}</c> for the current platform +
     /// architecture, falling back to the library's default search behavior if no file is found
-    /// (which lets <c>dotnet publish -r <rid></c> single-file layouts keep working).
+    /// (which lets <c>dotnet publish -r {rid}</c> single-file layouts keep working).
     /// </summary>
     internal static IntPtr ResolveFromRuntimes(string libraryName, Assembly assembly)
     {

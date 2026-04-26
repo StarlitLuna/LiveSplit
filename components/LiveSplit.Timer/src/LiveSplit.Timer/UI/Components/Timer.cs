@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Linq;
 using LiveSplit.Model;
 using LiveSplit.TimeFormatters;
@@ -194,20 +193,20 @@ public class Timer : IComponent
         BigTextLabel.IsMonospaced = true;
         SmallTextLabel.IsMonospaced = true;
 
-        if (Settings.ShowGradient && BigTextLabel.Brush is SolidBrush)
+        if (Settings.ShowGradient && BigTextLabel.Brush is ISolidBrush bigSolid)
         {
-            Color originalColor = (BigTextLabel.Brush as SolidBrush).Color;
+            Color originalColor = bigSolid.Color;
             originalColor.ToHSV(out double h, out double s, out double v);
 
             Color bottomColor = ColorExtensions.FromHSV(h, s, 0.8 * v);
             Color topColor = ColorExtensions.FromHSV(h, 0.5 * s, Math.Min(1, (1.5 * v) + 0.1));
 
-            var bigTimerGradiantBrush = new LinearGradientBrush(
+            ILinearGradientBrush bigTimerGradiantBrush = DrawingApi.Factory.CreateLinearGradientBrush(
                 new PointF(BigTextLabel.X, BigTextLabel.Y),
                 new PointF(BigTextLabel.X, BigTextLabel.Y + ascent + descent),
                 topColor,
                 bottomColor);
-            var smallTimerGradiantBrush = new LinearGradientBrush(
+            ILinearGradientBrush smallTimerGradiantBrush = DrawingApi.Factory.CreateLinearGradientBrush(
                 new PointF(SmallTextLabel.X, SmallTextLabel.Y),
                 new PointF(SmallTextLabel.X, SmallTextLabel.Y + ascent + descent + smallFont.Size - bigFont.Size),
                 topColor,

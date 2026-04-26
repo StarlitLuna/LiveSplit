@@ -150,7 +150,7 @@ public class Title : IComponent
         CategoryNameLabel.HorizontalAlignment = StringAlignment.Near;
         CategoryNameLabel.VerticalAlignment = string.IsNullOrEmpty(GameNameLabel.Text) ? StringAlignment.Center : StringAlignment.Far;
         CategoryNameLabel.Font = TitleFont;
-        CategoryNameLabel.Brush = new SolidBrush(Settings.OverrideTitleColor ? Settings.TitleColor : state.LayoutSettings.TextColor);
+        CategoryNameLabel.ForeColor = Settings.OverrideTitleColor ? Settings.TitleColor : state.LayoutSettings.TextColor;
         CategoryNameLabel.HasShadow = state.LayoutSettings.DropShadows;
         CategoryNameLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         CategoryNameLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
@@ -169,7 +169,7 @@ public class Title : IComponent
             AttemptCountLabel.Width = width - 5;
             AttemptCountLabel.Height = 40;
             AttemptCountLabel.Font = TitleFont;
-            AttemptCountLabel.Brush = new SolidBrush(Settings.OverrideTitleColor ? Settings.TitleColor : state.LayoutSettings.TextColor);
+            AttemptCountLabel.ForeColor = Settings.OverrideTitleColor ? Settings.TitleColor : state.LayoutSettings.TextColor;
             AttemptCountLabel.HasShadow = state.LayoutSettings.DropShadows;
             AttemptCountLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
             AttemptCountLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
@@ -198,7 +198,7 @@ public class Title : IComponent
         GameNameLabel.Y = 0;
         GameNameLabel.Height = height;
         GameNameLabel.Font = TitleFont;
-        GameNameLabel.Brush = new SolidBrush(Settings.OverrideTitleColor ? Settings.TitleColor : state.LayoutSettings.TextColor);
+        GameNameLabel.ForeColor = Settings.OverrideTitleColor ? Settings.TitleColor : state.LayoutSettings.TextColor;
         GameNameLabel.HasShadow = state.LayoutSettings.DropShadows;
         GameNameLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         GameNameLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;

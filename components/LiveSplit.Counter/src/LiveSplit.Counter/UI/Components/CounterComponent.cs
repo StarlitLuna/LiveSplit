@@ -78,7 +78,7 @@ public class CounterComponent : IComponent
         CounterNameLabel.Width = width - fourCharWidth - 5;
         CounterNameLabel.Height = height;
         CounterNameLabel.Font = CounterFont;
-        CounterNameLabel.Brush = new SolidBrush(Settings.OverrideTextColor ? Settings.CounterTextColor : state.LayoutSettings.TextColor);
+        CounterNameLabel.ForeColor = Settings.OverrideTextColor ? Settings.CounterTextColor : state.LayoutSettings.TextColor;
         CounterNameLabel.HasShadow = state.LayoutSettings.DropShadows;
         CounterNameLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         CounterNameLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;
@@ -92,7 +92,7 @@ public class CounterComponent : IComponent
         CounterValueLabel.Width = width - 10;
         CounterValueLabel.Height = height;
         CounterValueLabel.Font = CounterFont;
-        CounterValueLabel.Brush = new SolidBrush(Settings.OverrideTextColor ? Settings.CounterValueColor : state.LayoutSettings.TextColor);
+        CounterValueLabel.ForeColor = Settings.OverrideTextColor ? Settings.CounterValueColor : state.LayoutSettings.TextColor;
         CounterValueLabel.HasShadow = state.LayoutSettings.DropShadows;
         CounterValueLabel.ShadowColor = state.LayoutSettings.ShadowsColor;
         CounterValueLabel.OutlineColor = state.LayoutSettings.TextOutlineColor;

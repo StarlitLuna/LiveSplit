@@ -37,8 +37,14 @@ internal sealed class SkiaLinearGradientBrush : ILinearGradientBrush
 {
     internal readonly SKShader Shader;
 
+    public Color StartColor { get; }
+    public Color EndColor { get; }
+
     public SkiaLinearGradientBrush(PointF start, PointF end, Color startColor, Color endColor)
     {
+        StartColor = startColor;
+        EndColor = endColor;
+
         var startSk = new SKPoint(start.X, start.Y);
         var endSk = new SKPoint(end.X, end.Y);
         Shader = SKShader.CreateLinearGradient(

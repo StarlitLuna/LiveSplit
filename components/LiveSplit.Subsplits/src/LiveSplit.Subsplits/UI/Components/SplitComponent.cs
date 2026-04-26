@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Text.RegularExpressions;
 using LiveSplit.Model;
@@ -482,7 +481,7 @@ public class SplitComponent : IComponent
                 Color bottomColor = ColorExtensions.FromHSV(h, s, 0.8 * v);
                 Color topColor = ColorExtensions.FromHSV(h, 0.5 * s, Math.Min(1, (1.5 * v) + 0.1));
 
-                var bigTimerGradiantBrush = new LinearGradientBrush(
+                ILinearGradientBrush bigTimerGradiantBrush = DrawingApi.Factory.CreateLinearGradientBrush(
                     new PointF(DeltaLabel.X, DeltaLabel.Y),
                     new PointF(DeltaLabel.X, DeltaLabel.Y + ascent + descent),
                     topColor,
@@ -496,7 +495,7 @@ public class SplitComponent : IComponent
         TimeLabel.Draw(ctx);
         DeltaLabel.Draw(ctx);
 
-        DeltaLabel.Brush = new SolidBrush(originalColor);
+        DeltaLabel.ForeColor = originalColor;
     }
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)

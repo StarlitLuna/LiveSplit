@@ -19,7 +19,27 @@ public class SimpleLabel
     public float Width { get; set; }
     public float Height { get; set; }
     public FontDescriptor Font { get; set; }
-    public Brush Brush { get; set; }
+
+    private IBrush _brush;
+
+    // Lazy default + disposing setter. Lazy because component classes hold SimpleLabel field
+    // initializers that run before DrawingApi.Register, so the constructor must not touch the
+    // factory. Disposing because Timer/Subsplits reassign Brush per frame to a fresh
+    // ILinearGradientBrush — the Skia backing wraps an SKShader native handle that would
+    // otherwise leak at the frame rate.
+    public IBrush Brush
+    {
+        get => _brush ??= DrawingApi.Factory.CreateSolidBrush(Color.Black);
+        set
+        {
+            if (!ReferenceEquals(_brush, value))
+            {
+                _brush?.Dispose();
+                _brush = value;
+            }
+        }
+    }
+
     public StringAlignment HorizontalAlignment { get; set; }
     public StringAlignment VerticalAlignment { get; set; }
     public Color ShadowColor { get; set; }
@@ -28,24 +48,63 @@ public class SimpleLabel
     public bool HasShadow { get; set; }
     public bool IsMonospaced { get; set; }
 
-    private StringFormat Format { get; set; }
+    private ITextFormat _format;
+    private ITextFormat _centeredFormat;
+
+    // Lazy for the same factory-deferral reason as Brush. The constant flags are set once on
+    // first access; the mutable Alignment/LineAlignment bits are reapplied per Draw call by
+    // the callers below (matches the StringFormat-mutation pattern this used to do).
+    private ITextFormat Format
+    {
+        get
+        {
+            if (_format == null)
+            {
+                _format = DrawingApi.Factory.CreateTextFormat();
+                _format.FormatFlags = StringFormatFlags.NoWrap;
+                _format.Trimming = StringTrimming.EllipsisCharacter;
+            }
+
+            return _format;
+        }
+    }
+
+    // Cached centered format used by the monospace digit-column layout. LineAlignment is
+    // refreshed per call because callers may flip VerticalAlignment between draws.
+    private ITextFormat CenteredFormat
+    {
+        get
+        {
+            if (_centeredFormat == null)
+            {
+                _centeredFormat = DrawingApi.Factory.CreateTextFormat();
+                _centeredFormat.Alignment = StringAlignment.Center;
+            }
+
+            _centeredFormat.LineAlignment = VerticalAlignment;
+            return _centeredFormat;
+        }
+    }
 
     public float ActualWidth { get; set; }
 
     public Color ForeColor
     {
-        get => ((SolidBrush)Brush).Color;
+        // Returns Color.Empty if the brush is currently a gradient. The Subsplits header round-
+        // trip relies on this in steady state — DeltaLabel.ForeColor is captured before the
+        // gradient assignment and reapplied afterward via the setter (which mutates in-place).
+        get => (Brush as ISolidBrush)?.Color ?? Color.Empty;
         set
         {
             try
             {
-                if (Brush is SolidBrush brush)
+                if (_brush is ISolidBrush sb)
                 {
-                    brush.Color = value;
+                    sb.Color = value;
                 }
                 else
                 {
-                    Brush = new SolidBrush(value);
+                    Brush = DrawingApi.Factory.CreateSolidBrush(value);
                 }
             }
             catch (Exception ex)
@@ -58,7 +117,7 @@ public class SimpleLabel
     public SimpleLabel(
         string text = "",
         float x = 0.0f, float y = 0.0f,
-        FontDescriptor font = null, Brush brush = null,
+        FontDescriptor font = null,
         float width = float.MaxValue, float height = float.MaxValue,
         StringAlignment horizontalAlignment = StringAlignment.Near,
         StringAlignment verticalAlignment = StringAlignment.Near,
@@ -68,7 +127,6 @@ public class SimpleLabel
         X = x;
         Y = y;
         Font = font ?? new FontDescriptor("Arial", 1.0f);
-        Brush = brush ?? new SolidBrush(Color.Black);
         Width = width;
         Height = height;
         HorizontalAlignment = horizontalAlignment;
@@ -78,38 +136,27 @@ public class SimpleLabel
         ShadowColor = Color.FromArgb(128, 0, 0, 0);
         OutlineColor = Color.FromArgb(0, 0, 0, 0);
         ((List<string>)(AlternateText = [])).AddRange(alternateText ?? new string[0]);
-        Format = new StringFormat
-        {
-            Alignment = HorizontalAlignment,
-            LineAlignment = VerticalAlignment,
-            FormatFlags = StringFormatFlags.NoWrap,
-            Trimming = StringTrimming.EllipsisCharacter
-        };
     }
 
     public void Draw(IDrawingContext ctx)
     {
-        Format.Alignment = HorizontalAlignment;
-        Format.LineAlignment = VerticalAlignment;
+        ITextFormat fmt = Format;
+        fmt.Alignment = HorizontalAlignment;
+        fmt.LineAlignment = VerticalAlignment;
 
         using IFont iFont = WrapFont();
-        using IBrush iBrush = WrapBrush();
-        ITextFormat iFormat = WrapFormat(Format);
+        IBrush iBrush = Brush;
 
         if (!IsMonospaced)
         {
-            string actualText = CalculateAlternateText(ctx, Width, iFont, iFormat);
-            DrawText(actualText, ctx, X, Y, Width, Height, iFont, iBrush, iFormat);
+            string actualText = CalculateAlternateText(ctx, Width, iFont, fmt);
+            DrawText(actualText, ctx, X, Y, Width, Height, iFont, iBrush, fmt);
         }
         else
         {
-            ITextFormat monoFormat = WrapFormat(new StringFormat
-            {
-                Alignment = StringAlignment.Center,
-                LineAlignment = VerticalAlignment,
-            });
+            ITextFormat monoFormat = CenteredFormat;
 
-            int measurement = (int)(ctx.MeasureString("0", iFont, 9999, iFormat).Width + 0.5f);
+            int measurement = (int)(ctx.MeasureString("0", iFont, 9999, fmt).Width + 0.5f);
             float offset;
             int charIndex = 0;
             SetActualWidth(ctx);
@@ -132,7 +179,7 @@ public class SimpleLabel
                 }
                 else
                 {
-                    curOffset = (int)(ctx.MeasureString(curChar.ToString(), iFont, 9999, iFormat).Width + 0.5f);
+                    curOffset = (int)(ctx.MeasureString(curChar.ToString(), iFont, 9999, fmt).Width + 0.5f);
                 }
 
                 DrawText(curChar.ToString(), ctx, X + offset - (curOffset / 2f), Y, curOffset * 2f, Height, iFont, iBrush, monoFormat);
@@ -205,15 +252,15 @@ public class SimpleLabel
 
     public void SetActualWidth(IDrawingContext ctx)
     {
-        Format.Alignment = HorizontalAlignment;
-        Format.LineAlignment = VerticalAlignment;
+        ITextFormat fmt = Format;
+        fmt.Alignment = HorizontalAlignment;
+        fmt.LineAlignment = VerticalAlignment;
 
         using IFont iFont = WrapFont();
-        ITextFormat iFormat = WrapFormat(Format);
 
         if (!IsMonospaced)
         {
-            ActualWidth = ctx.MeasureString(Text, iFont, 9999, iFormat).Width;
+            ActualWidth = ctx.MeasureString(Text, iFont, 9999, fmt).Width;
         }
         else
         {
@@ -224,8 +271,7 @@ public class SimpleLabel
     public string CalculateAlternateText(IDrawingContext ctx, float width)
     {
         using IFont iFont = WrapFont();
-        ITextFormat iFormat = WrapFormat(Format);
-        return CalculateAlternateText(ctx, width, iFont, iFormat);
+        return CalculateAlternateText(ctx, width, iFont, Format);
     }
 
     // Internal overload that reuses already-built IFont / ITextFormat across a Draw tick.
@@ -252,7 +298,7 @@ public class SimpleLabel
     private float MeasureActualWidth(string text, IDrawingContext ctx)
     {
         using IFont iFont = WrapFont();
-        ITextFormat iFormat = WrapFormat(Format);
+        ITextFormat iFormat = Format;
 
         int charIndex = 0;
         int measurement = (int)(ctx.MeasureString("0", iFont, 9999, iFormat).Width + 0.5f);
@@ -299,43 +345,9 @@ public class SimpleLabel
         return cutOffText + "...";
     }
 
-    // Factory bridges between the System.Drawing public API of SimpleLabel and the abstract
-    // IDrawingContext resource types. Each call allocates a fresh wrapper; if profiling shows
-    // this dominates, a font-family+size+style+color cache could be added here.
-
     private IFont WrapFont()
     {
         return DrawingApi.Factory.CreateFont(
             Font.FamilyName, Font.Size, Font.Style, Font.Unit);
-    }
-
-    private IBrush WrapBrush()
-    {
-        // Consumers (Timer.DrawUnscaled in particular) sometimes assign a
-        // LinearGradientBrush to get gradient-filled text. Preserve that instead of
-        // collapsing to ForeColor, which would only read SolidBrush.
-        if (Brush is LinearGradientBrush lgb)
-        {
-            Color[] colors = lgb.LinearColors;
-            RectangleF rect = lgb.Rectangle;
-            // The LinearGradientBrush doesn't re-expose the constructor points; infer the
-            // direction from the bounding rectangle's main axis. This matches the
-            // start-and-end-point input pattern Timer uses (fixed X or fixed Y).
-            var start = new PointF(rect.X, rect.Y);
-            var end = new PointF(rect.X + rect.Width, rect.Y + rect.Height);
-            return DrawingApi.Factory.CreateLinearGradientBrush(start, end, colors[0], colors[1]);
-        }
-
-        return DrawingApi.Factory.CreateSolidBrush(ForeColor);
-    }
-
-    private static ITextFormat WrapFormat(StringFormat src)
-    {
-        ITextFormat f = DrawingApi.Factory.CreateTextFormat();
-        f.Alignment = src.Alignment;
-        f.LineAlignment = src.LineAlignment;
-        f.FormatFlags = src.FormatFlags;
-        f.Trimming = src.Trimming;
-        return f;
     }
 }

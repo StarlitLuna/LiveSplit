@@ -65,7 +65,17 @@ public sealed partial class TimerWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
 
-        Host = new AvaloniaTimerHost(InvalidateVisual, splitsPath, layoutPath);
+        // The host posts an invalidate every refresh tick. Calling Window.InvalidateVisual
+        // doesn't re-run the SkiaRenderControl's CustomDrawOperation; we have to invalidate
+        // the canvas itself. This keeps the timer ticking visibly (otherwise only the very
+        // first frame ever paints, and components that only set their VerticalHeight inside
+        // DrawGeneral are stuck at their pre-render seed values forever).
+        Action invalidate = () =>
+        {
+            SkiaRenderControl c = this.FindControl<SkiaRenderControl>("Canvas");
+            c?.InvalidateVisual();
+        };
+        Host = new AvaloniaTimerHost(invalidate, splitsPath, layoutPath);
 
         SplitCommand = new RelayCommand(() => Host.Model.Split());
         ResetCommand = new RelayCommand(() => Host.Model.Reset());
@@ -93,6 +103,25 @@ public sealed partial class TimerWindow : Window
         {
             canvas.Host = Host;
         }
+
+        Host.LayoutApplied += () =>
+        {
+            ApplyLayoutSize();
+            ApplyAlwaysOnTop();
+        };
+        ApplyLayoutSize();
+        ApplyAlwaysOnTop();
+
+        // Re-apply on Opened too — some window managers (Wayland XWayland in particular)
+        // don't honor Width/Height set before the window is realized. Setting them again on
+        // Opened forces the geometry the user expects from the layout's saved dimensions.
+        Opened += (_, _) =>
+        {
+            ApplyLayoutSize();
+            ApplyAlwaysOnTop();
+        };
+
+        SizeChanged += OnSizeChanged;
 
         WireDynamicSubmenus();
         WireComponentContextMenu();
@@ -198,6 +227,84 @@ public sealed partial class TimerWindow : Window
         {
             BeginMoveDrag(e);
         }
+    }
+
+    // --- Layout ↔ window dimension propagation ----------------------------------------------
+
+    /// <summary>
+    /// Sync window Topmost from the active layout's <c>AlwaysOnTop</c> setting. Master parity:
+    /// the setting is per-layout (lives in the .lsl) rather than global, so swapping layouts
+    /// must re-apply this.
+    /// </summary>
+    private void ApplyAlwaysOnTop()
+    {
+        Topmost = Host?.State?.Layout?.Settings?.AlwaysOnTop == true;
+    }
+
+    /// <summary>
+    /// Resize and reposition the window to match the active layout's stored dimensions. Mirrors
+    /// master's TimerForm.SetLayout — the .lsl persists VerticalWidth/Height (or Horizontal
+    /// variants) and X/Y; this method applies them after a load/swap.
+    /// </summary>
+    private void ApplyLayoutSize()
+    {
+        UI.ILayout layout = Host?.State?.Layout;
+        if (layout is null)
+        {
+            return;
+        }
+
+        bool vertical = layout.Mode == UI.LayoutMode.Vertical;
+        int w = vertical ? layout.VerticalWidth : layout.HorizontalWidth;
+        int h = vertical ? layout.VerticalHeight : layout.HorizontalHeight;
+
+        if (w != UI.Layout.InvalidSize && h != UI.Layout.InvalidSize && w > 0 && h > 0)
+        {
+            Width = w;
+            Height = h;
+        }
+
+        if (layout.X != 0 || layout.Y != 0)
+        {
+            Position = new global::Avalonia.PixelPoint(layout.X, layout.Y);
+        }
+    }
+
+    /// <summary>
+    /// User-resize → layout. Skips no-op updates (so the initial ApplyLayoutSize-driven
+    /// SizeChanged echo doesn't dirty the layout) and flips HasChanged so Save Layout will
+    /// persist the new dimensions.
+    /// </summary>
+    private void OnSizeChanged(object sender, global::Avalonia.Controls.SizeChangedEventArgs e)
+    {
+        UI.ILayout layout = Host?.State?.Layout;
+        if (layout is null)
+        {
+            return;
+        }
+
+        int w = (int)Math.Round(e.NewSize.Width);
+        int h = (int)Math.Round(e.NewSize.Height);
+        bool vertical = layout.Mode == UI.LayoutMode.Vertical;
+        int currentW = vertical ? layout.VerticalWidth : layout.HorizontalWidth;
+        int currentH = vertical ? layout.VerticalHeight : layout.HorizontalHeight;
+        if (currentW == w && currentH == h)
+        {
+            return;
+        }
+
+        if (vertical)
+        {
+            layout.VerticalWidth = w;
+            layout.VerticalHeight = h;
+        }
+        else
+        {
+            layout.HorizontalWidth = w;
+            layout.HorizontalHeight = h;
+        }
+
+        layout.HasChanged = true;
     }
 
 #pragma warning disable CS0618 // Avalonia 11 marks FileDialogFilter / OpenFileDialog obsolete in favor of StorageProvider; migration is tracked separately.
@@ -314,6 +421,9 @@ public sealed partial class TimerWindow : Window
     {
         var dlg = new LayoutSettingsDialog(Host.State.LayoutSettings);
         await dlg.ShowDialogAsync(this);
+
+
+        ApplyAlwaysOnTop();
         InvalidateVisual();
     }
 
@@ -327,7 +437,32 @@ public sealed partial class TimerWindow : Window
     private async Task OpenSetSize()
     {
         var dlg = new SetSizeForm(this);
-        await dlg.ShowDialogAsync(this);
+        bool ok = await dlg.ShowDialogAsync(this);
+        if (!ok)
+        {
+            return;
+        }
+
+        UI.ILayout layout = Host?.State?.Layout;
+        if (layout is null)
+        {
+            return;
+        }
+
+        int w = (int)Math.Round(Width);
+        int h = (int)Math.Round(Height);
+        if (layout.Mode == UI.LayoutMode.Vertical)
+        {
+            layout.VerticalWidth = w;
+            layout.VerticalHeight = h;
+        }
+        else
+        {
+            layout.HorizontalWidth = w;
+            layout.HorizontalHeight = h;
+        }
+
+        layout.HasChanged = true;
     }
 
     private async Task OpenShare()
@@ -593,13 +728,16 @@ public sealed partial class TimerWindow : Window
         };
         gameTime.Click += (_, _) => { Host.State.CurrentTimingMethod = TimingMethod.GameTime; InvalidateVisual(); };
 
-        parent.ItemsSource = new[] { realTime, gameTime };
+        parent.Items.Clear();
+        parent.Items.Add(realTime);
+        parent.Items.Add(gameTime);
     }
 
     private void PopulateLanguageMenu(MenuItem parent)
     {
-        var children = new List<MenuItem>();
         string current = LiveSplit.Localization.LanguageResolver.NormalizeSettingValue(Host.State.Settings.UILanguage);
+
+        parent.Items.Clear();
 
         var auto = new MenuItem
         {
@@ -607,8 +745,8 @@ public sealed partial class TimerWindow : Window
             Icon = string.IsNullOrEmpty(current) ? new TextBlock { Text = "•" } : null,
         };
         auto.Click += async (_, _) => await ApplyLanguage(string.Empty);
-        children.Add(auto);
-        children.Add(new MenuItem { Header = "-" });
+        parent.Items.Add(auto);
+        parent.Items.Add(new Separator());
 
         foreach (LiveSplit.Localization.AppLanguage language in LiveSplit.Localization.UiTextCatalog.Languages)
         {
@@ -621,10 +759,8 @@ public sealed partial class TimerWindow : Window
                     : null,
             };
             item.Click += async (_, _) => await ApplyLanguage(captured);
-            children.Add(item);
+            parent.Items.Add(item);
         }
-
-        parent.ItemsSource = children;
     }
 
     private async Task ApplyLanguage(string code)

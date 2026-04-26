@@ -239,7 +239,16 @@ public sealed class AvaloniaTimerHost : IDisposable
         State.Layout = layout;
         State.LayoutSettings = layout.Settings;
         Renderer.VisibleComponents = layout.LayoutComponents.Select(lc => lc.Component);
+        LayoutApplied?.Invoke();
     }
+
+    /// <summary>
+    /// Fires after a layout swap (LoadLayout, CloseSplits, or any caller of ApplyLayout). The
+    /// TimerWindow uses this to re-apply window-level layout-derived state — Topmost, the
+    /// window's natural Width/Height, the saved Position — without each call site having to
+    /// remember.
+    /// </summary>
+    public event Action LayoutApplied;
 
     private void Invalidate()
     {
@@ -334,7 +343,11 @@ public sealed class AvaloniaTimerHost : IDisposable
             }
         }
 
-        return new TimerOnlyLayoutFactory().Create(state);
+        // Master parity: a clean first launch (no explicit -l, no recent layouts, no on-disk
+        // file at the recent path) loads the embedded DefaultLayout.lsl with Title + Splits +
+        // Timer + PreviousSegment. TimerOnlyLayoutFactory is reserved for the explicit
+        // "Close Splits" path (Host.CloseSplits) where the user just wants the timer alone.
+        return new StandardLayoutFactory().Create(state);
     }
 
     private static void ApplyRecentSplitsFileState(string path, ISettings settings, LiveSplitState state)

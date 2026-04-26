@@ -26,7 +26,12 @@ public sealed class LayoutSettingsDialog : Window
         Control settingsControl = AvaloniaSettingsBuilder.Build(layoutSettings, "Layout Settings");
 
         var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
-        ok.Click += (_, _) => { _result.TrySetResult(true); Close(); };
+        ok.Click += (_, _) =>
+        {
+            ok.Focus();
+            _result.TrySetResult(true);
+            Close();
+        };
         var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
         cancel.Click += (_, _) => { _result.TrySetResult(false); Close(); };
 

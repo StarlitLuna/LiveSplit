@@ -5,6 +5,7 @@
 .fleet/
 
 # Build artifacts
+.flatpak-builder/
 artifacts/
 bin/
 obj/

@@ -198,14 +198,14 @@ internal sealed class SkiaGraphicsPath : IGraphicsPath
 
         var skFont = (SkiaFont)font;
 
-        ushort[] glyphs = skFont.Font.GetGlyphs(text);
+        ushort[] glyphs = StringToGlyphs(skFont.Font, text);
         if (glyphs.Length == 0)
         {
             return;
         }
 
         float[] widths = new float[glyphs.Length];
-        skFont.Font.GetGlyphWidths(glyphs, widths, null);
+        skFont.Font.GetGlyphWidths(glyphs, widths, default);
 
         // Trim with ellipsis if the run overflows and the format requests it. Walk left-to-right,
         // keeping glyphs whose cumulative width plus the ellipsis still fits. Other trimming
@@ -224,9 +224,9 @@ internal sealed class SkiaGraphicsPath : IGraphicsPath
 
         if (overflows && format != null && format.Trimming == StringTrimming.EllipsisCharacter)
         {
-            ushort[] ellipsisGlyphs = skFont.Font.GetGlyphs("…");
+            ushort[] ellipsisGlyphs = StringToGlyphs(skFont.Font, "…");
             float[] ellipsisWidths = new float[ellipsisGlyphs.Length];
-            skFont.Font.GetGlyphWidths(ellipsisGlyphs, ellipsisWidths, null);
+            skFont.Font.GetGlyphWidths(ellipsisGlyphs, ellipsisWidths, default);
             float ellipsisWidth = 0f;
             foreach (float w in ellipsisWidths)
             {
@@ -312,6 +312,19 @@ internal sealed class SkiaGraphicsPath : IGraphicsPath
     }
 
     public void Dispose() => Path.Dispose();
+
+    private static ushort[] StringToGlyphs(SKFont font, string text)
+    {
+        int count = font.CountGlyphs(text);
+        if (count == 0)
+        {
+            return [];
+        }
+
+        ushort[] glyphs = new ushort[count];
+        font.GetGlyphs(text, glyphs);
+        return glyphs;
+    }
 }
 
 internal sealed class SkiaTextFormat : ITextFormat

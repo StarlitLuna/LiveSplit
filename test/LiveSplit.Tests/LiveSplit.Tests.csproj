@@ -23,9 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
-  </ItemGroup>
-
-  <ItemGroup>
+    <!-- Pulls Avalonia.Skia, SkiaSharp, and the matching SkiaSharp.NativeAssets.* into the test
+         output so the version-compat regression test (and the AddString tests) can load the real
+         libSkiaSharp at runtime. Version is centralized in props/LiveSplit.props. -->
+    <PackageReference Include="Avalonia.Skia" Version="$(AvaloniaVersion)" />
   </ItemGroup>
 
 </Project>

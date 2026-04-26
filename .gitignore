@@ -9,6 +9,7 @@ artifacts/
 bin/
 obj/
 publish/
+dist/
 
 # User-specific files
 *.user
@@ -21,6 +22,11 @@ GitInfo/
 
 **/x64/target/
 **/x86/target/
+
+# Native libs produced on-demand by scripts/build-native-linux.sh; the Windows
+# .dlls under runtimes/win-*/native/ stay tracked (prebuilt + committed).
+**/runtimes/linux-*/native/
+**/runtimes/osx*/native/
 
 LiveSplit.AutoSplitters.xml
 

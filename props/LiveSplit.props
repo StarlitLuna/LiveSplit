@@ -26,4 +26,10 @@
     <UseArtifactsOutput>true</UseArtifactsOutput>
   </PropertyGroup>
 
+  <!-- Centralized package versions. Tests reflect on these at runtime; bumping in one place
+       keeps the main app and the version-compat regression test in sync. -->
+  <PropertyGroup>
+    <AvaloniaVersion>11.2.0</AvaloniaVersion>
+  </PropertyGroup>
+
 </Project>

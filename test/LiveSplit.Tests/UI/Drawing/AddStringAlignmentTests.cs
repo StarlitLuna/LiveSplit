@@ -3,6 +3,8 @@ using System.Drawing;
 
 using LiveSplit.UI.Drawing.Skia;
 
+using SkiaSharp;
+
 using Xunit;
 
 namespace LiveSplit.Tests.UI.Drawing;
@@ -112,13 +114,13 @@ public class AddStringAlignmentTests
         const string Source = "This entire run-on string would not fit in eighty pixels at 16px";
 
         // Long string overflows.
-        Assert.True(font.Font.MeasureText(Source) > 80f);
+        Assert.True(MeasureText(font.Font, Source) > 80f);
 
         // After ellipsizing, the resulting trimmed string must measure within the bound.
         // Mirrors the binary-search the DrawString path runs at draw time.
         string trimmed = TrimWithEllipsisLikeContext(Source, font, 80f);
-        Assert.True(font.Font.MeasureText(trimmed) <= 80f + 0.5f,
-            $"Trimmed='{trimmed}' measures {font.Font.MeasureText(trimmed)} but rect is 80");
+        Assert.True(MeasureText(font.Font, trimmed) <= 80f + 0.5f,
+            $"Trimmed='{trimmed}' measures {MeasureText(font.Font, trimmed)} but rect is 80");
         Assert.EndsWith("…", trimmed);
     }
 
@@ -129,12 +131,12 @@ public class AddStringAlignmentTests
     private static string TrimWithEllipsisLikeContext(string text, SkiaFont skFont, float maxWidth)
     {
         const string Ellipsis = "…";
-        if (skFont.Font.MeasureText(text) <= maxWidth)
+        if (MeasureText(skFont.Font, text) <= maxWidth)
         {
             return text;
         }
 
-        float ellipsisWidth = skFont.Font.MeasureText(Ellipsis);
+        float ellipsisWidth = MeasureText(skFont.Font, Ellipsis);
         if (ellipsisWidth >= maxWidth)
         {
             return string.Empty;
@@ -146,7 +148,7 @@ public class AddStringAlignmentTests
         while (low <= high)
         {
             int mid = (low + high) / 2;
-            float width = skFont.Font.MeasureText(text.AsSpan(0, mid)) + ellipsisWidth;
+            float width = MeasureText(skFont.Font, text.AsSpan(0, mid)) + ellipsisWidth;
             if (width <= maxWidth)
             {
                 best = mid;
@@ -159,5 +161,23 @@ public class AddStringAlignmentTests
         }
 
         return string.Concat(text.AsSpan(0, best), Ellipsis);
+    }
+
+    private static float MeasureText(SKFont font, ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty)
+        {
+            return 0f;
+        }
+
+        int count = font.CountGlyphs(text);
+        if (count == 0)
+        {
+            return 0f;
+        }
+
+        ushort[] glyphs = new ushort[count];
+        font.GetGlyphs(text, glyphs);
+        return font.MeasureText(glyphs);
     }
 }

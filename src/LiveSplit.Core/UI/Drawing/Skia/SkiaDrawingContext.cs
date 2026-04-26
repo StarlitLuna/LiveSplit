@@ -148,7 +148,7 @@ public sealed class SkiaDrawingContext : IDrawingContext
             text = TrimWithEllipsis(text, skFont, bounds.Width);
         }
 
-        float textWidth = skFont.Font.MeasureText(text);
+        float textWidth = MeasureText(skFont.Font, text);
         float textHeight = metrics.Descent - metrics.Ascent;
 
         float x = skFormat.Alignment switch
@@ -177,10 +177,28 @@ public sealed class SkiaDrawingContext : IDrawingContext
         }
 
         var skFont = (SkiaFont)font;
-        float width = skFont.Font.MeasureText(text);
+        float width = MeasureText(skFont.Font, text);
         SKFontMetrics metrics = skFont.Font.Metrics;
         float height = metrics.Descent - metrics.Ascent;
         return new SizeF(width, height);
+    }
+
+    private static float MeasureText(SKFont font, ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty)
+        {
+            return 0f;
+        }
+
+        int count = font.CountGlyphs(text);
+        if (count == 0)
+        {
+            return 0f;
+        }
+
+        ushort[] glyphs = new ushort[count];
+        font.GetGlyphs(text, glyphs);
+        return font.MeasureText(glyphs);
     }
 
     /// <summary>
@@ -193,12 +211,12 @@ public sealed class SkiaDrawingContext : IDrawingContext
     private static string TrimWithEllipsis(string text, SkiaFont skFont, float maxWidth)
     {
         const string Ellipsis = "…";
-        if (skFont.Font.MeasureText(text) <= maxWidth)
+        if (MeasureText(skFont.Font, text) <= maxWidth)
         {
             return text;
         }
 
-        float ellipsisWidth = skFont.Font.MeasureText(Ellipsis);
+        float ellipsisWidth = MeasureText(skFont.Font, Ellipsis);
         if (ellipsisWidth >= maxWidth)
         {
             // The ellipsis itself doesn't fit — fall back to drawing nothing rather than
@@ -212,7 +230,7 @@ public sealed class SkiaDrawingContext : IDrawingContext
         while (low <= high)
         {
             int mid = (low + high) / 2;
-            float width = skFont.Font.MeasureText(text.AsSpan(0, mid)) + ellipsisWidth;
+            float width = MeasureText(skFont.Font, text.AsSpan(0, mid)) + ellipsisWidth;
             if (width <= maxWidth)
             {
                 best = mid;

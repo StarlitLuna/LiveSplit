@@ -173,24 +173,6 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "Selected release tag: ${tag}"
 
-      - name: Diagnose release-token permissions
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
-        run: |
-          set +e
-          echo "::group::gh auth status"
-          gh auth status
-          echo "::endgroup::"
-          echo "::group::repo metadata visible to token"
-          gh api "/repos/${{ github.repository }}" --jq '{full_name, fork, private, default_branch, permissions}'
-          echo "::endgroup::"
-          echo "::group::list releases (needs contents:read)"
-          gh api "/repos/${{ github.repository }}/releases" --jq 'length' && echo "  read OK" || echo "  read FAILED"
-          echo "::endgroup::"
-          echo "::group::tag protection rules (block tag creation -> 403)"
-          gh api "/repos/${{ github.repository }}/tags/protection" 2>&1 || echo "  (none, or endpoint inaccessible)"
-          echo "::endgroup::"
-
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}

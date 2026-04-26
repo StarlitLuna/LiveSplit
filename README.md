@@ -121,7 +121,7 @@ To produce a self-contained build that doesn't require the host to have .NET ins
 
 ```sh
 scripts/package-linux.sh                       # → dist/livesplit-linux-x64.tar.gz
-scripts/package-linux.sh --appimage            # → also dist/LiveSplit-x86_64.AppImage
+scripts/package-linux.sh --appimage            # → also dist/LiveSplit.AppImage
 scripts/package-linux.sh --rid linux-arm64     # cross-RID build
 ```
 
@@ -154,14 +154,14 @@ flatpak install --user flathub \
 scripts/package-linux.sh --flatpak
 ```
 
-This produces a redistributable `dist/livesplit.flatpak` bundle. Install it locally with:
+This produces a redistributable `dist/LiveSplit.flatpak` bundle. Install it locally with:
 
 ```sh
-flatpak install --user dist/livesplit.flatpak
+flatpak install --user dist/LiveSplit.flatpak
 flatpak run org.livesplit.LiveSplit
 ```
 
-The bundle installs on any distro with `flatpak install ./livesplit.flatpak`.
+The bundle installs on any distro with `flatpak install ./LiveSplit.flatpak`.
 
 Note: the manifest sets `--share=network` during the build phase so cargo and `dotnet restore` can fetch packages — fine for personal use, but Flathub doesn't allow it. Submitting upstream needs NuGet packages and Cargo crates vendored ahead of time and listed under `sources:` in the manifest.
 

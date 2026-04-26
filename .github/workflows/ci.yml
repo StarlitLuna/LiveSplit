@@ -76,18 +76,6 @@ jobs:
       - name: Package tarball + AppImage
         run: bash scripts/package-linux.sh --appimage
 
-      - name: Upload tarball artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: LiveSplit_Linux_Tarball
-          path: dist/livesplit-linux-x64.tar.gz
-
-      - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: LiveSplit_Linux_AppImage
-          path: dist/LiveSplit-*.AppImage
-
       - name: Install flatpak-builder
         run: |
           set -euo pipefail
@@ -103,7 +91,7 @@ jobs:
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: livesplit.flatpak
+          bundle: LiveSplit.flatpak
           manifest-path: org.livesplit.LiveSplit.yml
           cache-key: flatpak-builder-${{ github.sha }}
 
@@ -137,5 +125,5 @@ jobs:
             --target "${commit}" \
             --notes "Automated build of \`${{ inputs.branch }}\` at ${commit}." \
             dist/livesplit-linux-x64.tar.gz \
-            dist/LiveSplit-*.AppImage \
-            livesplit.flatpak
+            dist/LiveSplit.AppImage \
+            LiveSplit.flatpak

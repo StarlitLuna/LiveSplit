@@ -2,7 +2,7 @@
 # Package a Linux build of LiveSplit. Three output modes:
 #   tarball  (default) — self-contained publish, gzipped
 #   appimage           — also produces dist/LiveSplit-<rid>.AppImage
-#   flatpak            — produces dist/livesplit.flatpak (host-side native build skipped;
+#   flatpak            — produces dist/LiveSplit.flatpak (host-side native build skipped;
 #                        flatpak-builder runs the whole pipeline inside the sandbox)
 #
 # Prerequisites:
@@ -18,8 +18,8 @@
 #
 # Usage:
 #   scripts/package-linux.sh                        # dist/livesplit-linux-x64.tar.gz
-#   scripts/package-linux.sh --appimage             # also dist/LiveSplit-x86_64.AppImage
-#   scripts/package-linux.sh --flatpak              # dist/livesplit.flatpak (linux-x64 only)
+#   scripts/package-linux.sh --appimage             # also dist/LiveSplit.AppImage
+#   scripts/package-linux.sh --flatpak              # dist/LiveSplit.flatpak (linux-x64 only)
 #   scripts/package-linux.sh --rid linux-arm64      # cross-RID tarball
 
 set -euo pipefail
@@ -54,15 +54,15 @@ if [[ "$MAKE_FLATPAK" == "true" ]]; then
     flatpak-builder --repo="$DIST_DIR/flatpak-repo" --force-clean \
         "$DIST_DIR/flatpak-build" org.livesplit.LiveSplit.yml
     flatpak build-bundle "$DIST_DIR/flatpak-repo" \
-        "$DIST_DIR/livesplit.flatpak" org.livesplit.LiveSplit
+        "$DIST_DIR/LiveSplit.flatpak" org.livesplit.LiveSplit
     popd >/dev/null
 
-    echo "wrote $DIST_DIR/livesplit.flatpak"
-    echo "install with: flatpak install --user $DIST_DIR/livesplit.flatpak"
+    echo "wrote $DIST_DIR/LiveSplit.flatpak"
+    echo "install with: flatpak install --user $DIST_DIR/LiveSplit.flatpak"
     exit 0
 fi
 
-PUBLISH_DIR="$DIST_DIR/publish-$RID"
+PUBLISH_DIR="$DIST_DIR/livesplit-$RID"
 rm -rf "$PUBLISH_DIR"
 
 # Build the Rust native libs for the target RID first (no-op if already built).
@@ -77,9 +77,10 @@ dotnet publish "$REPO_ROOT/src/LiveSplit/LiveSplit.csproj" \
     -p:DebugType=None \
     -o "$PUBLISH_DIR"
 
-# Tarball: livesplit-linux-x64.tar.gz containing the self-contained publish output.
+# Tarball: livesplit-linux-x64.tar.gz containing one livesplit-linux-x64/ folder
+# (matches the publish dir name so untar produces a single top-level directory).
 TARBALL="$DIST_DIR/livesplit-${RID}.tar.gz"
-tar -C "$DIST_DIR" -czf "$TARBALL" "publish-$RID"
+tar -C "$DIST_DIR" -czf "$TARBALL" "livesplit-$RID"
 echo "wrote $TARBALL"
 
 # Optional AppImage. Requires linuxdeploy in PATH; ships an icon + .desktop file.
@@ -111,6 +112,9 @@ EOF
 
     pushd "$DIST_DIR" >/dev/null
     linuxdeploy --appdir "$APPDIR" --output appimage
+    # linuxdeploy names the file after the .desktop Name + arch (e.g. LiveSplit-x86_64.AppImage).
+    # Normalize to a single LiveSplit.AppImage so release assets have a stable URL.
+    mv LiveSplit-*.AppImage LiveSplit.AppImage
     popd >/dev/null
-    echo "wrote $DIST_DIR/LiveSplit-$RID.AppImage"
+    echo "wrote $DIST_DIR/LiveSplit.AppImage"
 fi

@@ -102,17 +102,16 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
-          # Bridge /var/lib/flatpak to the cached user-owned path (see comment above).
           mkdir -p "$HOME/.local/share/flatpak-system"
           sudo rm -rf /var/lib/flatpak
           sudo ln -s "$HOME/.local/share/flatpak-system" /var/lib/flatpak
-          # Idempotent: a warm cache makes this near-instant.
-          flatpak remote-add --system --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          flatpak install --system -y --noninteractive flathub \
+          sudo flatpak remote-add --system --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install --system -y --noninteractive flathub \
             org.freedesktop.Platform//24.08 \
             org.freedesktop.Sdk//24.08 \
             org.freedesktop.Sdk.Extension.dotnet8//24.08 \
             org.freedesktop.Sdk.Extension.rust-stable//24.08
+          sudo chown -R "$USER:$(id -gn)" "$HOME/.local/share/flatpak-system"
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6

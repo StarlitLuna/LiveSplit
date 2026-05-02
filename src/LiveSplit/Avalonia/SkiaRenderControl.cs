@@ -10,6 +10,7 @@ using LiveSplit.UI.Drawing;
 using LiveSplit.UI.Drawing.Skia;
 using LiveSplit.UI.Components;
 using LiveSplit.Model;
+using LiveSplit.Options;
 
 using SkiaSharp;
 
@@ -40,7 +41,7 @@ public sealed class SkiaRenderControl : Control
         int w = (int)System.Math.Max(1, Bounds.Width);
         int h = (int)System.Math.Max(1, Bounds.Height);
 
-        Host.Renderer.CalculateOverallSize(Host.State.Layout.Mode);
+        Host.UpdateComponentsForRender(w, h);
 
         using var surface = SKSurface.Create(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
         if (surface == null)
@@ -52,19 +53,25 @@ public sealed class SkiaRenderControl : Control
         canvas.Clear(SKColors.Transparent);
 
         IDrawingContext ctx = new SkiaDrawingContext(canvas);
+        ApplyMasterRenderSettings(ctx, Host.State.LayoutSettings);
         LayoutMode mode = Host.State.Layout.Mode;
 
         RenderOp.DrawLayoutBackgroundInner(ctx, Host.State.LayoutSettings, w, h);
 
-        float overallSize = Host.Renderer.OverallSize;
+        float overallSize = System.Math.Max(Host.Renderer.OverallSize, 1f);
         float scale = mode == LayoutMode.Vertical ? h / overallSize : w / overallSize;
         if (scale > 0 && !float.IsInfinity(scale) && !float.IsNaN(scale))
         {
             ctx.ScaleTransform(scale, scale);
         }
+        else
+        {
+            return null;
+        }
 
         float drawWidth = mode == LayoutMode.Vertical ? w / scale : overallSize;
         float drawHeight = mode == LayoutMode.Vertical ? overallSize : h / scale;
+        ctx.TranslateTransform(-0.5f, -0.5f);
         Host.Renderer.Render(ctx, Host.State, drawWidth, drawHeight, mode);
 
         using SKImage image = surface.Snapshot();
@@ -116,10 +123,12 @@ public sealed class SkiaRenderControl : Control
             SKCanvas canvas = lease.SkCanvas;
 
             IDrawingContext ctx = new SkiaDrawingContext(canvas);
+            ApplyMasterRenderSettings(ctx, _host.State.LayoutSettings);
 
             LiveSplitState state = _host.State;
             float width = (float)Bounds.Width;
             float height = (float)Bounds.Height;
+            _host.UpdateComponentsForRender(width, height);
             LayoutMode mode = state.Layout.Mode;
 
             // Layout-level background (solid, gradient, or image). Drawn before the per-component
@@ -130,7 +139,7 @@ public sealed class SkiaRenderControl : Control
 
             // Scale so components paint at their natural size; the layout mode picks which
             // axis is the constraint (full height for vertical, full width for horizontal).
-            float overallSize = _host.Renderer.OverallSize;
+            float overallSize = System.Math.Max(_host.Renderer.OverallSize, 1f);
             float scale = mode == LayoutMode.Vertical
                 ? height / overallSize
                 : width / overallSize;
@@ -138,10 +147,15 @@ public sealed class SkiaRenderControl : Control
             {
                 ctx.ScaleTransform(scale, scale);
             }
+            else
+            {
+                return;
+            }
 
             float drawWidth = mode == LayoutMode.Vertical ? width / scale : overallSize;
             float drawHeight = mode == LayoutMode.Vertical ? overallSize : height / scale;
 
+            ctx.TranslateTransform(-0.5f, -0.5f);
             _host.Renderer.Render(ctx, state, drawWidth, drawHeight, mode);
         }
 
@@ -212,5 +226,17 @@ public sealed class SkiaRenderControl : Control
                 }
             }
         }
+    }
+
+    internal static void ApplyMasterRenderSettings(IDrawingContext ctx, LayoutSettings settings)
+    {
+#pragma warning disable CA1416 // The System.Drawing enum values are used by our cross-platform Skia abstraction only.
+        ctx.TextRenderingHint = settings?.AntiAliasing == true
+            ? System.Drawing.Text.TextRenderingHint.AntiAlias
+            : System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        ctx.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.GammaCorrected;
+        ctx.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Bilinear;
+        ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+#pragma warning restore CA1416
     }
 }

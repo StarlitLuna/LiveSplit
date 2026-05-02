@@ -63,7 +63,7 @@ public static class SmokeTestRunner
         width = Math.Max(1, width);
         height = Math.Max(1, height);
 
-        host.Renderer.CalculateOverallSize(host.State.Layout.Mode);
+        host.UpdateComponentsForRender(width, height);
 
         using var surface = SKSurface.Create(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
         if (surface is null)
@@ -75,17 +75,23 @@ public static class SmokeTestRunner
         canvas.Clear(SKColors.Transparent);
 
         var ctx = new SkiaDrawingContext(canvas);
+        SkiaRenderControl.ApplyMasterRenderSettings(ctx, host.State.LayoutSettings);
         LayoutMode mode = host.State.Layout.Mode;
 
-        float overallSize = host.Renderer.OverallSize;
+        float overallSize = Math.Max(host.Renderer.OverallSize, 1f);
         float scale = mode == LayoutMode.Vertical ? height / overallSize : width / overallSize;
         if (scale > 0 && !float.IsInfinity(scale) && !float.IsNaN(scale))
         {
             ctx.ScaleTransform(scale, scale);
         }
+        else
+        {
+            throw new InvalidOperationException("Smoke test calculated an invalid render scale.");
+        }
 
         float drawWidth = mode == LayoutMode.Vertical ? width / scale : overallSize;
         float drawHeight = mode == LayoutMode.Vertical ? overallSize : height / scale;
+        ctx.TranslateTransform(-0.5f, -0.5f);
         host.Renderer.Render(ctx, host.State, drawWidth, drawHeight, mode);
 
         if (!host.Renderer.VisibleComponents.Any())

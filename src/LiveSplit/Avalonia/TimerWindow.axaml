@@ -3,7 +3,8 @@
         xmlns:local="using:LiveSplit.Avalonia"
         x:Class="LiveSplit.Avalonia.TimerWindow"
         Title="LiveSplit"
-        Background="#101214"
+        Background="Black"
+        SystemDecorations="None"
         CanResize="True">
   <Window.ContextMenu>
     <ContextMenu>

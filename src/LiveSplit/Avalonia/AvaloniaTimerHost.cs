@@ -42,6 +42,7 @@ public sealed class AvaloniaTimerHost : IDisposable
     private readonly Task _refreshTask;
     private readonly HotkeyService _hotkeys;
     private readonly TimerModel _timerModel;
+    private readonly Invalidator _invalidator;
     private readonly bool _activateAutoSplitters;
     private readonly bool _persistOnDispose;
     private readonly Func<string, AutoSplitter> _autoSplitterResolver;
@@ -65,6 +66,7 @@ public sealed class AvaloniaTimerHost : IDisposable
 
         ISettings settings = LoadOrCreateSettings();
         LayoutSettings layoutSettings = new StandardLayoutSettingsFactory().Create();
+        _invalidator = new Invalidator((_, _, _, _) => Invalidate());
 
         State = new LiveSplitState(null, null, null, layoutSettings, settings);
 
@@ -482,6 +484,30 @@ public sealed class AvaloniaTimerHost : IDisposable
     public bool DispatchFocusedHotkey(global::Avalonia.Input.Key key)
     {
         return _hotkeys?.DispatchFocusedKey(key) == true;
+    }
+
+    public void UpdateComponentsForRender(float width, float height)
+    {
+        if (State?.Layout is null || Renderer?.VisibleComponents is null)
+        {
+            return;
+        }
+
+        width = Math.Max(1f, width);
+        height = Math.Max(1f, height);
+        UI.LayoutMode mode = State.Layout.Mode;
+
+        try
+        {
+            Renderer.CalculateOverallSize(mode);
+            _invalidator.Restart();
+            Renderer.Update(_invalidator, State, width, height, mode);
+        }
+        catch (Exception e)
+        {
+            Options.Log.Error(e);
+            Invalidate();
+        }
     }
 
     public void ApplySettings(ISettings settings, string selectedHotkeyProfile)

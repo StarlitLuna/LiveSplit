@@ -31,6 +31,9 @@ namespace LiveSplit.Avalonia;
 /// </summary>
 public sealed partial class TimerWindow : Window
 {
+    private const int BorderlessWidthCompensation = 3;
+    private const int BorderlessHeightCompensation = 1;
+
     public AvaloniaTimerHost Host { get; }
 
     public ICommand SplitCommand { get; }
@@ -337,8 +340,9 @@ public sealed partial class TimerWindow : Window
 
         if (w != UI.Layout.InvalidSize && h != UI.Layout.InvalidSize && w > 0 && h > 0)
         {
-            Width = w;
-            Height = h;
+            (int windowWidth, int windowHeight) = GetWindowSizeForLayout(w, h);
+            Width = windowWidth;
+            Height = windowHeight;
         }
 
         if (layout.X != 0 || layout.Y != 0)
@@ -360,8 +364,7 @@ public sealed partial class TimerWindow : Window
             return;
         }
 
-        int w = (int)Math.Round(e.NewSize.Width);
-        int h = (int)Math.Round(e.NewSize.Height);
+        (int w, int h) = GetLayoutSizeForWindow(e.NewSize.Width, e.NewSize.Height);
         bool vertical = layout.Mode == UI.LayoutMode.Vertical;
         int currentW = vertical ? layout.VerticalWidth : layout.HorizontalWidth;
         int currentH = vertical ? layout.VerticalHeight : layout.HorizontalHeight;
@@ -383,6 +386,16 @@ public sealed partial class TimerWindow : Window
 
         layout.HasChanged = true;
     }
+
+    public static (int Width, int Height) GetWindowSizeForLayout(int layoutWidth, int layoutHeight)
+        => (
+            Math.Max(1, layoutWidth + BorderlessWidthCompensation),
+            Math.Max(1, layoutHeight + BorderlessHeightCompensation));
+
+    public static (int Width, int Height) GetLayoutSizeForWindow(double windowWidth, double windowHeight)
+        => (
+            Math.Max(1, (int)Math.Round(windowWidth) - BorderlessWidthCompensation),
+            Math.Max(1, (int)Math.Round(windowHeight) - BorderlessHeightCompensation));
 
 #pragma warning disable CS0618 // Avalonia 11 marks FileDialogFilter / OpenFileDialog obsolete in favor of StorageProvider; migration is tracked separately.
     private async Task OpenSplits()
@@ -616,8 +629,7 @@ public sealed partial class TimerWindow : Window
             return;
         }
 
-        int w = (int)Math.Round(Width);
-        int h = (int)Math.Round(Height);
+        (int w, int h) = GetLayoutSizeForWindow(Width, Height);
         if (layout.Mode == UI.LayoutMode.Vertical)
         {
             layout.VerticalWidth = w;

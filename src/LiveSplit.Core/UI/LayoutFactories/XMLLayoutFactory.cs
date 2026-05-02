@@ -94,6 +94,14 @@ public class XMLLayoutFactory : ILayoutFactory
 
         settings.BackgroundImage = SettingsHelper.GetImageFromElement(element["BackgroundImage"]);
 
+        if (settings.TimerFont == null || settings.TimesFont == null || settings.TextFont == null)
+        {
+            LayoutSettings defaults = new Options.SettingsFactories.StandardLayoutSettingsFactory().Create();
+            settings.TimerFont ??= defaults.TimerFont;
+            settings.TimesFont ??= defaults.TimesFont;
+            settings.TextFont ??= defaults.TextFont;
+        }
+
         return settings;
     }
 

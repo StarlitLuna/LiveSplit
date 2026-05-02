@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -429,9 +428,9 @@ public class DetailedTimer : IComponent
         Cache["InternalComponentText"] = InternalComponent.BigTextLabel.Text + InternalComponent.SmallTextLabel.Text;
         if (InternalComponent.BigTextLabel.Brush != null && invalidator != null)
         {
-            if (InternalComponent.BigTextLabel.Brush is LinearGradientBrush brush)
+            if (InternalComponent.BigTextLabel.Brush is ILinearGradientBrush brush)
             {
-                Cache["TimerColor"] = brush.LinearColors.First().ToArgb();
+                Cache["TimerColor"] = brush.StartColor.ToArgb();
             }
             else
             {

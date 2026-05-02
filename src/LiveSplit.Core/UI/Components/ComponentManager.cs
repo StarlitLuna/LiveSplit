@@ -10,7 +10,7 @@ namespace LiveSplit.UI.Components;
 
 public class ComponentManager
 {
-    public const string PATH_COMPONENTS = "Components\\";
+    public const string PATH_COMPONENTS = "Components";
     public static string BasePath { get; set; }
     public static IDictionary<string, IComponentFactory> ComponentFactories { get; protected set; }
 

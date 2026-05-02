@@ -45,8 +45,6 @@ You can browse the [Issues](https://github.com/LiveSplit/LiveSplit/issues) to fi
 
 ## Building on Linux
 
-The instructions above produce a Windows binary (`net8.0-windows`). A Linux port using an Avalonia front-end and a SkiaSharp renderer lives on the `linux-port` branch. The notes below cover building it on any distro and packaging it as a tarball, AppImage, or — recommended for distribution — a Flatpak.
-
 ### Prerequisites (all distros)
 
 You need three toolchains on the build host (or, for the Flatpak path, only `flatpak-builder` — see below):

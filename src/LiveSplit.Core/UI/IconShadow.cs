@@ -41,10 +41,10 @@ public static class IconShadow
         }
 
         // Downsample to a fixed size so the kernel produces a consistent shadow regardless of
-        // the source icon resolution. Mitchell cubic resampling matches the prior High filter.
+        // the source icon resolution. High-quality filter is the cubic Mitchell resampler
         var scaledInfo = new SKImageInfo(ScaledSize, ScaledSize, SKColorType.Bgra8888, SKAlphaType.Unpremul);
         using var scaled = new SKBitmap(scaledInfo);
-        source.ScalePixels(scaled, new SKSamplingOptions(SKCubicResampler.Mitchell));
+        source.ScalePixels(scaled, SKFilterQuality.High);
 
         byte[] sourceAlpha = ExtractAlpha(scaled, ScaledSize, ScaledSize);
 

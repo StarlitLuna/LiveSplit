@@ -87,7 +87,16 @@ public interface ISolidBrush : IBrush
     Color Color { get; set; }
 }
 
-public interface ILinearGradientBrush : IBrush { }
+public interface ILinearGradientBrush : IBrush
+{
+    /// <summary>
+    /// Color at the gradient's start point. Exposed so consumers (e.g. DetailedTimer's
+    /// invalidation cache) can introspect the gradient without a backend-specific cast.
+    /// </summary>
+    Color StartColor { get; }
+    /// <summary>Color at the gradient's end point.</summary>
+    Color EndColor { get; }
+}
 
 public interface IPen : IDisposable
 {

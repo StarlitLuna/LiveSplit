@@ -20,11 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.2.0" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.2.0" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.0" />
-    <PackageReference Include="Avalonia.Skia" Version="11.2.0" />
-    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.0" />
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Skia" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="$(AvaloniaVersion)" />
     <!-- Cross-platform global keyboard hook (libuiohook wrapper) for split/reset/skip/undo/pause
          hotkeys that work when LiveSplit isn't focused. Linux X11 path requires the X11 socket
          (granted by socket=fallback-x11 in the Flatpak manifest); Wayland users without the
@@ -67,6 +67,41 @@
     </ItemGroup>
 
     <Delete Files="@(_FilesToPrune)" />
+  </Target>
+
+  <!-- Components live under components/ and are loaded via reflection from a Components/ subdir
+       at runtime; they are deliberately not ProjectReference-able from this project, so dotnet
+       publish would otherwise leave them out of the self-contained output. Build the component
+       csproj's inline and stage their .dll outputs (plus any RID-matched native runtime files)
+       into the publish dir as Components/. -->
+  <Target Name="BuildAndPublishComponents" BeforeTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <_ComponentProjects Include="$(ComponentsPath)\**\*.csproj" />
+    </ItemGroup>
+
+    <!-- Components are framework-dependent libraries loaded into the main app's runtime; clear
+         the inherited RuntimeIdentifier so they don't try to restore for the publish RID. -->
+    <MSBuild Projects="@(_ComponentProjects)"
+             Targets="Restore;Build"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=;SelfContained=" />
+
+    <ItemGroup>
+      <!-- Top-level component DLLs (managed, RID-agnostic). -->
+      <_ComponentManagedDlls Include="$(BuildPath)\Components\*.dll" />
+      <ResolvedFileToPublish Include="@(_ComponentManagedDlls)">
+        <RelativePath>Components\%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+
+      <!-- Native runtime tree filtered to the publish RID, so a linux-x64 publish doesn't
+           drag win-* native libs along. -->
+      <_ComponentRuntimeFiles Include="$(BuildPath)\Components\runtimes\$(RuntimeIdentifier)\**\*"
+                              Condition="'$(RuntimeIdentifier)' != ''" />
+      <ResolvedFileToPublish Include="@(_ComponentRuntimeFiles)">
+        <RelativePath>Components\runtimes\$(RuntimeIdentifier)\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
   </Target>
 
 </Project>

@@ -3,7 +3,6 @@
         xmlns:local="using:LiveSplit.Avalonia"
         x:Class="LiveSplit.Avalonia.TimerWindow"
         Title="LiveSplit"
-        Width="300" Height="500"
         Background="#101214"
         CanResize="True">
   <!--

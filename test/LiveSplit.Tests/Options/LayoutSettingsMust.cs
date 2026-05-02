@@ -1,7 +1,10 @@
-﻿using System.Drawing;
+﻿using System;
+using System.Drawing;
+using System.IO;
 
 using LiveSplit.Options;
 using LiveSplit.UI;
+using LiveSplit.UI.Drawing;
 
 using Xunit;
 
@@ -104,5 +107,65 @@ public class LayoutSettingsMust
         var sut = new LayoutSettings();
         sut.Assign(original);
         ValidateSubject(sut);
+    }
+
+    [Fact]
+    public void CacheFailedBackgroundImageDecode()
+    {
+        IDrawingFactory previousFactory = null;
+        try
+        {
+            previousFactory = DrawingApi.Factory;
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        var factory = new CountingDrawingFactory();
+        DrawingApi.Register(factory);
+
+        try
+        {
+            var sut = new LayoutSettings { BackgroundImage = new byte[] { 1, 2, 3 } };
+
+            Assert.Null(sut.GetCachedBackgroundImage());
+            Assert.Null(sut.GetCachedBackgroundImage());
+
+            Assert.Equal(1, factory.LoadImageCalls);
+        }
+        finally
+        {
+            if (previousFactory != null)
+            {
+                DrawingApi.Register(previousFactory);
+            }
+        }
+    }
+
+    private sealed class CountingDrawingFactory : IDrawingFactory
+    {
+        public int LoadImageCalls { get; private set; }
+
+        public ISolidBrush CreateSolidBrush(Color color) => throw new NotSupportedException();
+
+        public ILinearGradientBrush CreateLinearGradientBrush(PointF start, PointF end, Color startColor, Color endColor)
+            => throw new NotSupportedException();
+
+        public IPen CreatePen(Color color, float width) => throw new NotSupportedException();
+
+        public IFont CreateFont(string familyName, float size, FontStyle style, GraphicsUnit unit)
+            => throw new NotSupportedException();
+
+        public IImage CreateImage(int width, int height) => throw new NotSupportedException();
+
+        public IImage LoadImage(Stream stream)
+        {
+            LoadImageCalls++;
+            throw new InvalidOperationException("Decode failed.");
+        }
+
+        public IGraphicsPath CreateGraphicsPath() => throw new NotSupportedException();
+
+        public ITextFormat CreateTextFormat() => throw new NotSupportedException();
     }
 }

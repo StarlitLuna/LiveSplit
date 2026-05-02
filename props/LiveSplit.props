@@ -14,6 +14,10 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
 
+    <!-- Keep restore self-contained for CI/sandboxed builds. This avoids depending on
+         user-wide NuGet.Config files or package caches outside the repository. -->
+    <RestoreConfigFile Condition="'$(RestoreConfigFile)' == ''">$(MSBuildThisFileDirectory)..\NuGet.Config</RestoreConfigFile>
+
     <!-- BinaryFormatter is disabled by default on .NET 8+; LiveSplit still uses it to (de)serialize
          Font/Image/ISegment blobs for .lss / .lsl round-trip. Opt back in at the app level; format
          migration is deferred. BinaryFormatter is removed entirely on .NET 9+, so this must be

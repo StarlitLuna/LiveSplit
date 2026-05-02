@@ -12,6 +12,15 @@ internal static class Program
     {
         InitializeLocalization();
         StartupOptions.Parse(args);
+        if (StartupOptions.SmokeTest)
+        {
+            return SmokeTestRunner.Run(new SmokeTestOptions
+            {
+                SplitsPath = StartupOptions.SplitsPath,
+                LayoutPath = StartupOptions.LayoutPath
+            });
+        }
+
         return AvaloniaProgram.Run(args);
     }
 

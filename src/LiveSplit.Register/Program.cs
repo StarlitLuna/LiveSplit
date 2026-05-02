@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 using LiveSplit.Options;
 
@@ -9,14 +9,10 @@ public class Program
 {
     private static void Main(string[] args)
     {
-        try
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            if (!EventLog.SourceExists("LiveSplit"))
-            {
-                EventLog.CreateEventSource("LiveSplit", "Application");
-            }
+            return;
         }
-        catch { }
 
         try
         {

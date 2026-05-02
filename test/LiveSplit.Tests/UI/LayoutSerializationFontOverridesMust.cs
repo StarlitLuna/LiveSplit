@@ -108,6 +108,27 @@ public class LayoutSerializationFontOverridesMust
         Assert.Null(fontOverridesNode);
     }
 
+    [Fact]
+    public void PreserveLegacyFontBlob_WhenItCannotBeDecoded()
+    {
+        byte[] legacyBlob = { 9, 8, 7, 6 };
+        var source = new XmlDocument();
+        XmlElement sourceElement = source.CreateElement("TimerFont");
+        sourceElement.InnerText = Convert.ToBase64String(legacyBlob);
+
+        FontDescriptor font = SettingsHelper.GetFontFromElement(sourceElement);
+
+        Assert.NotNull(font);
+        Assert.Equal(legacyBlob, font.LegacySerializedFont);
+
+        var output = new XmlDocument();
+        XmlElement parent = output.CreateElement("Settings");
+        output.AppendChild(parent);
+        SettingsHelper.CreateSetting(output, parent, "TimerFont", font);
+
+        Assert.Equal(sourceElement.InnerText, parent["TimerFont"].InnerText);
+    }
+
     /// <summary>
     /// Minimal IComponent stub for serialization tests.
     /// Only GetSettings is needed by XMLLayoutSaver.

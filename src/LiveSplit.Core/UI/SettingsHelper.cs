@@ -1,6 +1,8 @@
 using System;
 using System.Drawing;
 using System.Globalization;
+using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Xml;
 
 namespace LiveSplit.UI;
@@ -30,8 +32,8 @@ public class SettingsHelper
     /// Read a font descriptor from XML. The current format stores nested
     /// <c>&lt;FamilyName&gt;</c>/<c>&lt;Size&gt;</c>/<c>&lt;Style&gt;</c>/<c>&lt;Unit&gt;</c> elements.
     /// Older <c>.lss</c> / <c>.lsl</c> files stored a base64'd <c>BinaryFormatter</c> blob of a
-    /// <see cref="System.Drawing.Font"/>; that path needs Windows-only types and is dropped on the
-    /// linux-port — old custom fonts fall back to defaults from <c>StandardLayoutSettingsFactory</c>.
+    /// <see cref="System.Drawing.Font"/>. Decode it when possible, and otherwise preserve the
+    /// blob so saving the layout does not destroy data still understood by Windows builds.
     /// </summary>
     public static FontDescriptor GetFontFromElement(XmlElement element)
     {
@@ -50,9 +52,20 @@ public class SettingsHelper
                 unit: ParseEnum(element["Unit"], GraphicsUnit.Point));
         }
 
-        // Legacy binary-blob format — unreadable without System.Drawing.Font. Returning null
-        // makes the caller fall through to the default font from StandardLayoutSettingsFactory.
-        return null;
+        byte[] legacy = TryReadBase64(element.InnerText);
+        if (legacy is null)
+        {
+            return null;
+        }
+
+        FontDescriptor decoded = TryDecodeLegacyFont(legacy);
+        if (decoded != null)
+        {
+            return decoded;
+        }
+
+        return new FontDescriptor { LegacySerializedFont = legacy };
+
     }
 
     public static int CreateSetting(XmlDocument document, XmlElement parent, string elementName, FontDescriptor font)
@@ -61,7 +74,12 @@ public class SettingsHelper
         {
             XmlElement element = document.CreateElement(elementName);
 
-            if (font != null)
+            if (font?.LegacySerializedFont is { Length: > 0 })
+            {
+                XmlCDataSection cdata = document.CreateCDataSection(Convert.ToBase64String(font.LegacySerializedFont));
+                element.InnerXml = cdata.OuterXml;
+            }
+            else if (font != null)
             {
                 XmlElement family = document.CreateElement("FamilyName");
                 family.InnerText = font.FamilyName;
@@ -86,28 +104,92 @@ public class SettingsHelper
         return font?.GetHashCode() ?? 0;
     }
 
-    /// <summary>
-    /// Background-image storage was a base64'd <c>BinaryFormatter</c> blob of
-    /// <see cref="System.Drawing.Image"/>, also Windows-only. We now write empty image elements
-    /// to preserve the layout schema; reintroducing custom backgrounds requires a SkiaSharp-backed
-    /// image surface, which is out of scope for the linux-port migration.
-    /// </summary>
     public static int CreateSetting(XmlDocument document, XmlElement parent, string elementName, byte[] image)
     {
         if (document != null)
         {
             XmlElement element = document.CreateElement(elementName);
+            if (image is { Length: > 0 })
+            {
+                XmlCDataSection cdata = document.CreateCDataSection(Convert.ToBase64String(image));
+                element.InnerXml = cdata.OuterXml;
+            }
+
             parent.AppendChild(element);
         }
 
-        return image?.GetHashCode() ?? 0;
+        return GetByteArrayHash(image);
     }
 
     public static byte[] GetImageFromElement(XmlElement element)
     {
-        // See CreateSetting(..., byte[] image). Old binary-blob images can't be decoded on .NET 8
-        // Linux; return null and let the layout render without a custom background.
+        if (element == null || element.IsEmpty)
+        {
+            return null;
+        }
+
+        return TryReadBase64(element.InnerText);
+    }
+
+    private static byte[] TryReadBase64(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return Convert.FromBase64String(value);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+#pragma warning disable SYSLIB0011
+    private static FontDescriptor TryDecodeLegacyFont(byte[] data)
+    {
+        try
+        {
+            using var stream = new MemoryStream(data);
+            if (new BinaryFormatter().Deserialize(stream) is Font font)
+            {
+                using (font)
+                {
+                    return new FontDescriptor(font.FontFamily.Name, font.Size, font.Style, font.Unit)
+                    {
+                        LegacySerializedFont = (byte[])data.Clone()
+                    };
+                }
+            }
+        }
+        catch
+        {
+        }
+
         return null;
+    }
+#pragma warning restore SYSLIB0011
+
+    private static int GetByteArrayHash(byte[] data)
+    {
+        if (data is null || data.Length == 0)
+        {
+            return 0;
+        }
+
+        unchecked
+        {
+            int hash = 17;
+            foreach (byte b in data)
+            {
+                hash = (hash * 31) + b;
+            }
+
+            return hash;
+        }
     }
 
     public static bool ParseBool(XmlElement boolElement, bool defaultBool = false)

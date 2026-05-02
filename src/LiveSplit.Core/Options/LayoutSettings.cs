@@ -29,6 +29,7 @@ public class LayoutSettings : ICloneable
 
     private byte[] _backgroundImage;
     private IImage _cachedBackgroundImage;
+    private bool _backgroundImageDecodeFailed;
 
     /// <summary>Encoded image bytes (PNG/JPEG). Stored opaquely so the data type stays cross-platform;
     /// rendering decodes via SkiaSharp when the layout draws.</summary>
@@ -41,6 +42,7 @@ public class LayoutSettings : ICloneable
             {
                 _cachedBackgroundImage?.Dispose();
                 _cachedBackgroundImage = null;
+                _backgroundImageDecodeFailed = false;
             }
 
             _backgroundImage = value;
@@ -50,7 +52,7 @@ public class LayoutSettings : ICloneable
     /// <summary>Lazily-decoded <see cref="IImage"/> for <see cref="BackgroundImage"/>. The
     /// renderer reads this on each frame; the decode happens once and caches until
     /// <see cref="BackgroundImage"/> is reassigned. Returns null if the bytes are missing or
-    /// fail to decode (any IO/decoder error gets logged and the cache stays null so we don't
+    /// fail to decode (any IO/decoder error gets logged once and negatively cached so we don't
     /// hot-loop on a broken image).</summary>
     public IImage GetCachedBackgroundImage()
     {
@@ -59,7 +61,7 @@ public class LayoutSettings : ICloneable
             return _cachedBackgroundImage;
         }
 
-        if (_backgroundImage is null || _backgroundImage.Length == 0)
+        if (_backgroundImageDecodeFailed || _backgroundImage is null || _backgroundImage.Length == 0)
         {
             return null;
         }
@@ -73,6 +75,7 @@ public class LayoutSettings : ICloneable
         {
             Log.Error(ex);
             _cachedBackgroundImage = null;
+            _backgroundImageDecodeFailed = true;
         }
 
         return _cachedBackgroundImage;
@@ -131,7 +134,9 @@ public class LayoutSettings : ICloneable
         Opacity = settings.Opacity;
         MousePassThroughWhileRunning = settings.MousePassThroughWhileRunning;
         BackgroundType = settings.BackgroundType;
-        BackgroundImage = settings.BackgroundImage;
+        BackgroundImage = settings.BackgroundImage is null
+            ? null
+            : (byte[])settings.BackgroundImage.Clone();
         ImageOpacity = settings.ImageOpacity;
         ImageBlur = settings.ImageBlur;
         AllowResizing = settings.AllowResizing;

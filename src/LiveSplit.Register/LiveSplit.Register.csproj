@@ -2,16 +2,20 @@
 
   <PropertyGroup>
     <RootNamespace>LiveSplit</RootNamespace>
-    <OutputType>Library</OutputType>
+    <OutputType>WinExe</OutputType>
+    <NoWarn>$(NoWarn);CA1416;CS1574</NoWarn>
 
     <!-- Windows-only utility — registered .lss/.lsl file associations and IE compat-view
-         registry tweaks. On Linux this compiles to an empty Library so the solution still
-         builds; the real source files are excluded below. -->
+         registry tweaks. On Linux this compiles to a no-op executable so the solution
+         still builds; Flatpak/xdg-mime handles Linux file association. -->
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Remove="**/*.cs" />
-    <Compile Include="LinuxNoOp.cs" />
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <Compile Remove="Program.cs;FiletypeRegistryHelper.cs;InternetExplorerBrowserEmulation.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
+    <Compile Remove="LinuxNoOp.cs" />
   </ItemGroup>
 
   <ItemGroup>

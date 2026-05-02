@@ -9,11 +9,13 @@ public static class StartupOptions
 {
     public static string SplitsPath { get; set; }
     public static string LayoutPath { get; set; }
+    public static bool SmokeTest { get; set; }
 
     public static void Parse(string[] args)
     {
         SplitsPath = null;
         LayoutPath = null;
+        SmokeTest = false;
 
         if (args == null)
         {
@@ -29,6 +31,10 @@ public static class StartupOptions
             else if (args[i] == "-l" && i + 1 < args.Length)
             {
                 LayoutPath = args[++i];
+            }
+            else if (args[i] == "--smoke-test")
+            {
+                SmokeTest = true;
             }
         }
     }

@@ -40,11 +40,24 @@ public sealed class AvaloniaTimerHost : IDisposable
     private readonly Action _invalidateVisual;
     private readonly Task _refreshTask;
     private readonly HotkeyService _hotkeys;
+    private readonly bool _activateAutoSplitters;
+    private readonly bool _persistOnDispose;
+    private readonly Func<string, AutoSplitter> _autoSplitterResolver;
     private bool _disposed;
 
-    public AvaloniaTimerHost(Action invalidateVisual, string splitsPath = null, string layoutPath = null)
+    public AvaloniaTimerHost(
+        Action invalidateVisual,
+        string splitsPath = null,
+        string layoutPath = null,
+        bool startBackgroundServices = true,
+        bool persistOnDispose = true,
+        Func<string, AutoSplitter> autoSplitterResolver = null
+    )
     {
         _invalidateVisual = invalidateVisual;
+        _activateAutoSplitters = startBackgroundServices;
+        _persistOnDispose = persistOnDispose;
+        _autoSplitterResolver = autoSplitterResolver ?? (static game => AutoSplitterFactory.Instance.Create(game));
         // Plugin and on-disk auto-splitter resolution walks ComponentManager.BasePath.
         ComponentManager.BasePath = UserDataPaths.ExecutableDir;
 
@@ -77,7 +90,7 @@ public sealed class AvaloniaTimerHost : IDisposable
         SwitchComparison(State, settings.LastComparison);
         RegenerateComparisons(State);
 
-        CreateAutoSplitter(State);
+        CreateAutoSplitter(State, _activateAutoSplitters, _autoSplitterResolver);
 
         Renderer = new ComponentRenderer
         {
@@ -86,21 +99,24 @@ public sealed class AvaloniaTimerHost : IDisposable
 
         WireStateEvents(invalidateVisual);
 
-        // System-wide split/reset/skip/undo/pause hotkey listener. Falls back silently if
-        // libuiohook can't grab globals (Wayland without portal, headless CI); the per-window
-        // KeyBindings in TimerWindow.axaml still fire when the LiveSplit window is focused.
-        _hotkeys = new HotkeyService(State, Model);
-        _hotkeys.Start();
-
-        int delayMs = Math.Max(1, (int)Math.Round(1000.0 / Math.Max(1, settings.RefreshRate)));
-        _refreshTask = Task.Run(async () =>
+        if (startBackgroundServices)
         {
-            while (!_disposed)
+            // System-wide split/reset/skip/undo/pause hotkey listener. Falls back silently if
+            // libuiohook can't grab globals (Wayland without portal, headless CI); the per-window
+            // KeyBindings in TimerWindow.axaml still fire when the LiveSplit window is focused.
+            _hotkeys = new HotkeyService(State, Model);
+            _hotkeys.Start();
+
+            int delayMs = Math.Max(1, (int)Math.Round(1000.0 / Math.Max(1, settings.RefreshRate)));
+            _refreshTask = Task.Run(async () =>
             {
-                Dispatcher.UIThread.Post(invalidateVisual, DispatcherPriority.Background);
-                await Task.Delay(delayMs).ConfigureAwait(false);
-            }
-        });
+                while (!_disposed)
+                {
+                    Dispatcher.UIThread.Post(invalidateVisual, DispatcherPriority.Background);
+                    await Task.Delay(delayMs).ConfigureAwait(false);
+                }
+            });
+        }
     }
 
     public void Dispose()
@@ -114,12 +130,15 @@ public sealed class AvaloniaTimerHost : IDisposable
 
         try
         {
-            State.Settings.LastComparison = State.CurrentComparison;
-            UpdateRecentSplitsTimingForCurrentRun();
             State.Run.AutoSplitter?.Deactivate();
-            SaveRunIfDirty();
-            SaveLayoutIfDirty();
-            SaveSettingsToDisk(State.Settings);
+            if (_persistOnDispose)
+            {
+                State.Settings.LastComparison = State.CurrentComparison;
+                UpdateRecentSplitsTimingForCurrentRun();
+                SaveRunIfDirty();
+                SaveLayoutIfDirty();
+                SaveSettingsToDisk(State.Settings);
+            }
         }
         catch (Exception e)
         {
@@ -172,7 +191,7 @@ public sealed class AvaloniaTimerHost : IDisposable
             SwitchComparison(State, State.Settings.LastComparison);
             RegenerateComparisons(State);
 
-            CreateAutoSplitter(State);
+            CreateAutoSplitter(State, _activateAutoSplitters, _autoSplitterResolver);
 
             Invalidate();
             return true;
@@ -352,9 +371,15 @@ public sealed class AvaloniaTimerHost : IDisposable
         }
     }
 
-    private static void CreateAutoSplitter(LiveSplitState state)
+    private static void CreateAutoSplitter(LiveSplitState state, bool activate, Func<string, AutoSplitter> resolveAutoSplitter)
     {
-        AutoSplitter splitter = AutoSplitterFactory.Instance.Create(state.Run.GameName);
+        if (!activate)
+        {
+            state.Run.AutoSplitter = null;
+            return;
+        }
+
+        AutoSplitter splitter = resolveAutoSplitter(state.Run.GameName);
         state.Run.AutoSplitter = splitter;
         if (splitter == null || !state.Settings.ActiveAutoSplitters.Contains(state.Run.GameName))
         {

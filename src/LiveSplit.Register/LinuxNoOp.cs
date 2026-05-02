@@ -6,5 +6,8 @@ namespace LiveSplit.Register
 {
     internal static class LinuxNoOp
     {
+        private static void Main(string[] args)
+        {
+        }
     }
 }

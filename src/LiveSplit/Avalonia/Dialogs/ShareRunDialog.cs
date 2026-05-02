@@ -1,8 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Net.Http;
-using System.Net.Http.Headers;
+using System.Linq;
 using System.Threading.Tasks;
 
 using global::Avalonia;
@@ -13,72 +13,42 @@ using global::Avalonia.Media;
 using global::Avalonia.Platform.Storage;
 
 using LiveSplit.Model;
-using LiveSplit.Model.RunSavers;
 using LiveSplit.Options;
 using LiveSplit.Web;
+using LiveSplit.Web.Share;
 
 namespace LiveSplit.Avalonia.Dialogs;
 
-/// <summary>
-/// Avalonia-native share dialog. Generates run screenshots via Skia (no System.Drawing
-/// dependency), and offers four destinations that are functional on Linux:
-///   - Save Screenshot…   → PNG file via Avalonia storage picker
-///   - Tweet…             → opens browser to twitter.com/intent/tweet (no clipboard image)
-///   - Upload to Imgur    → multipart POST via HttpClient; URL copied via Avalonia clipboard
-///   - Export to Excel    → calls <see cref="ExcelRunSaver"/> against the run
-///
-/// Paths that require Twitch OAuth or speedrun.com credentials are surfaced as info
-/// messages — those flows still depend on WinForms-based prompt dialogs and are tracked
-/// as follow-up work.
-/// </summary>
 public sealed class ShareRunDialog : Window
 {
-    private const string ImgurClientId = "63e6ae2de8601ef";
-
     private readonly Func<byte[]> _screenshotPng;
     private readonly LiveSplitState _state;
+    private readonly IRun _run;
     private readonly TaskCompletionSource<bool> _result = new();
+    private readonly IReadOnlyList<SharePlatformChoice> _platforms;
+    private readonly List<Button> _insertButtons = [];
+    private ComboBox _platformBox;
+    private TextBlock _descriptionBlock;
+    private TextBox _notesBox;
     private TextBlock _statusBlock;
+    private Button _submitButton;
+    private Button _previewButton;
 
-    public ShareRunDialog(LiveSplitState state, ISettings _, Func<byte[]> screenshotPng)
+    public ShareRunDialog(LiveSplitState state, ISettings settings, Func<byte[]> screenshotPng)
     {
         _state = state;
         _screenshotPng = screenshotPng;
+        _run = SelectRunForSharing(state);
+        _platforms = BuildPlatformList();
 
         Title = "Share Run";
-        Width = 480;
-        Height = 320;
-        CanResize = false;
+        Width = 560;
+        Height = 560;
+        MinWidth = 460;
+        MinHeight = 440;
 
-        var msg = new TextBlock
-        {
-            Text = "Share or export the current run.",
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 12),
-        };
-
-        Button save = MakeAction("Save Screenshot…", SaveScreenshot);
-        Button tweet = MakeAction("Tweet…", Tweet);
-        Button imgur = MakeAction("Upload to Imgur", UploadToImgur);
-        Button excel = MakeAction("Export to Excel…", ExportExcel);
-
-        _statusBlock = new TextBlock { Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap };
-
-        var close = new Button { Content = "Close", Width = 80, IsCancel = true, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 12, 12) };
-        close.Click += (_, _) => { _result.TrySetResult(false); Close(); };
-
-        var stack = new StackPanel
-        {
-            Margin = new Thickness(20),
-            Spacing = 6,
-            Children = { msg, save, tweet, imgur, excel, _statusBlock },
-        };
-
-        var root = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(close, Dock.Bottom);
-        root.Children.Add(close);
-        root.Children.Add(stack);
-        Content = root;
+        Content = BuildContent();
+        RefreshPlatform();
 
         Closed += (_, _) =>
         {
@@ -89,30 +59,270 @@ public sealed class ShareRunDialog : Window
         };
     }
 
-    private Button MakeAction(string label, Func<Task> handler)
+    public async Task<bool> ShowDialogAsync(Window owner)
     {
-        var btn = new Button { Content = label, HorizontalAlignment = HorizontalAlignment.Stretch };
-        btn.Click += async (_, _) =>
+        if (owner is not null)
         {
-            try
-            {
-                await handler();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex);
-                SetStatus($"Failed: {ex.Message}");
-            }
-        };
-        return btn;
+            await ShowDialog(owner);
+        }
+        else
+        {
+            Show();
+        }
+
+        return await _result.Task;
     }
 
-    private void SetStatus(string text)
+    private Control BuildContent()
     {
-        if (_statusBlock != null)
+        _platformBox = new ComboBox
         {
-            _statusBlock.Text = text;
+            ItemsSource = _platforms,
+            SelectedIndex = 0,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        _platformBox.SelectionChanged += (_, _) => RefreshPlatform();
+
+        _descriptionBlock = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brushes.Gray
+        };
+
+        _notesBox = new TextBox
+        {
+            AcceptsReturn = true,
+            MinHeight = 120,
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        var insertPanel = new WrapPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        AddInsertButton(insertPanel, "$game");
+        AddInsertButton(insertPanel, "$category");
+        AddInsertButton(insertPanel, "$title");
+        AddInsertButton(insertPanel, "$pb");
+        AddInsertButton(insertPanel, "$splitname");
+        AddInsertButton(insertPanel, "$splittime");
+        AddInsertButton(insertPanel, "$delta");
+        AddInsertButton(insertPanel, "$stream");
+
+        _previewButton = new Button { Content = "Preview", Width = 88 };
+        _previewButton.Click += async (_, _) => await Preview();
+
+        _submitButton = new Button { Content = "Submit", Width = 88, IsDefault = true };
+        _submitButton.Click += async (_, _) => await Submit();
+
+        var close = new Button { Content = "Close", Width = 88, IsCancel = true };
+        close.Click += (_, _) =>
+        {
+            _result.TrySetResult(false);
+            Close();
+        };
+
+        var buttonBar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(0, 12, 0, 0),
+            Children = { _previewButton, close, _submitButton }
+        };
+
+        _statusBlock = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brushes.Gray,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+
+        return new StackPanel
+        {
+            Margin = new Thickness(20),
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "Platform:" },
+                _platformBox,
+                _descriptionBlock,
+                new TextBlock { Text = "Notes:" },
+                _notesBox,
+                insertPanel,
+                _statusBlock,
+                buttonBar
+            }
+        };
+    }
+
+    private void AddInsertButton(Panel panel, string token)
+    {
+        var button = new Button
+        {
+            Content = token,
+            Margin = new Thickness(0, 0, 6, 6),
+            MinWidth = 68
+        };
+        button.Click += (_, _) => Insert(token);
+        _insertButtons.Add(button);
+        panel.Children.Add(button);
+    }
+
+    private IReadOnlyList<SharePlatformChoice> BuildPlatformList()
+    {
+        var platforms = new List<SharePlatformChoice>
+        {
+            SharePlatformChoice.Twitter
+        };
+
+        if (_state.CurrentPhase is TimerPhase.NotRunning or TimerPhase.Ended && HasPersonalBest(_run))
+        {
+            platforms.Add(SharePlatformChoice.SpeedrunCom);
         }
+
+        platforms.Add(SharePlatformChoice.Twitch);
+        platforms.Add(SharePlatformChoice.Screenshot);
+        platforms.Add(SharePlatformChoice.Imgur);
+        platforms.Add(SharePlatformChoice.Excel);
+        return platforms;
+    }
+
+    private static IRun SelectRunForSharing(LiveSplitState state)
+    {
+        if (state.CurrentPhase != TimerPhase.Ended)
+        {
+            return state.Run;
+        }
+
+        var model = new TimerModel
+        {
+            CurrentState = state
+        };
+        model.ResetAndSetAttemptAsPB();
+        return state.Run;
+    }
+
+    private static bool HasPersonalBest(IRun run)
+    {
+        return run.LastOrDefault()?.PersonalBestSplitTime.RealTime.HasValue == true;
+    }
+
+    private SharePlatformChoice CurrentPlatform => _platformBox.SelectedItem as SharePlatformChoice ?? _platforms[0];
+
+    private void RefreshPlatform()
+    {
+        SharePlatformChoice platform = CurrentPlatform;
+        _descriptionBlock.Text = platform.Description;
+        _submitButton.Content = platform.SubmitText;
+
+        bool notesEnabled = platform.SupportsNotes;
+        _notesBox.IsEnabled = notesEnabled;
+        _previewButton.IsEnabled = notesEnabled;
+        foreach (Button button in _insertButtons)
+        {
+            button.IsEnabled = notesEnabled;
+        }
+
+        if (platform == SharePlatformChoice.Twitter)
+        {
+            _notesBox.Text = ShareNotesFormatter.DefaultTwitterFormat(_state.CurrentPhase);
+        }
+        else if (platform == SharePlatformChoice.Twitch)
+        {
+            _notesBox.Text = ShareNotesFormatter.DefaultTwitchFormat();
+        }
+        else if (platform == SharePlatformChoice.Imgur)
+        {
+            _notesBox.Text = Imgur.BuildTitle(_run, _state.CurrentTimingMethod);
+        }
+        else if (platform == SharePlatformChoice.SpeedrunCom)
+        {
+            _notesBox.Text = string.Empty;
+        }
+        else
+        {
+            _notesBox.Text = string.Empty;
+        }
+
+        _statusBlock.Text = string.Empty;
+    }
+
+    private async Task Submit()
+    {
+        SharePlatformChoice platform = CurrentPlatform;
+        if (platform == SharePlatformChoice.Twitter)
+        {
+            Twitter.Instance.SubmitRun(_run, method: _state.CurrentTimingMethod, comment: FormatNotes());
+            SetStatus("Opened browser to Twitter compose.");
+        }
+        else if (platform == SharePlatformChoice.Twitch)
+        {
+            await SubmitToTwitch();
+        }
+        else if (platform == SharePlatformChoice.Screenshot)
+        {
+            await SaveScreenshot();
+        }
+        else if (platform == SharePlatformChoice.Imgur)
+        {
+            await UploadToImgur();
+        }
+        else if (platform == SharePlatformChoice.Excel)
+        {
+            await ExportExcel();
+        }
+        else if (platform == SharePlatformChoice.SpeedrunCom)
+        {
+            await SubmitToSpeedrunCom();
+        }
+    }
+
+    private async Task Preview()
+    {
+        await new MessageDialog("Preview", FormatNotes()).ShowDialogAsync(this);
+    }
+
+    private void Insert(string token)
+    {
+        int caret = Math.Clamp(_notesBox.CaretIndex, 0, _notesBox.Text?.Length ?? 0);
+        _notesBox.Text = (_notesBox.Text ?? string.Empty).Insert(caret, token);
+        _notesBox.CaretIndex = caret + token.Length;
+        _notesBox.Focus();
+    }
+
+    private string FormatNotes()
+    {
+        string template = _notesBox.Text ?? string.Empty;
+        return ShareNotesFormatter.Format(
+            _run,
+            _state.CurrentPhase,
+            _state.CurrentSplitIndex,
+            _state.CurrentTimingMethod,
+            template,
+            ResolveStreamLink(template));
+    }
+
+    private static string ResolveStreamLink(string template)
+    {
+        if (template?.Contains("$stream", StringComparison.Ordinal) != true)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            if (Twitch.Instance.IsLoggedIn || Twitch.Instance.VerifyLogin(false))
+            {
+                return $"http://twitch.tv/{Twitch.Instance.ChannelName}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
+
+        return string.Empty;
     }
 
     private async Task SaveScreenshot()
@@ -140,15 +350,6 @@ public sealed class ShareRunDialog : Window
         SetStatus($"Saved to {file.Path?.LocalPath ?? file.Name}.");
     }
 
-    private async Task Tweet()
-    {
-        string title = BuildRunTitle();
-        var uri = new Uri("https://twitter.com/intent/tweet?text=" + Uri.EscapeDataString(title));
-        Process.Start(new ProcessStartInfo(uri.ToString()) { UseShellExecute = true });
-        SetStatus("Opened browser to Twitter compose. (Screenshot upload via Twitter's API requires OAuth and is not supported here.)");
-        await Task.CompletedTask;
-    }
-
     private async Task UploadToImgur()
     {
         byte[] png = _screenshotPng?.Invoke();
@@ -158,49 +359,36 @@ public sealed class ShareRunDialog : Window
             return;
         }
 
-        SetStatus("Uploading to Imgur…");
-
-        using var http = new HttpClient();
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Client-ID", ImgurClientId);
-
-        using var content = new MultipartFormDataContent();
-        var imageContent = new ByteArrayContent(png);
-        imageContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
-        content.Add(imageContent, "image", "splits.png");
-        content.Add(new StringContent(BuildRunTitle()), "title");
-
-        HttpResponseMessage resp = await http.PostAsync("https://api.imgur.com/3/image", content);
-        string body = await resp.Content.ReadAsStringAsync();
-        if (!resp.IsSuccessStatusCode)
-        {
-            SetStatus($"Imgur upload failed: {resp.StatusCode}");
-            return;
-        }
+        SetStatus("Uploading to Imgur...");
 
         try
         {
-            dynamic json = JSON.FromString(body);
-            string id = json?.data?.id?.ToString();
-            if (!string.IsNullOrEmpty(id))
+            ImgurUploadResult result = await Imgur.Instance.SubmitRunAsync(
+                _run,
+                () => png,
+                _state.CurrentTimingMethod,
+                FormatNotes());
+
+            if (result.Success)
             {
-                string url = "https://imgur.com/" + id;
                 IClipboard clipboard = Clipboard;
                 if (clipboard is not null)
                 {
-                    await clipboard.SetTextAsync(url);
+                    await clipboard.SetTextAsync(result.Url);
                 }
 
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-                SetStatus($"Uploaded: {url} (URL copied to clipboard).");
+                Process.Start(new ProcessStartInfo(result.Url) { UseShellExecute = true });
+                SetStatus($"Uploaded: {result.Url} (URL copied to clipboard).");
                 return;
             }
+
+            SetStatus(result.ErrorMessage);
         }
         catch (Exception ex)
         {
             Log.Error(ex);
+            SetStatus($"Imgur upload failed: {ex.Message}");
         }
-
-        SetStatus("Imgur upload succeeded but the response did not include an image id.");
     }
 
     private async Task ExportExcel()
@@ -209,7 +397,7 @@ public sealed class ShareRunDialog : Window
         {
             Title = "Export to Excel",
             DefaultExtension = "xlsx",
-            SuggestedFileName = $"{_state.Run.GameName}-{_state.Run.CategoryName}.xlsx",
+            SuggestedFileName = $"{_run.GameName}-{_run.CategoryName}.xlsx",
         });
         if (file is null)
         {
@@ -217,39 +405,196 @@ public sealed class ShareRunDialog : Window
         }
 
         await using Stream stream = await file.OpenWriteAsync();
-        new ExcelRunSaver().Save(_state.Run, stream);
+        Excel.Instance.Save(_run, stream);
         SetStatus($"Exported to {file.Path?.LocalPath ?? file.Name}.");
     }
 
-    private string BuildRunTitle()
+    private async Task SubmitToTwitch()
     {
-        IRun run = _state.Run;
-        bool hasGame = !string.IsNullOrEmpty(run.GameName);
-        bool hasCategory = !string.IsNullOrEmpty(run.CategoryName);
-        if (hasGame && hasCategory)
+        if (!await EnsureTwitchAuthentication())
         {
-            return $"{run.GameName} - {run.CategoryName}";
+            SetStatus("Your login information seems to be incorrect.");
+            return;
         }
 
-        if (hasGame)
+        try
         {
-            return run.GameName;
-        }
+            bool submitted = Twitch.Instance.SubmitRun(
+                _run,
+                _screenshotPng,
+                _state.CurrentTimingMethod,
+                FormatNotes());
 
-        return hasCategory ? run.CategoryName : "LiveSplit run";
+            SetStatus(submitted
+                ? "Your run was successfully shared to Twitch."
+                : "The run could not be shared.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+            SetStatus("The run could not be shared.");
+        }
     }
 
-    public async Task<bool> ShowDialogAsync(Window owner)
+    private async Task SubmitToSpeedrunCom()
     {
-        if (owner is not null)
+        if (!await EnsureSpeedrunComAuthentication())
         {
-            await ShowDialog(owner);
-        }
-        else
-        {
-            Show();
+            SetStatus("Your login information seems to be incorrect.");
+            return;
         }
 
-        return await _result.Task;
+        if (!SpeedrunCom.ValidateRun(_run, out string reason))
+        {
+            SetStatus(reason);
+            await new MessageDialog("Submitting Failed", reason).ShowDialogAsync(this);
+            return;
+        }
+
+        var dialog = new SpeedrunComSubmitDialog(_run.Metadata, FormatNotes());
+        bool submitted = await dialog.ShowDialogAsync(this);
+        SetStatus(submitted
+            ? "Your run was successfully shared to Speedrun.com."
+            : "The run could not be shared.");
+    }
+
+    private async Task<bool> EnsureTwitchAuthentication()
+    {
+        if (Twitch.Instance.IsLoggedIn || Twitch.Instance.VerifyLogin(false))
+        {
+            return true;
+        }
+
+        OpenBrowser(TwitchAccessTokenPrompt.BuildOAuthUri());
+        var input = new TextInputDialog(
+            "Twitch Authentication",
+            "After completing the OAuth flow, paste the full redirected URL or access token:");
+        string token = TwitchAccessTokenPrompt.ExtractAccessToken(await input.ShowDialogAsync(this));
+        if (string.IsNullOrEmpty(token))
+        {
+            return false;
+        }
+
+        WebCredentials.TwitchAccessToken = token;
+        Twitch.Instance.ClearAccessToken();
+        return Twitch.Instance.VerifyLogin(false);
+    }
+
+    private async Task<bool> EnsureSpeedrunComAuthentication()
+    {
+        try
+        {
+            if (SpeedrunCom.Client.IsAccessTokenValid)
+            {
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
+
+        OpenBrowser("https://www.speedrun.com/settings/api");
+        var input = new TextInputDialog("Speedrun.com Authentication", "Enter your Speedrun.com API Key:");
+        string accessToken = await input.ShowDialogAsync(this);
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            return false;
+        }
+
+        SpeedrunCom.Authenticator = new StaticSpeedrunComAuthenticator(accessToken);
+        return SpeedrunCom.MakeSureUserIsAuthenticated();
+    }
+
+    private static void OpenBrowser(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
+    }
+
+    private void SetStatus(string text)
+    {
+        if (_statusBlock != null)
+        {
+            _statusBlock.Text = text;
+        }
+    }
+
+    private sealed class StaticSpeedrunComAuthenticator : ISpeedrunComAuthenticator
+    {
+        private readonly string _accessToken;
+
+        public StaticSpeedrunComAuthenticator(string accessToken)
+        {
+            _accessToken = accessToken;
+        }
+
+        public string GetAccessToken()
+        {
+            return _accessToken;
+        }
+    }
+
+    private sealed class SharePlatformChoice
+    {
+        public static readonly SharePlatformChoice Twitter = new(
+            "X (Twitter)",
+            "X (Twitter) opens a browser compose window for sharing the run.",
+            "Share",
+            supportsNotes: true);
+
+        public static readonly SharePlatformChoice SpeedrunCom = new(
+            "Speedrun.com",
+            "Speedrun.com provides centralized leaderboards for speedrunning.",
+            "Submit",
+            supportsNotes: true);
+
+        public static readonly SharePlatformChoice Twitch = new(
+            "Twitch",
+            "Sharing to Twitch updates your stream title and game from the run.",
+            "Share",
+            supportsNotes: true);
+
+        public static readonly SharePlatformChoice Screenshot = new(
+            "Screenshot",
+            "Save a screenshot of the current LiveSplit layout.",
+            "Save",
+            supportsNotes: false);
+
+        public static readonly SharePlatformChoice Imgur = new(
+            "Imgur",
+            "Upload a screenshot of the current LiveSplit layout and copy the public URL.",
+            "Upload",
+            supportsNotes: true);
+
+        public static readonly SharePlatformChoice Excel = new(
+            "Excel",
+            "Export the current splits to an Excel workbook.",
+            "Export",
+            supportsNotes: false);
+
+        private SharePlatformChoice(string name, string description, string submitText, bool supportsNotes)
+        {
+            Name = name;
+            Description = description;
+            SubmitText = submitText;
+            SupportsNotes = supportsNotes;
+        }
+
+        public string Name { get; }
+        public string Description { get; }
+        public string SubmitText { get; }
+        public bool SupportsNotes { get; }
+
+        public override string ToString()
+        {
+            return Name;
+        }
     }
 }

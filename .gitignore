@@ -34,7 +34,7 @@ LiveSplit.AutoSplitters.xml
 # Operating System Files
 # =========================
 
-# OSX
+# macOS filesystem noise
 .DS_Store
 .AppleDouble
 .LSOverride

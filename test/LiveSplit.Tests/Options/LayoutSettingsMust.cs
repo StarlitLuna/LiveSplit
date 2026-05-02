@@ -10,6 +10,7 @@ using Xunit;
 
 namespace LiveSplit.Tests.Options;
 
+[Collection("DrawingApi")]
 public class LayoutSettingsMust
 {
     [Fact]

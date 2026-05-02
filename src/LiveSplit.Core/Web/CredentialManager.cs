@@ -37,7 +37,7 @@ namespace LiveSplit.Web;
 /// </summary>
 public static class CredentialManager
 {
-    private static readonly ICredentialStore Backend = SelectBackend();
+    private static ICredentialStore Backend = SelectBackend();
 
     private static ICredentialStore SelectBackend()
     {
@@ -70,6 +70,16 @@ public static class CredentialManager
         }
 
         Backend.Delete(applicationName);
+    }
+
+    internal static void SetBackendForTesting(ICredentialStore backend)
+    {
+        Backend = backend ?? throw new ArgumentNullException(nameof(backend));
+    }
+
+    internal static void ResetBackendForTesting()
+    {
+        Backend = SelectBackend();
     }
 }
 

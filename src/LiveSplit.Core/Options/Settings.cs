@@ -3,6 +3,7 @@ using System.Linq;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Input;
+using LiveSplit.Web.SRL;
 
 namespace LiveSplit.Options;
 
@@ -16,12 +17,15 @@ public class Settings : ISettings
     public int HcpHistorySize { get; set; }
     public int HcpNBestRuns { get; set; }
     public bool WarnOnReset { get; set; }
+    public bool AgreedToSRLRules { get; set; }
     public bool UpdateCheckEnabled { get; set; }
     public bool SimpleSumOfBest { get; set; }
     public int RefreshRate { get; set; }
     public int ServerPort { get; set; }
     public ServerStartupType ServerStartup { get; set; }
     public ServerStateType ServerState { get; set; }
+    public IRaceViewer RaceViewer { get; set; }
+    public IList<RaceProviderSettings> RaceProvider { get; set; }
     public IList<string> ActiveAutoSplitters { get; set; }
     public IDictionary<string, bool> ComparisonGeneratorStates { get; set; }
     public bool EnableDPIAwareness { get; set; }
@@ -94,6 +98,7 @@ public class Settings : ISettings
         RecentSplits = [];
         RecentLayouts = [];
         ActiveAutoSplitters = [];
+        RaceProvider = [];
     }
 
     public object Clone()
@@ -105,6 +110,9 @@ public class Settings : ISettings
             RecentSplits = new List<RecentSplitsFile>(RecentSplits),
             RecentLayouts = new List<string>(RecentLayouts),
             LastComparison = LastComparison,
+            RaceViewer = RaceViewer,
+            RaceProvider = RaceProvider.Select(x => (RaceProviderSettings)x.Clone()).ToList(),
+            AgreedToSRLRules = AgreedToSRLRules,
             UpdateCheckEnabled = UpdateCheckEnabled,
             SimpleSumOfBest = SimpleSumOfBest,
             RefreshRate = RefreshRate,

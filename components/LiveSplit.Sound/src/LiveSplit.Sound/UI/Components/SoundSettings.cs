@@ -1,7 +1,4 @@
-using System;
 using System.Xml;
-
-using NAudio.Wave;
 
 namespace LiveSplit.UI.Components;
 
@@ -42,7 +39,6 @@ public class SoundSettings
 
     public SoundSettings()
     {
-
         Split =
         SplitAheadGaining =
         SplitAheadLosing =
@@ -56,9 +52,7 @@ public class SoundSettings
         Reset =
         Pause =
         Resume =
-        StartTimer = "";
-
-        OutputDevice = 0;
+        StartTimer = string.Empty;
 
         GeneralVolume =
         SplitVolume =
@@ -75,12 +69,6 @@ public class SoundSettings
         PauseVolume =
         ResumeVolume =
         StartTimerVolume = 100;
-
-        for (int i = 0; i < WaveOut.DeviceCount; ++i)
-        {
-            cbOutputDevice.Items.Add(WaveOut.GetCapabilities(i));
-        }
-
     }
 
     public void SetSettings(XmlNode node)
@@ -129,13 +117,10 @@ public class SoundSettings
     }
 
     public int GetSettingsHashCode()
-    {
-        return CreateSettingsNode(null, null);
-    }
+        => CreateSettingsNode(null, null);
 
     private int CreateSettingsNode(XmlDocument document, XmlElement parent)
-    {
-        return SettingsHelper.CreateSetting(document, parent, "Version", "1.6") ^
+        => SettingsHelper.CreateSetting(document, parent, "Version", "1.6") ^
         SettingsHelper.CreateSetting(document, parent, "Split", Split) ^
         SettingsHelper.CreateSetting(document, parent, "SplitAheadGaining", SplitAheadGaining) ^
         SettingsHelper.CreateSetting(document, parent, "SplitAheadLosing", SplitAheadLosing) ^
@@ -166,34 +151,4 @@ public class SoundSettings
         SettingsHelper.CreateSetting(document, parent, "ResumeVolume", ResumeVolume) ^
         SettingsHelper.CreateSetting(document, parent, "StartTimerVolume", StartTimerVolume) ^
         SettingsHelper.CreateSetting(document, parent, "GeneralVolume", GeneralVolume);
-    }
-
-    protected string BrowseForPath(TextBox textBox, Action<string> callback)
-    {
-        string path = textBox.Text;
-        var fileDialog = new OpenFileDialog()
-        {
-            FileName = path,
-            Filter = "Audio Files|*.mp3;*.wav;*.aiff;*.wma|All Files|*.*"
-        };
-
-        DialogResult result = fileDialog.ShowDialog();
-
-        if (result == DialogResult.OK)
-        {
-            path = fileDialog.FileName;
-        }
-
-        textBox.Text = path;
-        callback(path);
-
-        return path;
-    }
-
-    private void VolumeTrackBarScrollHandler(object sender, EventArgs e)
-    {
-        var trackBar = (TrackBar)sender;
-
-        ttVolume.SetToolTip(trackBar, trackBar.Value.ToString());
-    }
 }

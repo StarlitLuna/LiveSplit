@@ -4,6 +4,7 @@
     <ApplicationIcon>Icon.ico</ApplicationIcon>
 
     <OutputType>WinExe</OutputType>
+    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>

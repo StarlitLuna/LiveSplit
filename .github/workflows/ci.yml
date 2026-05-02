@@ -1,4 +1,4 @@
-name: Build Linux
+name: Build Packages
 
 on:
   workflow_dispatch:
@@ -7,14 +7,11 @@ on:
         description: 'Branch to build'
         required: true
         default: linux-port
-        type: choice
-        options:
-          - linux-port
-          - master
+        type: string
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-22.04
+  build-windows:
+    runs-on: windows-2022
     permissions:
       contents: read
 
@@ -23,17 +20,116 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
-          submodules: recursive
 
       - name: Set up .NET environment
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.x'
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
         with:
-          targets: x86_64-unknown-linux-gnu
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Build.props', '**/Directory.Packages.props', 'NuGet.Config') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore LiveSplit.sln --verbosity minimal
+
+      - name: Build
+        run: dotnet build LiveSplit.sln --no-restore --configuration Release --verbosity minimal -m:1
+
+      - name: Test
+        run: dotnet test LiveSplit.sln --no-build --no-restore --configuration Release --verbosity minimal -m:1
+
+      - name: Publish Windows package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          dotnet publish src/LiveSplit/LiveSplit.csproj `
+            --no-restore `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=false `
+            -p:DebugType=None `
+            -p:BuildPath="$PWD/artifacts/windows-build" `
+            -o "$PWD/dist/LiveSplit-win-x64"
+          Compress-Archive -Path "$PWD/dist/LiveSplit-win-x64/*" -DestinationPath "$PWD/dist/LiveSplit-win-x64.zip" -Force
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-dist
+          path: dist/LiveSplit-win-x64.zip
+          retention-days: 1
+          if-no-files-found: error
+
+  build-flatpak:
+    runs-on: ubuntu-22.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout LiveSplit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: LiveSplit.flatpak
+          manifest-path: org.livesplit.LiveSplit.yml
+          cache-key: flatpak-builder-${{ hashFiles('**/Cargo.lock', 'org.livesplit.LiveSplit.yml') }}
+
+      - name: Upload Flatpak bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-flatpak
+          path: LiveSplit.flatpak
+          retention-days: 1
+          if-no-files-found: error
+
+  build-fedora-rpm:
+    runs-on: ubuntu-22.04
+    container:
+      image: fedora:40
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+
+    steps:
+      - name: Install GitHub Actions runtime dependencies
+        run: |
+          set -euo pipefail
+          dnf install -y git tar gzip
+
+      - name: Checkout LiveSplit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Install Fedora build dependencies
+        run: |
+          set -euo pipefail
+          dnf install -y \
+            @development-tools \
+            dotnet-sdk-8.0 \
+            cargo \
+            rpm-build \
+            rpmdevtools \
+            desktop-file-utils \
+            pkgconf-pkg-config \
+            git \
+            tar \
+            gzip
 
       - name: Cache Cargo registry + Rust target dirs
         uses: Swatinem/rust-cache@v2
@@ -46,92 +142,25 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Build.props', '**/Directory.Packages.props') }}
-          restore-keys: nuget-${{ runner.os }}-
+          key: nuget-fedora-${{ hashFiles('**/*.csproj', '**/Directory.Build.props', '**/Directory.Packages.props', 'NuGet.Config') }}
+          restore-keys: nuget-fedora-
 
-      - name: Install linuxdeploy (AppImage tooling)
+      - name: Build Fedora RPM
         run: |
           set -euo pipefail
-          url="https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-          curl --fail --silent --show-error --location \
-               --retry 5 --retry-delay 5 --retry-all-errors \
-               -o /tmp/linuxdeploy "$url"
-          if ! head -c 4 /tmp/linuxdeploy | od -An -c | grep -q 'E   L   F'; then
-            echo "::error::downloaded linuxdeploy is not an ELF binary; first bytes:"
-            head -c 200 /tmp/linuxdeploy
-            exit 1
-          fi
-          chmod +x /tmp/linuxdeploy
-          sudo mv /tmp/linuxdeploy /usr/local/bin/linuxdeploy
-          echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
+          chmod +x scripts/build-native-linux.sh scripts/package-fedora-rpm.sh
+          RPM_VERSION="0.0.$GITHUB_RUN_NUMBER" RPM_RELEASE=1 bash scripts/package-fedora-rpm.sh
 
-      - name: Package tarball + AppImage
-        run: bash scripts/package-linux.sh --appimage
-
-      - name: Stash dist for the release job
+      - name: Upload Fedora RPM
         uses: actions/upload-artifact@v4
         with:
-          name: linux-dist
-          path: |
-            dist/livesplit-linux-x64.tar.gz
-            dist/LiveSplit.AppImage
-          retention-days: 1
-          if-no-files-found: error
-
-  build-flatpak:
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout LiveSplit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
-          submodules: recursive
-
-      - name: Cache flatpak system runtimes
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/share/flatpak-system
-          key: flatpak-runtimes-${{ hashFiles('org.livesplit.LiveSplit.yml') }}
-          restore-keys: flatpak-runtimes-
-
-      - name: Install flatpak-builder + runtimes
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
-          mkdir -p "$HOME/.local/share/flatpak-system"
-          sudo rm -rf /var/lib/flatpak
-          sudo ln -s "$HOME/.local/share/flatpak-system" /var/lib/flatpak
-          sudo flatpak remote-add --system --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak install --system -y --noninteractive flathub \
-            org.freedesktop.Platform//24.08 \
-            org.freedesktop.Sdk//24.08 \
-            org.freedesktop.Sdk.Extension.dotnet8//24.08 \
-            org.freedesktop.Sdk.Extension.rust-stable//24.08
-          sudo chown -R "$USER:$(id -gn)" "$HOME/.local/share/flatpak-system"
-
-      - name: Build Flatpak bundle
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-        with:
-          bundle: LiveSplit.flatpak
-          manifest-path: org.livesplit.LiveSplit.yml
-          # Content-addressed cache key — hits whenever Cargo.lock files and the
-          # manifest are unchanged, so the inner Rust + dotnet builds reuse state.
-          cache-key: flatpak-builder-${{ hashFiles('**/Cargo.lock', 'org.livesplit.LiveSplit.yml') }}
-
-      - name: Stash bundle for the release job
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-flatpak
-          path: LiveSplit.flatpak
+          name: fedora-rpm
+          path: dist/rpm/*.rpm
           retention-days: 1
           if-no-files-found: error
 
   release:
-    needs: [build-linux, build-flatpak]
+    needs: [build-windows, build-flatpak, build-fedora-rpm]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -143,17 +172,23 @@ jobs:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
 
-      - name: Download dist artifacts
+      - name: Download Windows package
         uses: actions/download-artifact@v4
         with:
-          name: linux-dist
+          name: windows-dist
           path: dist
 
       - name: Download Flatpak bundle
         uses: actions/download-artifact@v4
         with:
           name: linux-flatpak
-          path: .
+          path: dist
+
+      - name: Download Fedora RPM
+        uses: actions/download-artifact@v4
+        with:
+          name: fedora-rpm
+          path: dist/rpm
 
       - name: Compute release tag
         id: tag
@@ -184,6 +219,6 @@ jobs:
             --title "${tag}" \
             --target "${commit}" \
             --notes "Automated build of \`${{ inputs.branch }}\` at ${commit}." \
-            dist/livesplit-linux-x64.tar.gz \
-            dist/LiveSplit.AppImage \
-            LiveSplit.flatpak
+            dist/LiveSplit-win-x64.zip \
+            dist/LiveSplit.flatpak \
+            dist/rpm/*.rpm

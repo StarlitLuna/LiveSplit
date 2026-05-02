@@ -19,6 +19,7 @@ using LiveSplit.Model;
 using LiveSplit.Options;
 using LiveSplit.Server;
 using LiveSplit.UI;
+using LiveSplit.UI.Components;
 
 namespace LiveSplit.Avalonia;
 
@@ -43,6 +44,10 @@ public sealed partial class TimerWindow : Window
     public ICommand OpenSplitsFromUrlCommand { get; }
     public ICommand OpenLayoutFromUrlCommand { get; }
     public ICommand CloseSplitsCommand { get; }
+    public ICommand SaveSplitsCommand { get; }
+    public ICommand SaveSplitsAsCommand { get; }
+    public ICommand SaveLayoutCommand { get; }
+    public ICommand SaveLayoutAsCommand { get; }
     public ICommand EditSplitsCommand { get; }
     public ICommand EditLayoutCommand { get; }
     public ICommand LayoutSettingsCommand { get; }
@@ -76,9 +81,10 @@ public sealed partial class TimerWindow : Window
             c?.InvalidateVisual();
         };
         Host = new AvaloniaTimerHost(invalidate, splitsPath, layoutPath);
+        Host.ResetRequested += async (_, _) => await Reset();
 
         SplitCommand = new RelayCommand(() => Host.Model.Split());
-        ResetCommand = new RelayCommand(() => Host.Model.Reset());
+        ResetCommand = new RelayCommand(async () => await Reset());
         SkipCommand = new RelayCommand(() => Host.Model.SkipSplit());
         UndoCommand = new RelayCommand(() => Host.Model.UndoSplit());
         PauseCommand = new RelayCommand(() => Host.Model.Pause());
@@ -87,7 +93,11 @@ public sealed partial class TimerWindow : Window
         OpenLayoutCommand = new RelayCommand(async () => await OpenLayout());
         OpenSplitsFromUrlCommand = new RelayCommand(async () => await OpenSplitsFromUrl());
         OpenLayoutFromUrlCommand = new RelayCommand(async () => await OpenLayoutFromUrl());
-        CloseSplitsCommand = new RelayCommand(() => Host.CloseSplits());
+        CloseSplitsCommand = new RelayCommand(async () => await CloseSplits());
+        SaveSplitsCommand = new RelayCommand(async () => await SaveSplits());
+        SaveSplitsAsCommand = new RelayCommand(async () => await SaveSplitsAs());
+        SaveLayoutCommand = new RelayCommand(async () => await SaveLayout());
+        SaveLayoutAsCommand = new RelayCommand(async () => await SaveLayoutAs());
         EditSplitsCommand = new RelayCommand(async () => await OpenEditSplits());
         EditLayoutCommand = new RelayCommand(async () => await OpenEditLayout());
         LayoutSettingsCommand = new RelayCommand(async () => await OpenLayoutSettings());
@@ -171,6 +181,7 @@ public sealed partial class TimerWindow : Window
 
         e.Cancel = true;
 
+        CaptureLayoutPosition();
         bool ok = await ConfirmUnsavedChanges();
         if (ok)
         {
@@ -181,7 +192,7 @@ public sealed partial class TimerWindow : Window
 
     private async Task<bool> ConfirmUnsavedChanges()
     {
-        if (Host?.State?.Run is { HasChanged: true } run && !string.IsNullOrEmpty(run.FilePath))
+        if (Host?.State?.Run is { HasChanged: true })
         {
             var dlg = new MessageDialog(
                 "Save Splits?",
@@ -193,13 +204,13 @@ public sealed partial class TimerWindow : Window
                 return false;
             }
 
-            if (r == MessageResult.Yes && !Host.SaveRun())
+            if (r == MessageResult.Yes && !await SaveSplits())
             {
                 return false;
             }
         }
 
-        if (Host?.State?.Layout is { HasChanged: true } layout && !string.IsNullOrEmpty(layout.FilePath))
+        if (Host?.State?.Layout is { HasChanged: true })
         {
             var dlg = new MessageDialog(
                 "Save Layout?",
@@ -211,7 +222,7 @@ public sealed partial class TimerWindow : Window
                 return false;
             }
 
-            if (r == MessageResult.Yes && !Host.SaveLayout())
+            if (r == MessageResult.Yes && !await SaveLayout())
             {
                 return false;
             }
@@ -219,6 +230,45 @@ public sealed partial class TimerWindow : Window
 
         return true;
     }
+
+    private bool _resetMessageShown;
+
+    private async Task Reset()
+    {
+        if (_resetMessageShown)
+        {
+            return;
+        }
+
+        try
+        {
+            _resetMessageShown = true;
+            if (Host.State.Settings.WarnOnReset && ResetWarning.ShouldAskToUpdateBestTimes(Host.State))
+            {
+                var dlg = new MessageDialog(
+                    "Update Times?",
+                    "You have beaten some of your best times.\nDo you want to update them?",
+                    MessageDialog.Buttons.YesNoCancel);
+                MessageResult result = await dlg.ShowDialogResultAsync(this);
+                if (result == MessageResult.Cancel)
+                {
+                    return;
+                }
+
+                Host.Model.Reset(updateSplits: result == MessageResult.Yes);
+                return;
+            }
+
+            Host.Model.Reset();
+        }
+        finally
+        {
+            _resetMessageShown = false;
+        }
+    }
+
+    private void CaptureLayoutPosition()
+        => Host.UpdateLayoutPosition(Position.X, Position.Y);
 
     private void OnPointerPressed(object sender, PointerPressedEventArgs e)
     {
@@ -310,6 +360,11 @@ public sealed partial class TimerWindow : Window
 #pragma warning disable CS0618 // Avalonia 11 marks FileDialogFilter / OpenFileDialog obsolete in favor of StorageProvider; migration is tracked separately.
     private async Task OpenSplits()
     {
+        if (!await ConfirmUnsavedChanges())
+        {
+            return;
+        }
+
         string path = await PickFile("Open Splits", new[]
         {
             new FileDialogFilter { Name = "LiveSplit Splits", Extensions = { "lss" } },
@@ -323,6 +378,11 @@ public sealed partial class TimerWindow : Window
 
     private async Task OpenLayout()
     {
+        if (!await ConfirmUnsavedChanges())
+        {
+            return;
+        }
+
         string path = await PickFile("Open Layout", new[]
         {
             new FileDialogFilter { Name = "LiveSplit Layout", Extensions = { "lsl" } },
@@ -336,6 +396,11 @@ public sealed partial class TimerWindow : Window
 
     private async Task OpenSplitsFromUrl()
     {
+        if (!await ConfirmUnsavedChanges())
+        {
+            return;
+        }
+
         var dlg = new TextInputDialog("Open Splits From URL", "Enter the URL of a .lss file:");
         string url = await dlg.ShowDialogAsync(this);
         if (string.IsNullOrEmpty(url))
@@ -352,6 +417,11 @@ public sealed partial class TimerWindow : Window
 
     private async Task OpenLayoutFromUrl()
     {
+        if (!await ConfirmUnsavedChanges())
+        {
+            return;
+        }
+
         var dlg = new TextInputDialog("Open Layout From URL", "Enter the URL of a .lsl file:");
         string url = await dlg.ShowDialogAsync(this);
         if (string.IsNullOrEmpty(url))
@@ -378,6 +448,70 @@ public sealed partial class TimerWindow : Window
         string[] paths = await picker.ShowAsync(this);
         return paths is { Length: > 0 } ? paths[0] : null;
     }
+
+    private async Task<string> PickSaveFile(string title, string defaultExtension, IEnumerable<FileDialogFilter> filters)
+    {
+        var picker = new SaveFileDialog
+        {
+            Title = title,
+            DefaultExtension = defaultExtension,
+            Filters = filters.ToList(),
+        };
+
+        return await picker.ShowAsync(this);
+    }
+    private async Task<bool> SaveSplits()
+    {
+        if (!string.IsNullOrEmpty(Host.State.Run?.FilePath))
+        {
+            return Host.SaveRun();
+        }
+
+        return await SaveSplitsAs();
+    }
+
+    private async Task<bool> SaveSplitsAs()
+    {
+        string path = await PickSaveFile("Save Splits", "lss", new[]
+        {
+            new FileDialogFilter { Name = "LiveSplit Splits", Extensions = { "lss" } },
+            new FileDialogFilter { Name = "All Files", Extensions = { "*" } },
+        });
+
+        return !string.IsNullOrEmpty(path) && Host.SaveRunAs(path);
+    }
+
+    private async Task<bool> SaveLayout()
+    {
+        CaptureLayoutPosition();
+        if (!string.IsNullOrEmpty(Host.State.Layout?.FilePath))
+        {
+            return Host.SaveLayout();
+        }
+
+        return await SaveLayoutAs();
+    }
+
+    private async Task<bool> SaveLayoutAs()
+    {
+        CaptureLayoutPosition();
+        string path = await PickSaveFile("Save Layout", "lsl", new[]
+        {
+            new FileDialogFilter { Name = "LiveSplit Layout", Extensions = { "lsl" } },
+            new FileDialogFilter { Name = "All Files", Extensions = { "*" } },
+        });
+
+        return !string.IsNullOrEmpty(path) && Host.SaveLayoutAs(path, Position.X, Position.Y);
+    }
+
+    private async Task CloseSplits()
+    {
+        if (await ConfirmUnsavedChanges())
+        {
+            Host.CloseSplits();
+        }
+    }
+
 #pragma warning restore CS0618
 
     private static readonly HttpClient HttpClient = new();
@@ -429,9 +563,13 @@ public sealed partial class TimerWindow : Window
 
     private async Task OpenSettings()
     {
-        var dlg = new SettingsDialog(Host.State.Settings);
-        await dlg.ShowDialogAsync(this);
-        InvalidateVisual();
+        ISettings edited = (ISettings)Host.State.Settings.Clone();
+        var dlg = new SettingsDialog(edited);
+        if (await dlg.ShowDialogAsync(this))
+        {
+            Host.State.Settings = edited;
+            InvalidateVisual();
+        }
     }
 
     private async Task OpenSetSize()
@@ -640,6 +778,11 @@ public sealed partial class TimerWindow : Window
             serverMenu.SubmenuOpened += (_, _) => PopulateServerMenu(serverMenu);
         }
 
+        if (this.FindControl<MenuItem>("RaceMenu") is MenuItem raceMenu)
+        {
+            raceMenu.SubmenuOpened += (_, _) => PopulateRaceMenu(raceMenu);
+        }
+
         if (this.FindControl<MenuItem>("LanguageMenu") is MenuItem languageMenu)
         {
             languageMenu.SubmenuOpened += (_, _) => PopulateLanguageMenu(languageMenu);
@@ -660,7 +803,13 @@ public sealed partial class TimerWindow : Window
 
             string capturedPath = entry.Path;
             var item = new MenuItem { Header = Path.GetFileName(capturedPath) };
-            item.Click += (_, _) => Host.LoadRun(capturedPath);
+            item.Click += async (_, _) =>
+            {
+                if (await ConfirmUnsavedChanges())
+                {
+                    Host.LoadRun(capturedPath);
+                }
+            };
             children.Add(item);
         }
 
@@ -679,7 +828,13 @@ public sealed partial class TimerWindow : Window
 
             string capturedPath = path;
             var item = new MenuItem { Header = Path.GetFileName(capturedPath) };
-            item.Click += (_, _) => Host.LoadLayout(capturedPath);
+            item.Click += async (_, _) =>
+            {
+                if (await ConfirmUnsavedChanges())
+                {
+                    Host.LoadLayout(capturedPath);
+                }
+            };
             children.Add(item);
         }
 
@@ -761,6 +916,154 @@ public sealed partial class TimerWindow : Window
             item.Click += async (_, _) => await ApplyLanguage(captured);
             parent.Items.Add(item);
         }
+    }
+
+    private void PopulateRaceMenu(MenuItem parent)
+    {
+        parent.Items.Clear();
+
+        foreach (KeyValuePair<string, IRaceProviderFactory> entry in ComponentManager.RaceProviderFactories.OrderBy(x => x.Value.UpdateName))
+        {
+            RaceProviderSettings settings = Host.State.Settings.RaceProvider.FirstOrDefault(x => x.Name == entry.Key);
+            RaceProviderAPI provider = entry.Value.Create(Host.Model, settings ?? entry.Value.CreateSettings());
+            if (settings?.Enabled == false)
+            {
+                continue;
+            }
+
+            var providerItem = new MenuItem
+            {
+                Header = $"{provider.ProviderName} Races",
+                Tag = provider
+            };
+            providerItem.Items.Add(new MenuItem { Header = "Refreshing...", IsEnabled = false });
+            providerItem.SubmenuOpened += (_, _) =>
+            {
+                providerItem.Items.Clear();
+                providerItem.Items.Add(new MenuItem { Header = "Refreshing...", IsEnabled = false });
+                provider.RacesRefreshedCallback = refreshedProvider =>
+                    Dispatcher.UIThread.Post(() => PopulateRaceProviderMenu(providerItem, refreshedProvider));
+                provider.RefreshRacesListAsync();
+            };
+
+            parent.Items.Add(providerItem);
+        }
+
+        if (parent.Items.Count == 0)
+        {
+            parent.Items.Add(new MenuItem { Header = "No race providers enabled.", IsEnabled = false });
+        }
+    }
+
+    private void PopulateRaceProviderMenu(MenuItem providerItem, RaceProviderAPI provider)
+    {
+        providerItem.Items.Clear();
+        IReadOnlyList<IRaceInfo> races = provider.GetRaces()?.ToList() ?? [];
+        int addedCount = 0;
+
+        foreach (IRaceInfo race in races.Where(x => x.State == 1))
+        {
+            var item = new MenuItem
+            {
+                Header = RaceMenuFormatter.FormatOpenRaceTitle(race),
+                Tag = race.Id
+            };
+            item.Click += async (_, _) => await JoinRaceOrOpenViewer(provider, race);
+            providerItem.Items.Add(item);
+            addedCount++;
+        }
+
+        bool addedSeparator = false;
+        foreach (IRaceInfo race in races.Where(x => x.State == 3))
+        {
+            if (addedCount > 0 && !addedSeparator)
+            {
+                providerItem.Items.Add(new Separator());
+                addedSeparator = true;
+            }
+
+            var item = new MenuItem
+            {
+                Header = RaceMenuFormatter.FormatInProgressRaceTitle(race, DateTime.UtcNow),
+                Tag = race.Id
+            };
+            item.Click += async (_, _) =>
+            {
+                if (!race.IsParticipant(provider.Username))
+                {
+                    OpenRaceViewer(race);
+                }
+                else
+                {
+                    await JoinRaceOrOpenViewer(provider, race);
+                }
+            };
+            providerItem.Items.Add(item);
+            addedCount++;
+        }
+
+        if (addedCount > 0)
+        {
+            providerItem.Items.Add(new Separator());
+        }
+
+        var newRace = new MenuItem { Header = "New Race..." };
+        newRace.Click += async (_, _) => await CreateRace(provider);
+        providerItem.Items.Add(newRace);
+    }
+
+    private async Task JoinRaceOrOpenViewer(RaceProviderAPI provider, IRaceInfo race)
+    {
+        try
+        {
+            if (provider.JoinRace != null)
+            {
+                provider.JoinRace(Host.Model, race.Id);
+            }
+            else
+            {
+                OpenRaceViewer(race);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+            await new MessageDialog("Enter Race", ex.Message).ShowDialogAsync(this);
+        }
+    }
+
+    private void OpenRaceViewer(IRaceInfo race)
+    {
+        try
+        {
+            Host.State.Settings.RaceViewer?.ShowRace(race);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
+    }
+
+    private async Task CreateRace(RaceProviderAPI provider)
+    {
+        try
+        {
+            if (provider.CreateRace != null)
+            {
+                provider.CreateRace(Host.Model);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+            await new MessageDialog("New Race", ex.Message).ShowDialogAsync(this);
+            return;
+        }
+
+        await new MessageDialog(
+            "New Race",
+            $"{provider.ProviderName} does not expose race creation.").ShowDialogAsync(this);
     }
 
     private async Task ApplyLanguage(string code)
@@ -883,8 +1186,14 @@ public sealed partial class TimerWindow : Window
         e.Handled = true;
     }
 
-    private void OnDrop(object sender, DragEventArgs e)
+    private async void OnDrop(object sender, DragEventArgs e)
     {
+        if (!await ConfirmUnsavedChanges())
+        {
+            e.Handled = true;
+            return;
+        }
+
         IEnumerable<IStorageItem> files = e.Data.GetFiles() ?? Array.Empty<IStorageItem>();
         foreach (IStorageItem item in files)
         {

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Xml;
 
 using LiveSplit.Avalonia;
@@ -22,6 +23,7 @@ using Xunit;
 
 namespace LiveSplit.Tests.Avalonia;
 
+[Collection("DrawingApi")]
 public class SmokeTestRunnerMust
 {
     [Fact]
@@ -168,8 +170,30 @@ public class SmokeTestRunnerMust
                     && name != "LiveSplit.Tests.dll";
             }))
         {
-            File.Copy(dll, Path.Combine(componentsDir, Path.GetFileName(dll)), overwrite: true);
+            string destination = Path.Combine(componentsDir, Path.GetFileName(dll));
+            CopyComponentDll(dll, destination);
         }
+    }
+
+    private static void CopyComponentDll(string source, string destination)
+    {
+        try
+        {
+            File.Copy(source, destination, overwrite: true);
+        }
+        catch (IOException) when (File.Exists(destination) && AreFilesIdentical(source, destination))
+        {
+        }
+        catch (UnauthorizedAccessException) when (File.Exists(destination) && AreFilesIdentical(source, destination))
+        {
+        }
+    }
+
+    private static bool AreFilesIdentical(string first, string second)
+    {
+        byte[] firstHash = SHA256.HashData(File.ReadAllBytes(first));
+        byte[] secondHash = SHA256.HashData(File.ReadAllBytes(second));
+        return firstHash.SequenceEqual(secondHash);
     }
 
     private static void SaveSettingsWithActiveAutoSplitter(string gameName, string path)

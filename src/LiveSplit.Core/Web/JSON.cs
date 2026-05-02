@@ -4,6 +4,7 @@ using System.Dynamic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -16,6 +17,12 @@ namespace LiveSplit.Web;
 
 public static class JSON
 {
+    public static dynamic FromResponse(HttpResponseMessage response)
+    {
+        using Stream stream = response.Content.ReadAsStreamAsync().GetAwaiter().GetResult();
+        return FromStream(stream);
+    }
+
     public static dynamic FromStream(Stream stream)
     {
         var reader = new StreamReader(stream);
@@ -30,6 +37,45 @@ public static class JSON
         }
 
         return FromString(json);
+    }
+
+    public static dynamic FromUri(Uri uri)
+    {
+        using var client = new HttpClient();
+        using HttpResponseMessage response = client.GetAsync(uri).GetAwaiter().GetResult();
+        response.EnsureSuccessStatusCode();
+        return FromResponse(response);
+    }
+
+    public static string Escape(string value)
+    {
+        return HttpUtility.JavaScriptStringEncode(value);
+    }
+
+    public static dynamic FromUriPost(Uri uri, params string[] postValues)
+    {
+        var parameters = new StringBuilder();
+
+        parameters.Append('{');
+        for (int i = 0; i < postValues.Length; i += 2)
+        {
+            parameters.AppendFormat("\"{0}\": \"{1}\", ",
+                Escape(postValues[i]),
+                Escape(postValues[i + 1]));
+        }
+
+        if (postValues.Length > 0)
+        {
+            parameters.Length -= 2;
+        }
+
+        parameters.Append('}');
+
+        using var client = new HttpClient();
+        using var content = new StringContent(parameters.ToString(), Encoding.UTF8, "application/json");
+        using HttpResponseMessage response = client.PostAsync(uri, content).GetAwaiter().GetResult();
+        response.EnsureSuccessStatusCode();
+        return FromResponse(response);
     }
 
     public static dynamic FromString(string value)

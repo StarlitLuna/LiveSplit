@@ -5,14 +5,22 @@ using System.Linq;
 using System.Reflection;
 
 using LiveSplit.Model;
+using LiveSplit.Web.SRL;
 
 namespace LiveSplit.UI.Components;
 
 public class ComponentManager
 {
     public const string PATH_COMPONENTS = "Components";
+    private static IDictionary<string, IRaceProviderFactory> _raceProviderFactories;
+
     public static string BasePath { get; set; }
     public static IDictionary<string, IComponentFactory> ComponentFactories { get; protected set; }
+    public static IDictionary<string, IRaceProviderFactory> RaceProviderFactories
+    {
+        get => _raceProviderFactories ??= LoadRaceProviderFactories();
+        set => _raceProviderFactories = value;
+    }
 
     public static ILayoutComponent LoadLayoutComponent(string path, LiveSplitState state)
     {
@@ -39,6 +47,11 @@ public class ComponentManager
     public static IDictionary<string, T> LoadAllFactories<T>()
     {
         string path = Path.GetFullPath(Path.Combine(BasePath ?? "", PATH_COMPONENTS));
+        if (!Directory.Exists(path))
+        {
+            return new Dictionary<string, T>();
+        }
+
         return Directory
             .EnumerateFiles(path, "*.dll")
             .Select(x =>
@@ -69,5 +82,12 @@ public class ComponentManager
         catch { }
 
         return factory;
+    }
+
+    private static IDictionary<string, IRaceProviderFactory> LoadRaceProviderFactories()
+    {
+        IDictionary<string, IRaceProviderFactory> factories = LoadAllFactories<IRaceProviderFactory>();
+        factories["SRL"] = new SRLFactory();
+        return factories;
     }
 }

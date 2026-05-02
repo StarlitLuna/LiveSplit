@@ -104,7 +104,7 @@ public sealed class AvaloniaTimerHost : IDisposable
             // System-wide split/reset/skip/undo/pause hotkey listener. Falls back silently if
             // libuiohook can't grab globals (Wayland without portal, headless CI); the per-window
             // KeyBindings in TimerWindow.axaml still fire when the LiveSplit window is focused.
-            _hotkeys = new HotkeyService(State, Model);
+            _hotkeys = new HotkeyService(State, Model, RequestResetFromHotkey);
             _hotkeys.Start();
 
             int delayMs = Math.Max(1, (int)Math.Round(1000.0 / Math.Max(1, settings.RefreshRate)));
@@ -268,6 +268,7 @@ public sealed class AvaloniaTimerHost : IDisposable
     /// remember.
     /// </summary>
     public event Action LayoutApplied;
+    public event EventHandler ResetRequested;
 
     private void Invalidate()
     {
@@ -277,6 +278,17 @@ public sealed class AvaloniaTimerHost : IDisposable
         }
 
         Dispatcher.UIThread.Post(_invalidateVisual, DispatcherPriority.Background);
+    }
+
+    private void RequestResetFromHotkey()
+    {
+        if (ResetRequested is not null)
+        {
+            ResetRequested(this, EventArgs.Empty);
+            return;
+        }
+
+        Model.Reset();
     }
 
     // --- Bootstrap helpers (factored out of the constructor for readability) ---
@@ -525,6 +537,23 @@ public sealed class AvaloniaTimerHost : IDisposable
         }
     }
 
+    public bool SaveRunAs(string path)
+    {
+        if (State.Run == null || string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        State.Run.FilePath = path;
+        bool saved = SaveRun();
+        if (saved)
+        {
+            State.Settings.AddToRecentSplits(path, State.Run, State.CurrentTimingMethod, State.CurrentHotkeyProfile);
+        }
+
+        return saved;
+    }
+
     public bool SaveLayout()
     {
         if (State.Layout == null || string.IsNullOrEmpty(State.Layout.FilePath))
@@ -544,6 +573,41 @@ public sealed class AvaloniaTimerHost : IDisposable
             Options.Log.Error(e);
             return false;
         }
+    }
+
+    public bool SaveLayoutAs(string path, int? x = null, int? y = null)
+    {
+        if (State.Layout == null || string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        UpdateLayoutPosition(x, y);
+        State.Layout.FilePath = path;
+        bool saved = SaveLayout();
+        if (saved)
+        {
+            State.Settings.AddToRecentLayouts(path);
+        }
+
+        return saved;
+    }
+
+    public void UpdateLayoutPosition(int? x, int? y)
+    {
+        if (State.Layout == null || x == null || y == null)
+        {
+            return;
+        }
+
+        if (State.Layout.X == x.Value && State.Layout.Y == y.Value)
+        {
+            return;
+        }
+
+        State.Layout.X = x.Value;
+        State.Layout.Y = y.Value;
+        State.Layout.HasChanged = true;
     }
 
     private void SaveRunIfDirty()

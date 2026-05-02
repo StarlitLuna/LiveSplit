@@ -2,15 +2,10 @@
 
   <PropertyGroup>
     <EnableDynamicLoading>true</EnableDynamicLoading>
-
-    <!-- Windows-only at runtime: the original component used NAudio for sound playback,
-         which is Windows-only. The linux-port compiles an empty Library so the solution
-         still builds and the layout schema continues to recognize the component. -->
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="**\*.cs" />
-    <Compile Include="LinuxStub.cs" />
+    <PackageReference Include="LibVLCSharp" Version="3.9.6" />
   </ItemGroup>
 
   <ItemGroup>

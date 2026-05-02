@@ -49,14 +49,16 @@ public sealed class HotkeyService : IDisposable
 {
     private readonly LiveSplitState _state;
     private readonly ITimerModel _model;
+    private readonly Action _resetAction;
     private TaskPoolGlobalHook _hook;
     private Task _hookTask;
     private bool _disposed;
 
-    public HotkeyService(LiveSplitState state, ITimerModel model)
+    public HotkeyService(LiveSplitState state, ITimerModel model, Action resetAction = null)
     {
         _state = state ?? throw new ArgumentNullException(nameof(state));
         _model = model ?? throw new ArgumentNullException(nameof(model));
+        _resetAction = resetAction ?? (() => _model.Reset());
     }
 
     public void Start()
@@ -155,7 +157,7 @@ public sealed class HotkeyService : IDisposable
     private Action SelectAction(HotkeyProfile profile, Key pressed)
     {
         if (Matches(profile.SplitKey, pressed)) { return _model.Split; }
-        if (Matches(profile.ResetKey, pressed)) { return () => _model.Reset(); }
+        if (Matches(profile.ResetKey, pressed)) { return _resetAction; }
         if (Matches(profile.SkipKey, pressed)) { return _model.SkipSplit; }
         if (Matches(profile.UndoKey, pressed)) { return _model.UndoSplit; }
         if (Matches(profile.PauseKey, pressed)) { return _model.Pause; }

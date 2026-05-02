@@ -6,6 +6,8 @@ using System.Xml;
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
 using LiveSplit.Model.RunFactories;
+using LiveSplit.UI.Components;
+using LiveSplit.Web.SRL;
 
 using static LiveSplit.UI.SettingsHelper;
 
@@ -49,6 +51,7 @@ public class XMLSettingsFactory : ISettingsFactory
         // Falls back to default value (Off) if integer entry in XML is invalid
 
         settings.LastComparison = ParseString(parent["LastComparison"], settings.LastComparison);
+        settings.AgreedToSRLRules = ParseBool(parent["AgreedToSRLRules"], settings.AgreedToSRLRules);
         settings.UpdateCheckEnabled = ParseBool(parent["UpdateCheckEnabled"], settings.UpdateCheckEnabled);
 
         XmlElement recentLayouts = parent["RecentLayouts"];
@@ -68,6 +71,11 @@ public class XMLSettingsFactory : ISettingsFactory
         }
 
         settings.UILanguage = ParseString(parent["UILanguage"], settings.UILanguage);
+
+        if (version >= new Version(1, 3) && parent["RaceViewer"] is { } raceViewer)
+        {
+            settings.RaceViewer = RaceViewer.FromName(raceViewer.InnerText);
+        }
 
         if (version >= new Version(1, 4))
         {
@@ -168,6 +176,36 @@ public class XMLSettingsFactory : ISettingsFactory
         {
             var hotkeyProfile = HotkeyProfile.FromXml(parent, version);
             settings.HotkeyProfiles[HotkeyProfile.DefaultHotkeyProfileName] = hotkeyProfile;
+        }
+
+        settings.RaceProvider.Clear();
+        if (version >= new Version(1, 8, 8) && parent["RaceProviderPlugins"] is { } raceProviderPlugins)
+        {
+            foreach (XmlElement providerNode in raceProviderPlugins.ChildNodes.OfType<XmlElement>())
+            {
+                string providerName = providerNode.GetAttribute("name");
+                RaceProviderSettings raceProviderSettings;
+                if (ComponentManager.RaceProviderFactories.TryGetValue(providerName, out IRaceProviderFactory factory))
+                {
+                    raceProviderSettings = factory.CreateSettings();
+                }
+                else
+                {
+                    raceProviderSettings = new UnloadedRaceProviderSettings();
+                }
+
+                raceProviderSettings.FromXml(providerNode, version);
+                settings.RaceProvider.Add(raceProviderSettings);
+            }
+        }
+
+        foreach (IRaceProviderFactory factory in ComponentManager.RaceProviderFactories.Values)
+        {
+            RaceProviderSettings raceProviderSettings = factory.CreateSettings();
+            if (!settings.RaceProvider.Any(x => x.GetType() == raceProviderSettings.GetType()))
+            {
+                settings.RaceProvider.Add(raceProviderSettings);
+            }
         }
 
         LoadDrift(parent);

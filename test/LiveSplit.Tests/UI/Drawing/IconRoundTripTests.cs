@@ -16,6 +16,7 @@ namespace LiveSplit.Tests.UI.Drawing;
 /// icons. Without this the components fall back to silent black boxes the moment Skia changes
 /// behavior or the model stops carrying raw bytes.
 /// </summary>
+[Collection("DrawingApi")]
 public class IconRoundTripTests
 {
     public IconRoundTripTests()

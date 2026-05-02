@@ -25,8 +25,7 @@ namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
 /// Tabbed Avalonia editor for an <see cref="IRun"/>. Mirrors the surface of the original
-/// WinForms RunEditorDialog except the Speedrun.com submit/import flow which is intentionally
-/// out of scope. Tabs:
+/// WinForms RunEditorDialog for local split, history, comparison, and metadata editing. Tabs:
 ///   • Edit       — segment list (add/remove/rename/reorder/double-click rename)
 ///   • Real Time  — split + segment + best-segment + custom-comparison times for RealTime
 ///   • Game Time  — same grid for GameTime

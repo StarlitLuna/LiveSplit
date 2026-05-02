@@ -4,6 +4,7 @@ using global::Avalonia;
 using global::Avalonia.Controls;
 using global::Avalonia.Layout;
 
+using LiveSplit.Options;
 using LiveSplit.UI;
 
 namespace LiveSplit.Avalonia.Dialogs;
@@ -24,6 +25,28 @@ public sealed class SettingsDialog : Window
         Height = 600;
 
         Control settingsControl = AvaloniaSettingsBuilder.Build(settings, "Settings");
+        var contentStack = new StackPanel
+        {
+            Spacing = 8
+        };
+
+        if (settings is ISettings liveSplitSettings)
+        {
+            var raceProviders = new Button
+            {
+                Content = "Manage Race Providers...",
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(12, 12, 12, 0)
+            };
+            raceProviders.Click += async (_, _) =>
+            {
+                var dlg = new RaceProviderManagingDialog(liveSplitSettings.RaceProvider);
+                await dlg.ShowDialogAsync(this);
+            };
+            contentStack.Children.Add(raceProviders);
+        }
+
+        contentStack.Children.Add(settingsControl);
 
         var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
         ok.Click += (_, _) => { _result.TrySetResult(true); Close(); };
@@ -42,7 +65,7 @@ public sealed class SettingsDialog : Window
         var root = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
-        root.Children.Add(settingsControl);
+        root.Children.Add(contentStack);
         Content = root;
 
         Closed += (_, _) =>

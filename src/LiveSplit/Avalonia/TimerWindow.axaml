@@ -23,12 +23,16 @@
       <MenuItem Header="Open Splits…" Command="{Binding OpenSplitsCommand}" />
       <MenuItem Header="Open Splits From URL…" Command="{Binding OpenSplitsFromUrlCommand}" />
       <MenuItem Name="RecentSplitsMenu" Header="Recent Splits" />
+      <MenuItem Header="Save Splits" Command="{Binding SaveSplitsCommand}" />
+      <MenuItem Header="Save Splits As..." Command="{Binding SaveSplitsAsCommand}" />
       <MenuItem Header="Edit Splits…" Command="{Binding EditSplitsCommand}" />
       <MenuItem Header="Close Splits" Command="{Binding CloseSplitsCommand}" />
       <Separator />
       <MenuItem Header="Open Layout…" Command="{Binding OpenLayoutCommand}" />
       <MenuItem Header="Open Layout From URL…" Command="{Binding OpenLayoutFromUrlCommand}" />
       <MenuItem Name="RecentLayoutsMenu" Header="Recent Layouts" />
+      <MenuItem Header="Save Layout" Command="{Binding SaveLayoutCommand}" />
+      <MenuItem Header="Save Layout As..." Command="{Binding SaveLayoutAsCommand}" />
       <MenuItem Header="Edit Layout…" Command="{Binding EditLayoutCommand}" />
       <MenuItem Header="Layout Settings…" Command="{Binding LayoutSettingsCommand}" />
       <Separator />
@@ -36,6 +40,7 @@
       <MenuItem Name="TimingMethodMenu" Header="Timing Method" />
       <Separator />
       <MenuItem Header="Share…" Command="{Binding ShareCommand}" />
+      <MenuItem Name="RaceMenu" Header="Racing" />
       <MenuItem Name="ServerMenu" Header="Control Server" />
       <Separator />
       <MenuItem Header="Settings…" Command="{Binding SettingsCommand}" />

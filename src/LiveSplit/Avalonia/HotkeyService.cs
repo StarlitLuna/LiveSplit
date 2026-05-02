@@ -122,11 +122,6 @@ public sealed class HotkeyService : IDisposable
             return;
         }
 
-        if (!profile.GlobalHotkeysEnabled)
-        {
-            return;
-        }
-
         Key? mapped = ToLiveSplitKey(e.Data.KeyCode);
         if (mapped is null)
         {
@@ -135,35 +130,59 @@ public sealed class HotkeyService : IDisposable
 
         // The profile binds a KeyOrButton, but we only care about the keyboard half here —
         // gamepad inputs would need a different code path.
-        Action target = SelectAction(profile, mapped.Value);
-        if (target is null)
+        HotkeyAction target = SelectAction(profile, mapped.Value);
+        if (target.Action is null || (!profile.GlobalHotkeysEnabled && !target.IsToggleGlobalHotkeys))
         {
             return;
         }
 
-        Dispatcher.UIThread.Post(() =>
-        {
-            try
-            {
-                target();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex);
-            }
-        });
+        ExecuteOnUiThread(profile, target);
     }
 
-    private Action SelectAction(HotkeyProfile profile, Key pressed)
+    public bool DispatchFocusedKey(global::Avalonia.Input.Key pressed)
     {
-        if (Matches(profile.SplitKey, pressed)) { return _model.Split; }
-        if (Matches(profile.ResetKey, pressed)) { return _resetAction; }
-        if (Matches(profile.SkipKey, pressed)) { return _model.SkipSplit; }
-        if (Matches(profile.UndoKey, pressed)) { return _model.UndoSplit; }
-        if (Matches(profile.PauseKey, pressed)) { return _model.Pause; }
-        if (Matches(profile.SwitchComparisonPrevious, pressed)) { return SwitchComparisonPrevious; }
-        if (Matches(profile.SwitchComparisonNext, pressed)) { return SwitchComparisonNext; }
-        return null;
+        Key? mapped = ToLiveSplitKey(pressed);
+        return mapped.HasValue && DispatchFocusedKey(mapped.Value);
+    }
+
+    internal bool DispatchFocusedKey(Key pressed)
+    {
+        if (_disposed || _state?.Settings?.HotkeyProfiles is null)
+        {
+            return false;
+        }
+
+        if (!_state.Settings.HotkeyProfiles.TryGetValue(_state.CurrentHotkeyProfile, out HotkeyProfile profile)
+            || profile is null)
+        {
+            return false;
+        }
+
+        HotkeyAction target = SelectAction(profile, pressed);
+        if (target.Action is null)
+        {
+            return false;
+        }
+
+        Execute(profile, target);
+        return true;
+    }
+
+    private HotkeyAction SelectAction(HotkeyProfile profile, Key pressed)
+    {
+        if (Matches(profile.SplitKey, pressed)) { return new HotkeyAction(_model.Split, delayable: true); }
+        if (Matches(profile.ResetKey, pressed)) { return new HotkeyAction(_resetAction); }
+        if (Matches(profile.SkipKey, pressed)) { return new HotkeyAction(_model.SkipSplit); }
+        if (Matches(profile.UndoKey, pressed)) { return new HotkeyAction(_model.UndoSplit); }
+        if (Matches(profile.PauseKey, pressed)) { return new HotkeyAction(_model.Pause, delayable: true); }
+        if (Matches(profile.SwitchComparisonPrevious, pressed)) { return new HotkeyAction(_model.SwitchComparisonPrevious); }
+        if (Matches(profile.SwitchComparisonNext, pressed)) { return new HotkeyAction(_model.SwitchComparisonNext); }
+        if (Matches(profile.ToggleGlobalHotkeys, pressed))
+        {
+            return new HotkeyAction(() => profile.GlobalHotkeysEnabled = !profile.GlobalHotkeysEnabled, isToggleGlobalHotkeys: true);
+        }
+
+        return default;
     }
 
     private void SwitchComparisonPrevious()
@@ -206,6 +225,74 @@ public sealed class HotkeyService : IDisposable
     private static bool Matches(KeyOrButton binding, Key pressed)
     {
         return binding is { IsKey: true } && binding.Key == pressed;
+    }
+
+    private void ExecuteOnUiThread(HotkeyProfile profile, HotkeyAction action)
+    {
+        Dispatcher.UIThread.Post(() => Execute(profile, action));
+    }
+
+    private static void Execute(HotkeyProfile profile, HotkeyAction action)
+    {
+        try
+        {
+            if (action.Delayable && profile.HotkeyDelay > 0)
+            {
+                _ = DelayThenInvoke(profile.HotkeyDelay, action.Action);
+                return;
+            }
+
+            action.Action();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
+    }
+
+    private static async Task DelayThenInvoke(float seconds, Action action)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(seconds)).ConfigureAwait(false);
+            Dispatcher.UIThread.Post(action);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+        }
+    }
+
+    private static Key? ToLiveSplitKey(global::Avalonia.Input.Key key)
+    {
+        if (Enum.TryParse(key.ToString(), out Key parsed))
+        {
+            return parsed;
+        }
+
+        return key switch
+        {
+            global::Avalonia.Input.Key.D0 => Key.D0,
+            global::Avalonia.Input.Key.D1 => Key.D1,
+            global::Avalonia.Input.Key.D2 => Key.D2,
+            global::Avalonia.Input.Key.D3 => Key.D3,
+            global::Avalonia.Input.Key.D4 => Key.D4,
+            global::Avalonia.Input.Key.D5 => Key.D5,
+            global::Avalonia.Input.Key.D6 => Key.D6,
+            global::Avalonia.Input.Key.D7 => Key.D7,
+            global::Avalonia.Input.Key.D8 => Key.D8,
+            global::Avalonia.Input.Key.D9 => Key.D9,
+            global::Avalonia.Input.Key.Back => Key.Back,
+            global::Avalonia.Input.Key.LeftShift => Key.LShiftKey,
+            global::Avalonia.Input.Key.RightShift => Key.RShiftKey,
+            global::Avalonia.Input.Key.LeftCtrl => Key.LControlKey,
+            global::Avalonia.Input.Key.RightCtrl => Key.RControlKey,
+            global::Avalonia.Input.Key.LeftAlt => Key.LMenu,
+            global::Avalonia.Input.Key.RightAlt => Key.RMenu,
+            global::Avalonia.Input.Key.LWin => Key.LWin,
+            global::Avalonia.Input.Key.RWin => Key.RWin,
+            _ => null,
+        };
     }
 
     /// <summary>
@@ -317,6 +404,20 @@ public sealed class HotkeyService : IDisposable
 
         _ => null,
     };
+
+    private readonly struct HotkeyAction
+    {
+        public HotkeyAction(Action action, bool delayable = false, bool isToggleGlobalHotkeys = false)
+        {
+            Action = action;
+            Delayable = delayable;
+            IsToggleGlobalHotkeys = isToggleGlobalHotkeys;
+        }
+
+        public Action Action { get; }
+        public bool Delayable { get; }
+        public bool IsToggleGlobalHotkeys { get; }
+    }
 
     public void Dispose()
     {

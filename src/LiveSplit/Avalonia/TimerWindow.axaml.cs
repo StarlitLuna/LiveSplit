@@ -117,10 +117,14 @@ public sealed partial class TimerWindow : Window
         Host.LayoutApplied += () =>
         {
             ApplyLayoutSize();
-            ApplyAlwaysOnTop();
+            ApplyLayoutWindowSettings();
         };
         ApplyLayoutSize();
-        ApplyAlwaysOnTop();
+        ApplyLayoutWindowSettings();
+        Host.State.OnStart += (_, _) => Dispatcher.UIThread.Post(ApplyLayoutWindowSettings);
+        Host.State.OnReset += (_, _) => Dispatcher.UIThread.Post(ApplyLayoutWindowSettings);
+        Host.State.OnPause += (_, _) => Dispatcher.UIThread.Post(ApplyLayoutWindowSettings);
+        Host.State.OnResume += (_, _) => Dispatcher.UIThread.Post(ApplyLayoutWindowSettings);
 
         // Re-apply on Opened too — some window managers (Wayland XWayland in particular)
         // don't honor Width/Height set before the window is realized. Setting them again on
@@ -128,17 +132,17 @@ public sealed partial class TimerWindow : Window
         Opened += (_, _) =>
         {
             ApplyLayoutSize();
-            ApplyAlwaysOnTop();
+            ApplyLayoutWindowSettings();
         };
 
         SizeChanged += OnSizeChanged;
 
         WireDynamicSubmenus();
-        WireComponentContextMenu();
 
         // Tunnel-phase so the handler runs even when child controls swallow the bubble; the
         // right-click ContextMenu wired via XAML still surfaces normally.
         AddHandler(PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
 
         // Drag-and-drop a .lss / .lsl onto the window to load it.
         DragDrop.SetAllowDrop(this, true);
@@ -273,9 +277,17 @@ public sealed partial class TimerWindow : Window
     private void OnPointerPressed(object sender, PointerPressedEventArgs e)
     {
         PointerPointProperties props = e.GetCurrentPoint(this).Properties;
-        if (props.IsLeftButtonPressed)
+        if (props.IsLeftButtonPressed && Host?.State?.LayoutSettings?.AllowMoving != false)
         {
             BeginMoveDrag(e);
+        }
+    }
+
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Host?.DispatchFocusedHotkey(e.Key) == true)
+        {
+            e.Handled = true;
         }
     }
 
@@ -286,9 +298,24 @@ public sealed partial class TimerWindow : Window
     /// the setting is per-layout (lives in the .lsl) rather than global, so swapping layouts
     /// must re-apply this.
     /// </summary>
-    private void ApplyAlwaysOnTop()
+    private void ApplyLayoutWindowSettings()
     {
-        Topmost = Host?.State?.Layout?.Settings?.AlwaysOnTop == true;
+        LayoutSettings settings = Host?.State?.Layout?.Settings;
+        if (settings is null)
+        {
+            return;
+        }
+
+        Topmost = settings.AlwaysOnTop;
+        Opacity = Math.Clamp(settings.Opacity, 0.0, 1.0);
+        CanResize = settings.AllowResizing;
+
+        if (this.FindControl<SkiaRenderControl>("Canvas") is SkiaRenderControl canvas)
+        {
+            bool passThrough = settings.MousePassThroughWhileRunning
+                && Host.State.CurrentPhase == TimerPhase.Running;
+            canvas.IsHitTestVisible = !passThrough;
+        }
     }
 
     /// <summary>
@@ -554,20 +581,22 @@ public sealed partial class TimerWindow : Window
     private async Task OpenLayoutSettings()
     {
         var dlg = new LayoutSettingsDialog(Host.State.LayoutSettings);
-        await dlg.ShowDialogAsync(this);
-
-
-        ApplyAlwaysOnTop();
-        InvalidateVisual();
+        if (await dlg.ShowDialogAsync(this))
+        {
+            ApplyLayoutWindowSettings();
+            InvalidateVisual();
+        }
     }
 
     private async Task OpenSettings()
     {
+        ISettings previous = (ISettings)Host.State.Settings.Clone();
         ISettings edited = (ISettings)Host.State.Settings.Clone();
-        var dlg = new SettingsDialog(edited);
+        var dlg = new SettingsDialog(edited, Host.State.CurrentHotkeyProfile);
         if (await dlg.ShowDialogAsync(this))
         {
-            Host.State.Settings = edited;
+            Host.ApplySettings(edited, dlg.SelectedHotkeyProfile);
+            ApplyServerSettings(previous, edited);
             InvalidateVisual();
         }
     }
@@ -768,14 +797,9 @@ public sealed partial class TimerWindow : Window
             comparisons.SubmenuOpened += (_, _) => PopulateComparisons(comparisons);
         }
 
-        if (this.FindControl<MenuItem>("TimingMethodMenu") is MenuItem timingMethod)
+        if (this.FindControl<MenuItem>("ControlMenu") is MenuItem controlMenu)
         {
-            timingMethod.SubmenuOpened += (_, _) => PopulateTimingMethods(timingMethod);
-        }
-
-        if (this.FindControl<MenuItem>("ServerMenu") is MenuItem serverMenu)
-        {
-            serverMenu.SubmenuOpened += (_, _) => PopulateServerMenu(serverMenu);
+            controlMenu.SubmenuOpened += (_, _) => PopulateControlMenu(controlMenu);
         }
 
         if (this.FindControl<MenuItem>("RaceMenu") is MenuItem raceMenu)
@@ -843,7 +867,7 @@ public sealed partial class TimerWindow : Window
 
     private void PopulateComparisons(MenuItem parent)
     {
-        var children = new List<MenuItem>();
+        var children = new List<object>();
         string current = Host.State.CurrentComparison;
         foreach (string name in Host.State.Run.Comparisons)
         {
@@ -863,10 +887,13 @@ public sealed partial class TimerWindow : Window
             children.Add(item);
         }
 
+        children.Add(new Separator());
+        AddTimingMethodItems(children);
+
         parent.ItemsSource = children;
     }
 
-    private void PopulateTimingMethods(MenuItem parent)
+    private void AddTimingMethodItems(ICollection<object> children)
     {
         TimingMethod current = Host.State.CurrentTimingMethod;
         var realTime = new MenuItem
@@ -883,9 +910,8 @@ public sealed partial class TimerWindow : Window
         };
         gameTime.Click += (_, _) => { Host.State.CurrentTimingMethod = TimingMethod.GameTime; InvalidateVisual(); };
 
-        parent.Items.Clear();
-        parent.Items.Add(realTime);
-        parent.Items.Add(gameTime);
+        children.Add(realTime);
+        children.Add(gameTime);
     }
 
     private void PopulateLanguageMenu(MenuItem parent)
@@ -1076,10 +1102,132 @@ public sealed partial class TimerWindow : Window
         await dlg.ShowDialogAsync(this);
     }
 
+    private void PopulateControlMenu(MenuItem parent)
+    {
+        var children = new List<object>();
+        TimerPhase phase = Host.State.CurrentPhase;
+
+        var split = new MenuItem
+        {
+            Header = phase == TimerPhase.NotRunning ? "Start" : "Split",
+            IsEnabled = phase is TimerPhase.NotRunning or TimerPhase.Running,
+        };
+        split.Click += (_, _) =>
+        {
+            if (Host.State.CurrentPhase == TimerPhase.NotRunning)
+            {
+                Host.Model.Start();
+            }
+            else
+            {
+                Host.Model.Split();
+            }
+        };
+        children.Add(split);
+
+        var reset = new MenuItem
+        {
+            Header = "Reset",
+            IsEnabled = phase is not TimerPhase.NotRunning,
+        };
+        reset.Click += async (_, _) => await Reset();
+        children.Add(reset);
+
+        var undo = new MenuItem
+        {
+            Header = "Undo Split",
+            IsEnabled = Host.State.CurrentSplitIndex > 0,
+        };
+        undo.Click += (_, _) => Host.Model.UndoSplit();
+        children.Add(undo);
+
+        var skip = new MenuItem
+        {
+            Header = "Skip Split",
+            IsEnabled = (phase is TimerPhase.Running or TimerPhase.Paused)
+                && Host.State.CurrentSplitIndex < Host.State.Run.Count - 1,
+        };
+        skip.Click += (_, _) => Host.Model.SkipSplit();
+        children.Add(skip);
+
+        var pause = new MenuItem
+        {
+            Header = phase == TimerPhase.Paused ? "Resume" : "Pause",
+            IsEnabled = phase is TimerPhase.NotRunning or TimerPhase.Running or TimerPhase.Paused,
+        };
+        pause.Click += (_, _) => Host.Model.Pause();
+        children.Add(pause);
+
+        var undoPauses = new MenuItem
+        {
+            Header = "Undo All Pauses",
+            IsEnabled = phase is TimerPhase.Running or TimerPhase.Paused or TimerPhase.Ended,
+        };
+        undoPauses.Click += (_, _) => Host.Model.UndoAllPauses();
+        children.Add(undoPauses);
+
+        children.Add(new Separator());
+
+        HotkeyProfile profile = null;
+        Host.State.Settings.HotkeyProfiles?.TryGetValue(Host.State.CurrentHotkeyProfile, out profile);
+        var globalHotkeys = new MenuItem
+        {
+            Header = "Global Hotkeys",
+            Icon = profile?.GlobalHotkeysEnabled == true ? new TextBlock { Text = "*" } : null,
+            IsEnabled = profile != null,
+        };
+        globalHotkeys.Click += (_, _) =>
+        {
+            if (profile != null)
+            {
+                profile.GlobalHotkeysEnabled = !profile.GlobalHotkeysEnabled;
+            }
+        };
+        children.Add(globalHotkeys);
+
+        children.Add(new Separator());
+        AddServerItems(children);
+
+        foreach (LiveSplit.UI.Components.IComponent component in Host.Renderer.VisibleComponents)
+        {
+            if (component.ContextMenuControls is not { Count: > 0 } actions)
+            {
+                continue;
+            }
+
+            children.Add(new Separator());
+            foreach (KeyValuePair<string, Action> kv in actions)
+            {
+                Action handler = kv.Value;
+                var item = new MenuItem { Header = kv.Key };
+                item.Click += (_, _) =>
+                {
+                    try
+                    {
+                        handler?.Invoke();
+                        InvalidateVisual();
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex);
+                    }
+                };
+                children.Add(item);
+            }
+        }
+
+        parent.ItemsSource = children;
+    }
+
     private void PopulateServerMenu(MenuItem parent)
     {
-        var children = new List<MenuItem>();
+        var children = new List<object>();
+        AddServerItems(children);
+        parent.ItemsSource = children;
+    }
 
+    private void AddServerItems(ICollection<object> children)
+    {
         var startTcp = new MenuItem { Header = "Start TCP Server" };
         startTcp.Click += (_, _) => StartServer(ServerStartupType.TCP);
         children.Add(startTcp);
@@ -1088,19 +1236,13 @@ public sealed partial class TimerWindow : Window
         startWs.Click += (_, _) => StartServer(ServerStartupType.Websocket);
         children.Add(startWs);
 
-        var startPipe = new MenuItem { Header = "Start Named Pipe Server" };
-        startPipe.Click += (_, _) => StartNamedPipeServer();
-        children.Add(startPipe);
-
         if (_commandServer is { ServerState: not ServerStateType.Off })
         {
-            children.Add(new MenuItem { Header = "-" });
+            children.Add(new Separator());
             var stop = new MenuItem { Header = $"Stop Server ({_commandServer.ServerState})" };
             stop.Click += (_, _) => StopServer();
             children.Add(stop);
         }
-
-        parent.ItemsSource = children;
     }
 
     // --- Server lifecycle -------------------------------------------------------------------
@@ -1109,13 +1251,24 @@ public sealed partial class TimerWindow : Window
     {
         try
         {
+            StartNamedPipeServer();
             switch (Host.State.Settings.ServerStartup)
             {
                 case ServerStartupType.TCP:
-                    StartServer(ServerStartupType.TCP);
+                    StartServer(ServerStartupType.TCP, updateStartupSetting: false);
                     break;
                 case ServerStartupType.Websocket:
-                    StartServer(ServerStartupType.Websocket);
+                    StartServer(ServerStartupType.Websocket, updateStartupSetting: false);
+                    break;
+                case ServerStartupType.PreviousState:
+                    if (Host.State.Settings.ServerState == ServerStateType.TCP)
+                    {
+                        StartServer(ServerStartupType.TCP, updateStartupSetting: false);
+                    }
+                    else if (Host.State.Settings.ServerState == ServerStateType.Websocket)
+                    {
+                        StartServer(ServerStartupType.Websocket, updateStartupSetting: false);
+                    }
                     break;
             }
         }
@@ -1125,7 +1278,29 @@ public sealed partial class TimerWindow : Window
         }
     }
 
-    private void StartServer(ServerStartupType type)
+    private void ApplyServerSettings(ISettings previous, ISettings current)
+    {
+        if (previous.ServerPort == current.ServerPort
+            && previous.ServerStartup == current.ServerStartup
+            && previous.ServerState == current.ServerState)
+        {
+            return;
+        }
+
+        try
+        {
+            _commandServer?.StopTcp();
+            _commandServer?.StopWs();
+            Host.State.Settings.ServerState = ServerStateType.Off;
+            StartConfiguredServer();
+        }
+        catch (Exception e)
+        {
+            Log.Error(e);
+        }
+    }
+
+    private void StartServer(ServerStartupType type, bool updateStartupSetting = true)
     {
         try
         {
@@ -1140,7 +1315,11 @@ public sealed partial class TimerWindow : Window
                     break;
             }
 
-            Host.State.Settings.ServerStartup = type;
+            if (updateStartupSetting)
+            {
+                Host.State.Settings.ServerStartup = type;
+            }
+
             Host.State.Settings.ServerState = _commandServer.ServerState;
         }
         catch (Exception e)
@@ -1166,9 +1345,17 @@ public sealed partial class TimerWindow : Window
     {
         try
         {
-            _commandServer?.StopAll();
+            if (_commandServer?.ServerState == ServerStateType.TCP)
+            {
+                _commandServer.StopTcp();
+            }
+            else if (_commandServer?.ServerState == ServerStateType.Websocket)
+            {
+                _commandServer.StopWs();
+            }
+
             Host.State.Settings.ServerStartup = ServerStartupType.Off;
-            Host.State.Settings.ServerState = ServerStateType.Off;
+            Host.State.Settings.ServerState = _commandServer?.ServerState ?? ServerStateType.Off;
         }
         catch (Exception e)
         {

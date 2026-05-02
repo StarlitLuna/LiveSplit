@@ -48,7 +48,11 @@ public class LayoutSerializationFontOverridesMust
 
         XmlNode textFontNode = doc.SelectSingleNode("//FontOverrides/TextFont");
         Assert.NotNull(textFontNode);
-        Assert.False(string.IsNullOrEmpty(textFontNode.InnerText));
+        Assert.True(string.IsNullOrEmpty(textFontNode.InnerText));
+
+        XmlNode textFontDescriptorNode = doc.SelectSingleNode("//FontOverrides/TextFontDescriptor");
+        Assert.NotNull(textFontDescriptorNode);
+        Assert.Equal("Arial", textFontDescriptorNode["FamilyName"]?.InnerText);
     }
 
     [Fact]
@@ -127,6 +131,25 @@ public class LayoutSerializationFontOverridesMust
         SettingsHelper.CreateSetting(output, parent, "TimerFont", font);
 
         Assert.Equal(sourceElement.InnerText, parent["TimerFont"].InnerText);
+    }
+
+    [Fact]
+    public void WriteFontDescriptorSiblingWhenPreservingLegacyFontBlob()
+    {
+        byte[] legacyBlob = { 9, 8, 7, 6 };
+        var font = new FontDescriptor("Inter", 17f, System.Drawing.FontStyle.Bold)
+        {
+            LegacySerializedFont = legacyBlob,
+        };
+        var output = new XmlDocument();
+        XmlElement parent = output.CreateElement("Settings");
+        output.AppendChild(parent);
+
+        SettingsHelper.CreateFontSettings(output, parent, "TimerFont", font);
+
+        Assert.Equal(Convert.ToBase64String(legacyBlob), parent["TimerFont"].InnerText);
+        Assert.Equal("Inter", parent["TimerFontDescriptor"]["FamilyName"].InnerText);
+        Assert.Equal("17", parent["TimerFontDescriptor"]["Size"].InnerText);
     }
 
     /// <summary>

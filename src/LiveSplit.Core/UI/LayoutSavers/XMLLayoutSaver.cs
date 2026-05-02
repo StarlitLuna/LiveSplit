@@ -28,15 +28,16 @@ public class XMLLayoutSaver : ILayoutSaver
         SettingsHelper.CreateSetting(document, element, "PausedColor", settings.PausedColor) ^
         SettingsHelper.CreateSetting(document, element, "TextOutlineColor", settings.TextOutlineColor) ^
         SettingsHelper.CreateSetting(document, element, "ShadowsColor", settings.ShadowsColor) ^
-        SettingsHelper.CreateSetting(document, element, "TimesFont", settings.TimesFont) ^
-        SettingsHelper.CreateSetting(document, element, "TimerFont", settings.TimerFont) ^
-        SettingsHelper.CreateSetting(document, element, "TextFont", settings.TextFont) ^
+        SettingsHelper.CreateFontSettings(document, element, "TimesFont", settings.TimesFont) ^
+        SettingsHelper.CreateFontSettings(document, element, "TimerFont", settings.TimerFont) ^
+        SettingsHelper.CreateFontSettings(document, element, "TextFont", settings.TextFont) ^
         SettingsHelper.CreateSetting(document, element, "AlwaysOnTop", settings.AlwaysOnTop) ^
         SettingsHelper.CreateSetting(document, element, "ShowBestSegments", settings.ShowBestSegments) ^
         SettingsHelper.CreateSetting(document, element, "AntiAliasing", settings.AntiAliasing) ^
         SettingsHelper.CreateSetting(document, element, "DropShadows", settings.DropShadows) ^
         SettingsHelper.CreateSetting(document, element, "BackgroundType", settings.BackgroundType) ^
-        SettingsHelper.CreateSetting(document, element, "BackgroundImage", settings.BackgroundImage) ^
+        SettingsHelper.CreateLegacyImageSetting(document, element, "BackgroundImage", settings.LegacyBackgroundImage) ^
+        SettingsHelper.CreateSetting(document, element, "BackgroundImageData", settings.BackgroundImage) ^
         SettingsHelper.CreateSetting(document, element, "ImageOpacity", settings.ImageOpacity) ^
         SettingsHelper.CreateSetting(document, element, "ImageBlur", settings.ImageBlur) ^
         SettingsHelper.CreateSetting(document, element, "Opacity", settings.Opacity) ^
@@ -94,19 +95,19 @@ public class XMLLayoutSaver : ILayoutSaver
                         SettingsHelper.CreateSetting(document, fontOverridesElement, "OverrideTimerFont", layoutComponent.FontOverrides.OverrideTimerFont);
                         if (layoutComponent.FontOverrides.OverrideTimerFont && layoutComponent.FontOverrides.TimerFont != null)
                         {
-                            SettingsHelper.CreateSetting(document, fontOverridesElement, "TimerFont", layoutComponent.FontOverrides.TimerFont);
+                            SettingsHelper.CreateFontSettings(document, fontOverridesElement, "TimerFont", layoutComponent.FontOverrides.TimerFont);
                         }
 
                         SettingsHelper.CreateSetting(document, fontOverridesElement, "OverrideTimesFont", layoutComponent.FontOverrides.OverrideTimesFont);
                         if (layoutComponent.FontOverrides.OverrideTimesFont && layoutComponent.FontOverrides.TimesFont != null)
                         {
-                            SettingsHelper.CreateSetting(document, fontOverridesElement, "TimesFont", layoutComponent.FontOverrides.TimesFont);
+                            SettingsHelper.CreateFontSettings(document, fontOverridesElement, "TimesFont", layoutComponent.FontOverrides.TimesFont);
                         }
 
                         SettingsHelper.CreateSetting(document, fontOverridesElement, "OverrideTextFont", layoutComponent.FontOverrides.OverrideTextFont);
                         if (layoutComponent.FontOverrides.OverrideTextFont && layoutComponent.FontOverrides.TextFont != null)
                         {
-                            SettingsHelper.CreateSetting(document, fontOverridesElement, "TextFont", layoutComponent.FontOverrides.TextFont);
+                            SettingsHelper.CreateFontSettings(document, fontOverridesElement, "TextFont", layoutComponent.FontOverrides.TextFont);
                         }
 
                         componentElement.AppendChild(fontOverridesElement);
@@ -131,17 +132,17 @@ public class XMLLayoutSaver : ILayoutSaver
                             ^ (layoutComponentForHash.FontOverrides.OverrideTextFont ? 4 : 0);
                         if (layoutComponentForHash.FontOverrides.TimerFont != null)
                         {
-                            fontHash ^= SettingsHelper.CreateSetting(null, null, "TimerFont", layoutComponentForHash.FontOverrides.TimerFont);
+                            fontHash ^= SettingsHelper.CreateFontSettings(null, null, "TimerFont", layoutComponentForHash.FontOverrides.TimerFont);
                         }
 
                         if (layoutComponentForHash.FontOverrides.TimesFont != null)
                         {
-                            fontHash ^= SettingsHelper.CreateSetting(null, null, "TimesFont", layoutComponentForHash.FontOverrides.TimesFont);
+                            fontHash ^= SettingsHelper.CreateFontSettings(null, null, "TimesFont", layoutComponentForHash.FontOverrides.TimesFont);
                         }
 
                         if (layoutComponentForHash.FontOverrides.TextFont != null)
                         {
-                            fontHash ^= SettingsHelper.CreateSetting(null, null, "TextFont", layoutComponentForHash.FontOverrides.TextFont);
+                            fontHash ^= SettingsHelper.CreateFontSettings(null, null, "TextFont", layoutComponentForHash.FontOverrides.TextFont);
                         }
 
                         hashCode ^= fontHash ^ (count * 31337);

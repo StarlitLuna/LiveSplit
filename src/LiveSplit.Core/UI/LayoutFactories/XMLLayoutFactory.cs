@@ -45,7 +45,7 @@ public class XMLLayoutFactory : ILayoutFactory
             ShadowsColor = SettingsHelper.ParseColor(element["ShadowsColor"], Color.FromArgb(128, 0, 0, 0)),
             ShowBestSegments = SettingsHelper.ParseBool(element["ShowBestSegments"]),
             AlwaysOnTop = SettingsHelper.ParseBool(element["AlwaysOnTop"]),
-            TimerFont = SettingsHelper.GetFontFromElement(element["TimerFont"]),
+            TimerFont = SettingsHelper.GetFontFromElements(element["TimerFont"], element["TimerFontDescriptor"]),
             ImageOpacity = SettingsHelper.ParseFloat(element["ImageOpacity"], 1f),
             ImageBlur = SettingsHelper.ParseFloat(element["ImageBlur"], 0f)
         };
@@ -53,8 +53,8 @@ public class XMLLayoutFactory : ILayoutFactory
         if (version >= new Version(1, 3))
         {
             settings.BackgroundColor2 = SettingsHelper.ParseColor(element["BackgroundColor2"]);
-            settings.TimesFont = SettingsHelper.GetFontFromElement(element["TimesFont"]);
-            settings.TextFont = SettingsHelper.GetFontFromElement(element["TextFont"]);
+            settings.TimesFont = SettingsHelper.GetFontFromElements(element["TimesFont"], element["TimesFontDescriptor"]);
+            settings.TextFont = SettingsHelper.GetFontFromElements(element["TextFont"], element["TextFontDescriptor"]);
         }
         else
         {
@@ -92,7 +92,12 @@ public class XMLLayoutFactory : ILayoutFactory
             }
         }
 
-        settings.BackgroundImage = SettingsHelper.GetImageFromElement(element["BackgroundImage"]);
+        settings.LegacyBackgroundImage = SettingsHelper.GetImageFromElement(element["BackgroundImage"]);
+        settings.BackgroundImage = SettingsHelper.GetImageFromElement(element["BackgroundImageData"]);
+        if (settings.BackgroundImage is null && IsCommonEncodedImage(settings.LegacyBackgroundImage))
+        {
+            settings.BackgroundImage = settings.LegacyBackgroundImage;
+        }
 
         if (settings.TimerFont == null || settings.TimesFont == null || settings.TextFont == null)
         {
@@ -103,6 +108,23 @@ public class XMLLayoutFactory : ILayoutFactory
         }
 
         return settings;
+    }
+
+    private static bool IsCommonEncodedImage(byte[] data)
+    {
+        if (data is null || data.Length < 4)
+        {
+            return false;
+        }
+
+        return (data.Length >= 8
+                && data[0] == 0x89
+                && data[1] == 0x50
+                && data[2] == 0x4E
+                && data[3] == 0x47)
+            || (data[0] == 0xFF && data[1] == 0xD8)
+            || (data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46)
+            || (data[0] == 0x42 && data[1] == 0x4D);
     }
 
     public ILayout Create(LiveSplitState state)
@@ -141,19 +163,19 @@ public class XMLLayoutFactory : ILayoutFactory
                         lc.FontOverrides.OverrideTimerFont = SettingsHelper.ParseBool(fontOverridesElement["OverrideTimerFont"]);
                         if (lc.FontOverrides.OverrideTimerFont)
                         {
-                            lc.FontOverrides.TimerFont = SettingsHelper.GetFontFromElement(fontOverridesElement["TimerFont"]);
+                            lc.FontOverrides.TimerFont = SettingsHelper.GetFontFromElements(fontOverridesElement["TimerFont"], fontOverridesElement["TimerFontDescriptor"]);
                         }
 
                         lc.FontOverrides.OverrideTimesFont = SettingsHelper.ParseBool(fontOverridesElement["OverrideTimesFont"]);
                         if (lc.FontOverrides.OverrideTimesFont)
                         {
-                            lc.FontOverrides.TimesFont = SettingsHelper.GetFontFromElement(fontOverridesElement["TimesFont"]);
+                            lc.FontOverrides.TimesFont = SettingsHelper.GetFontFromElements(fontOverridesElement["TimesFont"], fontOverridesElement["TimesFontDescriptor"]);
                         }
 
                         lc.FontOverrides.OverrideTextFont = SettingsHelper.ParseBool(fontOverridesElement["OverrideTextFont"]);
                         if (lc.FontOverrides.OverrideTextFont)
                         {
-                            lc.FontOverrides.TextFont = SettingsHelper.GetFontFromElement(fontOverridesElement["TextFont"]);
+                            lc.FontOverrides.TextFont = SettingsHelper.GetFontFromElements(fontOverridesElement["TextFont"], fontOverridesElement["TextFontDescriptor"]);
                         }
                     }
                     else if (layoutComponent is LayoutComponent lcLegacy)

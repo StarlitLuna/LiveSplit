@@ -39,7 +39,7 @@ public class SettingsHelper
     {
         if (element == null || element.IsEmpty)
         {
-            return null;
+            return GetFontDescriptorSibling(element);
         }
 
         XmlElement familyEl = element["FamilyName"];
@@ -55,6 +55,12 @@ public class SettingsHelper
         byte[] legacy = TryReadBase64(element.InnerText);
         if (legacy is null)
         {
+            FontDescriptor sibling = GetFontDescriptorSibling(element);
+            if (sibling != null)
+            {
+                return sibling;
+            }
+
             return null;
         }
 
@@ -64,44 +70,75 @@ public class SettingsHelper
             return decoded;
         }
 
+        FontDescriptor descriptor = GetFontDescriptorSibling(element);
+        if (descriptor != null)
+        {
+            descriptor.LegacySerializedFont = legacy;
+            return descriptor;
+        }
+
         return new FontDescriptor { LegacySerializedFont = legacy };
 
     }
 
-    public static int CreateSetting(XmlDocument document, XmlElement parent, string elementName, FontDescriptor font)
+    public static FontDescriptor GetFontFromElements(XmlElement legacyElement, XmlElement descriptorElement)
+    {
+        FontDescriptor descriptor = GetFontFromElement(descriptorElement);
+        byte[] legacy = TryReadBase64(legacyElement?.InnerText);
+
+        if (descriptor != null)
+        {
+            descriptor.LegacySerializedFont = legacy;
+            return descriptor;
+        }
+
+        return GetFontFromElement(legacyElement);
+    }
+
+    public static int CreateFontSettings(XmlDocument document, XmlElement parent, string legacyElementName, FontDescriptor font)
+    {
+        return CreateLegacyFontSetting(document, parent, legacyElementName, font?.LegacySerializedFont)
+            ^ CreateFontDescriptorSetting(document, parent, legacyElementName + "Descriptor", font);
+    }
+
+    public static int CreateLegacyFontSetting(XmlDocument document, XmlElement parent, string elementName, byte[] legacyFont)
     {
         if (document != null)
         {
             XmlElement element = document.CreateElement(elementName);
-
-            if (font?.LegacySerializedFont is { Length: > 0 })
+            if (legacyFont is { Length: > 0 })
             {
-                XmlCDataSection cdata = document.CreateCDataSection(Convert.ToBase64String(font.LegacySerializedFont));
+                XmlCDataSection cdata = document.CreateCDataSection(Convert.ToBase64String(legacyFont));
                 element.InnerXml = cdata.OuterXml;
-            }
-            else if (font != null)
-            {
-                XmlElement family = document.CreateElement("FamilyName");
-                family.InnerText = font.FamilyName;
-                element.AppendChild(family);
-
-                XmlElement size = document.CreateElement("Size");
-                size.InnerText = font.Size.ToString(CultureInfo.InvariantCulture);
-                element.AppendChild(size);
-
-                XmlElement style = document.CreateElement("Style");
-                style.InnerText = font.Style.ToString();
-                element.AppendChild(style);
-
-                XmlElement unit = document.CreateElement("Unit");
-                unit.InnerText = font.Unit.ToString();
-                element.AppendChild(unit);
             }
 
             parent.AppendChild(element);
         }
 
-        return font?.GetHashCode() ?? 0;
+        return GetByteArrayHash(legacyFont);
+    }
+
+    public static int CreateFontDescriptorSetting(XmlDocument document, XmlElement parent, string elementName, FontDescriptor font)
+    {
+        if (document != null)
+        {
+            XmlElement element = document.CreateElement(elementName);
+            if (font != null)
+            {
+                AppendFontDescriptor(document, element, font);
+            }
+
+            parent.AppendChild(element);
+        }
+
+        return font == null
+            ? 0
+            : HashCode.Combine(font.FamilyName, font.Size, (int)font.Style, (int)font.Unit);
+    }
+
+    public static int CreateSetting(XmlDocument document, XmlElement parent, string elementName, FontDescriptor font)
+    {
+        return CreateFontSettings(document, parent, elementName, font);
     }
 
     public static int CreateSetting(XmlDocument document, XmlElement parent, string elementName, byte[] image)
@@ -120,6 +157,9 @@ public class SettingsHelper
 
         return GetByteArrayHash(image);
     }
+
+    public static int CreateLegacyImageSetting(XmlDocument document, XmlElement parent, string elementName, byte[] image)
+        => CreateSetting(document, parent, elementName, image);
 
     public static byte[] GetImageFromElement(XmlElement element)
     {
@@ -146,6 +186,51 @@ public class SettingsHelper
         {
             return null;
         }
+    }
+
+    private static void AppendFontDescriptor(XmlDocument document, XmlElement element, FontDescriptor font)
+    {
+        XmlElement family = document.CreateElement("FamilyName");
+        family.InnerText = font.FamilyName;
+        element.AppendChild(family);
+
+        XmlElement size = document.CreateElement("Size");
+        size.InnerText = font.Size.ToString(CultureInfo.InvariantCulture);
+        element.AppendChild(size);
+
+        XmlElement style = document.CreateElement("Style");
+        style.InnerText = font.Style.ToString();
+        element.AppendChild(style);
+
+        XmlElement unit = document.CreateElement("Unit");
+        unit.InnerText = font.Unit.ToString();
+        element.AppendChild(unit);
+    }
+
+    private static FontDescriptor GetFontDescriptorSibling(XmlElement legacyElement)
+    {
+        if (legacyElement?.ParentNode is not XmlElement parent)
+        {
+            return null;
+        }
+
+        XmlElement sibling = parent[legacyElement.Name + "Descriptor"];
+        if (sibling == null || sibling == legacyElement)
+        {
+            return null;
+        }
+
+        XmlElement familyEl = sibling["FamilyName"];
+        if (familyEl == null)
+        {
+            return null;
+        }
+
+        return new FontDescriptor(
+            familyName: familyEl.InnerText,
+            size: ParseFloat(sibling["Size"], 12f),
+            style: ParseEnum(sibling["Style"], FontStyle.Regular),
+            unit: ParseEnum(sibling["Unit"], GraphicsUnit.Point));
     }
 
 #pragma warning disable SYSLIB0011

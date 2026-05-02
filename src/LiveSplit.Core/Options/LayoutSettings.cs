@@ -49,6 +49,13 @@ public class LayoutSettings : ICloneable
         }
     }
 
+    /// <summary>
+    /// Master-compatible BinaryFormatter image blob from the legacy <c>BackgroundImage</c>
+    /// element. The Avalonia port never renders from this field; it is kept so saving a layout
+    /// preserves data understood by older Windows-only LiveSplit builds.
+    /// </summary>
+    public byte[] LegacyBackgroundImage { get; set; }
+
     /// <summary>Lazily-decoded <see cref="IImage"/> for <see cref="BackgroundImage"/>. The
     /// renderer reads this on each frame; the decode happens once and caches until
     /// <see cref="BackgroundImage"/> is reassigned. Returns null if the bytes are missing or
@@ -137,6 +144,9 @@ public class LayoutSettings : ICloneable
         BackgroundImage = settings.BackgroundImage is null
             ? null
             : (byte[])settings.BackgroundImage.Clone();
+        LegacyBackgroundImage = settings.LegacyBackgroundImage is null
+            ? null
+            : (byte[])settings.LegacyBackgroundImage.Clone();
         ImageOpacity = settings.ImageOpacity;
         ImageBlur = settings.ImageBlur;
         AllowResizing = settings.AllowResizing;

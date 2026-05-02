@@ -98,7 +98,7 @@ jobs:
   build-fedora-rpm:
     runs-on: ubuntu-22.04
     container:
-      image: fedora:40
+      image: fedora:latest
     defaults:
       run:
         shell: bash

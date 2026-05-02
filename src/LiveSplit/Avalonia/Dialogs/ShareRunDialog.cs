@@ -36,9 +36,9 @@ public sealed class ShareRunDialog : Window
 
     public ShareRunDialog(LiveSplitState state, ISettings settings, Func<byte[]> screenshotPng)
     {
-        _state = state;
+        _state = CloneStateForSharing(state);
         _screenshotPng = screenshotPng;
-        _run = SelectRunForSharing(state);
+        _run = SelectRunForSharing(_state);
         _platforms = BuildPlatformList();
 
         Title = "Share Run";
@@ -188,7 +188,12 @@ public sealed class ShareRunDialog : Window
         return platforms;
     }
 
-    private static IRun SelectRunForSharing(LiveSplitState state)
+    internal static LiveSplitState CloneStateForSharing(LiveSplitState state)
+    {
+        return state?.Clone() as LiveSplitState;
+    }
+
+    internal static IRun SelectRunForSharing(LiveSplitState state)
     {
         if (state.CurrentPhase != TimerPhase.Ended)
         {

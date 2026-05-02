@@ -4,9 +4,14 @@ using System.Linq;
 using System.Security.Cryptography;
 
 using LiveSplit.Avalonia;
+using LiveSplit.Model;
+using LiveSplit.Model.Comparisons;
+using LiveSplit.Model.RunSavers;
 using LiveSplit.Options;
+using LiveSplit.Model.Input;
 using LiveSplit.UI.Drawing;
 using LiveSplit.UI.Drawing.Skia;
+using LiveSplit.UI.LayoutSavers;
 
 using Xunit;
 
@@ -72,6 +77,99 @@ public class AvaloniaTimerHostPersistenceMust
         {
             RestoreSettingsFile(settingsBackup);
             TryDelete(path);
+        }
+    }
+
+    [Fact]
+    public void LoadingRunFromTimerOnlyModeRestoresRunLayoutPath()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+        string layoutPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.lsl");
+        string splitsPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.lss");
+
+        try
+        {
+            var layoutSettings = new LiveSplit.Options.SettingsFactories.StandardLayoutSettingsFactory().Create();
+            var layout = new LiveSplit.UI.Layout
+            {
+                Mode = LiveSplit.UI.LayoutMode.Vertical,
+                VerticalWidth = 321,
+                VerticalHeight = 123,
+                Settings = layoutSettings,
+            };
+            using (FileStream stream = File.Open(layoutPath, FileMode.Create, FileAccess.Write))
+            {
+                new XMLLayoutSaver().Save(layout, stream);
+            }
+
+            var run = new Run(new StandardComparisonGeneratorsFactory());
+            run.AddSegment("Finish");
+            run.LayoutPath = layoutPath;
+            using (FileStream stream = File.Open(splitsPath, FileMode.Create, FileAccess.Write))
+            {
+                new XMLRunSaver().Save(run, stream);
+            }
+
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            host.CloseSplits();
+
+            Assert.True(host.LoadRun(splitsPath));
+
+            Assert.Equal(layoutPath, host.State.Layout.FilePath);
+            Assert.Equal(321, host.State.Layout.VerticalWidth);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+            TryDelete(layoutPath);
+            TryDelete(splitsPath);
+        }
+    }
+
+    [Fact]
+    public void LoadingRunRestoresExistingRecentTimingAndHotkeyProfile()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+        string splitsPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.lss");
+
+        try
+        {
+            var run = new Run(new StandardComparisonGeneratorsFactory());
+            run.AddSegment("Finish");
+            using (FileStream stream = File.Open(splitsPath, FileMode.Create, FileAccess.Write))
+            {
+                new XMLRunSaver().Save(run, stream);
+            }
+
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            host.State.Settings.HotkeyProfiles["Alt"] = new HotkeyProfile
+            {
+                SplitKey = new KeyOrButton(Key.NumPad4),
+                DoubleTapPrevention = false,
+            };
+            host.State.Settings.AddToRecentSplits(splitsPath, run, TimingMethod.GameTime, "Alt");
+            host.State.CurrentTimingMethod = TimingMethod.RealTime;
+            host.State.CurrentHotkeyProfile = HotkeyProfile.DefaultHotkeyProfileName;
+
+            Assert.True(host.LoadRun(splitsPath));
+
+            Assert.Equal(TimingMethod.GameTime, host.State.CurrentTimingMethod);
+            Assert.Equal("Alt", host.State.CurrentHotkeyProfile);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+            TryDelete(splitsPath);
         }
     }
 

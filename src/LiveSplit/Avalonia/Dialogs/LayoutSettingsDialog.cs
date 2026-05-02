@@ -5,6 +5,7 @@ using global::Avalonia.Controls;
 using global::Avalonia.Layout;
 
 using LiveSplit.UI;
+using LiveSplit.Options;
 
 namespace LiveSplit.Avalonia.Dialogs;
 
@@ -16,9 +17,15 @@ namespace LiveSplit.Avalonia.Dialogs;
 public sealed class LayoutSettingsDialog : Window
 {
     private readonly TaskCompletionSource<bool> _result = new();
+    private readonly LayoutSettings _targetSettings;
+    private readonly LayoutSettings _snapshot;
+    private bool _accepted;
 
     public LayoutSettingsDialog(object layoutSettings)
     {
+        _targetSettings = layoutSettings as LayoutSettings;
+        _snapshot = _targetSettings?.Clone() as LayoutSettings;
+
         Title = "Layout Settings";
         Width = 540;
         Height = 600;
@@ -29,6 +36,7 @@ public sealed class LayoutSettingsDialog : Window
         ok.Click += (_, _) =>
         {
             ok.Focus();
+            _accepted = true;
             _result.TrySetResult(true);
             Close();
         };
@@ -55,6 +63,11 @@ public sealed class LayoutSettingsDialog : Window
             if (!_result.Task.IsCompleted)
             {
                 _result.TrySetResult(false);
+            }
+
+            if (!_accepted && _targetSettings != null && _snapshot != null)
+            {
+                _targetSettings.Assign(_snapshot);
             }
         };
     }

@@ -36,10 +36,12 @@ public sealed class AvaloniaTimerHost : IDisposable
     public LiveSplitState State { get; }
     public ITimerModel Model { get; }
     public ComponentRenderer Renderer { get; }
+    public bool InTimerOnlyMode { get; private set; }
 
     private readonly Action _invalidateVisual;
     private readonly Task _refreshTask;
     private readonly HotkeyService _hotkeys;
+    private readonly TimerModel _timerModel;
     private readonly bool _activateAutoSplitters;
     private readonly bool _persistOnDispose;
     private readonly Func<string, AutoSplitter> _autoSplitterResolver;
@@ -71,12 +73,15 @@ public sealed class AvaloniaTimerHost : IDisposable
         run.FixSplits();
         State.Run = run;
 
-        ILayout layout = LoadLayoutOrFallback(layoutPath, settings, State);
+        bool loadedFallbackLayout;
+        ILayout layout = LoadLayoutOrFallback(layoutPath, settings, State, run == null || string.IsNullOrEmpty(resolvedSplitsPath), out loadedFallbackLayout);
         State.Layout = layout;
         State.LayoutSettings = layout.Settings;
 
-        Model = new TimerModel { CurrentState = State };
+        _timerModel = new TimerModel();
+        Model = new DoubleTapPrevention(_timerModel) { CurrentState = State };
         State.CurrentHotkeyProfile = HotkeyProfile.DefaultHotkeyProfileName;
+        InTimerOnlyMode = loadedFallbackLayout && string.IsNullOrEmpty(resolvedSplitsPath);
 
         // Restore the per-splits-file timing method and hotkey profile from the MRU entry.
         if (!string.IsNullOrEmpty(resolvedSplitsPath))
@@ -183,8 +188,23 @@ public sealed class AvaloniaTimerHost : IDisposable
             run.FixSplits();
 
             State.Run.AutoSplitter?.Deactivate();
+            ResetBeforeDestructiveSwap();
+            UpdateRecentSplitsTimingForCurrentRun();
+
+            TimingMethod lastTimingMethod = State.CurrentTimingMethod;
+            string lastHotkeyProfile = State.CurrentHotkeyProfile;
+            RecentSplitsFile existingRecent = State.Settings.RecentSplits.LastOrDefault(x => x.Path == path);
+            if (!string.IsNullOrEmpty(existingRecent.Path))
+            {
+                lastTimingMethod = existingRecent.LastTimingMethod;
+                if (State.Settings.HotkeyProfiles.ContainsKey(existingRecent.LastHotkeyProfile))
+                {
+                    lastHotkeyProfile = existingRecent.LastHotkeyProfile;
+                }
+            }
+
             State.Run = run;
-            State.Settings.AddToRecentSplits(path, run, State.CurrentTimingMethod, State.CurrentHotkeyProfile);
+            State.Settings.AddToRecentSplits(path, run, lastTimingMethod, lastHotkeyProfile);
             ApplyRecentSplitsFileState(path, State.Settings, State);
 
             SwitchComparisonGenerators(State);
@@ -192,6 +212,7 @@ public sealed class AvaloniaTimerHost : IDisposable
             RegenerateComparisons(State);
 
             CreateAutoSplitter(State, _activateAutoSplitters, _autoSplitterResolver);
+            RestoreLayoutForRun(run);
 
             Invalidate();
             return true;
@@ -218,6 +239,7 @@ public sealed class AvaloniaTimerHost : IDisposable
             StandardLayoutFactory.CenturyGothicFix(layout);
 
             ApplyLayout(layout);
+            InTimerOnlyMode = IsTimerOnlyLayout(layout);
             State.Settings.AddToRecentLayouts(path);
 
             Invalidate();
@@ -235,11 +257,26 @@ public sealed class AvaloniaTimerHost : IDisposable
         try
         {
             State.Run.AutoSplitter?.Deactivate();
+            UpdateRecentSplitsTimingForCurrentRun();
+            ResetBeforeDestructiveSwap();
             IRun fresh = new StandardRunFactory().Create(new StandardComparisonGeneratorsFactory());
+            fresh.Offset = State.Run.Offset;
             State.Run = fresh;
 
-            ILayout layout = new TimerOnlyLayoutFactory().Create(State);
-            ApplyLayout(layout);
+            bool needToChangeLayout = !IsTimerOnlyLayout(State.Layout);
+            InTimerOnlyMode = true;
+            State.Settings.AddToRecentSplits(string.Empty, null, TimingMethod.RealTime, State.CurrentHotkeyProfile);
+            if (needToChangeLayout)
+            {
+                ILayout oldLayout = State.Layout;
+                ILayout layout = new TimerOnlyLayoutFactory().Create(State);
+                layout.Settings = oldLayout.Settings;
+                layout.X = oldLayout.X;
+                layout.Y = oldLayout.Y;
+                layout.Mode = oldLayout.Mode;
+                ApplyLayout(layout);
+                State.Settings.AddToRecentLayouts(string.Empty);
+            }
 
             SwitchComparisonGenerators(State);
             SwitchComparison(State, State.Settings.LastComparison);
@@ -258,6 +295,7 @@ public sealed class AvaloniaTimerHost : IDisposable
         State.Layout = layout;
         State.LayoutSettings = layout.Settings;
         Renderer.VisibleComponents = layout.LayoutComponents.Select(lc => lc.Component);
+        InTimerOnlyMode = IsTimerOnlyLayout(layout);
         LayoutApplied?.Invoke();
     }
 
@@ -350,8 +388,9 @@ public sealed class AvaloniaTimerHost : IDisposable
         return new StandardRunFactory().Create(comparisons);
     }
 
-    private static ILayout LoadLayoutOrFallback(string explicitPath, ISettings settings, LiveSplitState state)
+    private static ILayout LoadLayoutOrFallback(string explicitPath, ISettings settings, LiveSplitState state, bool allowTimerOnlyFallback, out bool loadedFallbackLayout)
     {
+        loadedFallbackLayout = false;
         string path = explicitPath;
         if (string.IsNullOrEmpty(path) && settings.RecentLayouts.Count > 0)
         {
@@ -374,11 +413,95 @@ public sealed class AvaloniaTimerHost : IDisposable
             }
         }
 
-        // Master parity: a clean first launch (no explicit -l, no recent layouts, no on-disk
-        // file at the recent path) loads the embedded DefaultLayout.lsl with Title + Splits +
-        // Timer + PreviousSegment. TimerOnlyLayoutFactory is reserved for the explicit
-        // "Close Splits" path (Host.CloseSplits) where the user just wants the timer alone.
-        return new StandardLayoutFactory().Create(state);
+        loadedFallbackLayout = true;
+        return allowTimerOnlyFallback
+            ? new TimerOnlyLayoutFactory().Create(state)
+            : new StandardLayoutFactory().Create(state);
+    }
+
+    private void RestoreLayoutForRun(IRun run)
+    {
+        if (!string.IsNullOrEmpty(run.LayoutPath))
+        {
+            if (string.Equals(run.LayoutPath, "?default", StringComparison.Ordinal))
+            {
+                ApplyLayout(new StandardLayoutFactory().Create(State));
+                return;
+            }
+
+            string layoutPath = ResolveLayoutPath(run.LayoutPath, run.FilePath);
+            if (!string.IsNullOrEmpty(layoutPath)
+                && File.Exists(layoutPath)
+                && !string.Equals(State.Layout?.FilePath, layoutPath, StringComparison.OrdinalIgnoreCase))
+            {
+                LoadLayout(layoutPath);
+                return;
+            }
+        }
+
+        if (!InTimerOnlyMode)
+        {
+            return;
+        }
+
+        string recentLayout = State.Settings.RecentLayouts.LastOrDefault(x => !string.IsNullOrEmpty(x));
+        if (!string.IsNullOrEmpty(recentLayout) && File.Exists(recentLayout))
+        {
+            LoadLayout(recentLayout);
+            return;
+        }
+
+        ApplyLayout(new StandardLayoutFactory().Create(State));
+    }
+
+    private static string ResolveLayoutPath(string layoutPath, string splitsPath)
+    {
+        if (string.IsNullOrEmpty(layoutPath) || Path.IsPathRooted(layoutPath) || string.IsNullOrEmpty(splitsPath))
+        {
+            return layoutPath;
+        }
+
+        string directory = Path.GetDirectoryName(splitsPath);
+        return string.IsNullOrEmpty(directory) ? layoutPath : Path.Combine(directory, layoutPath);
+    }
+
+    private static bool IsTimerOnlyLayout(ILayout layout)
+    {
+        return layout?.LayoutComponents.Count() == 1
+            && string.Equals(layout.LayoutComponents.FirstOrDefault()?.Component?.ComponentName, "Timer", StringComparison.Ordinal);
+    }
+
+    private void ResetBeforeDestructiveSwap()
+    {
+        if (State.CurrentPhase != TimerPhase.NotRunning)
+        {
+            _timerModel.Reset(updateSplits: false);
+        }
+    }
+
+    public bool DispatchFocusedHotkey(global::Avalonia.Input.Key key)
+    {
+        return _hotkeys?.DispatchFocusedKey(key) == true;
+    }
+
+    public void ApplySettings(ISettings settings, string selectedHotkeyProfile)
+    {
+        State.Settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        if (!string.IsNullOrEmpty(selectedHotkeyProfile)
+            && State.Settings.HotkeyProfiles.ContainsKey(selectedHotkeyProfile))
+        {
+            State.CurrentHotkeyProfile = selectedHotkeyProfile;
+        }
+        else if (!State.Settings.HotkeyProfiles.ContainsKey(State.CurrentHotkeyProfile)
+            && State.Settings.HotkeyProfiles.Count > 0)
+        {
+            State.CurrentHotkeyProfile = State.Settings.HotkeyProfiles.First().Key;
+        }
+
+        SwitchComparisonGenerators(State);
+        SwitchComparison(State, State.Settings.LastComparison);
+        RegenerateComparisons(State);
+        Invalidate();
     }
 
     private static void ApplyRecentSplitsFileState(string path, ISettings settings, LiveSplitState state)

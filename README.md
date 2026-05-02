@@ -154,7 +154,7 @@ Note: the manifest sets `--share=network` during the build phase so cargo and `d
 
 ### Packaging: Fedora RPM
 
-Fedora RPM packaging is built natively on Fedora and targets `linux-x64`.
+Fedora RPM packaging is built natively on Fedora and targets `linux-x64`. The automated package workflow runs the RPM build inside the currently supported `fedora:latest` container rather than pinning to an end-of-life Fedora release.
 
 ```sh
 sudo dnf install @development-tools dotnet-sdk-8.0 cargo rpm-build \

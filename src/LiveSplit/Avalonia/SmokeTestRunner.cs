@@ -72,7 +72,7 @@ public static class SmokeTestRunner
         }
 
         SKCanvas canvas = surface.Canvas;
-        canvas.Clear(SKColors.Transparent);
+        canvas.Clear(SKColors.Black);
 
         var ctx = new SkiaDrawingContext(canvas);
         SkiaRenderControl.ApplyMasterRenderSettings(ctx, host.State.LayoutSettings);
@@ -100,7 +100,7 @@ public static class SmokeTestRunner
         }
 
         using SKImage image = surface.Snapshot();
-        if (!HasNonTransparentPixel(image))
+        if (!HasNonBlackPixel(image))
         {
             throw new InvalidOperationException("Smoke test rendered a blank frame.");
         }
@@ -112,7 +112,7 @@ public static class SmokeTestRunner
         }
     }
 
-    private static bool HasNonTransparentPixel(SKImage image)
+    private static bool HasNonBlackPixel(SKImage image)
     {
         using SKBitmap bitmap = SKBitmap.FromImage(image);
         if (bitmap is null)
@@ -124,7 +124,8 @@ public static class SmokeTestRunner
         {
             for (int x = 0; x < bitmap.Width; x++)
             {
-                if (bitmap.GetPixel(x, y).Alpha != 0)
+                SKColor pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red != 0 || pixel.Green != 0 || pixel.Blue != 0)
                 {
                     return true;
                 }

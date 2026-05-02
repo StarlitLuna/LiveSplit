@@ -107,14 +107,16 @@ internal sealed class SkiaFont : IFont
 {
     internal readonly SKTypeface Typeface;
     internal readonly SKFont Font;
+    private readonly float _ascent;
+    private readonly float _descent;
 
     public string FamilyName { get; }
     public float Size { get; }
     public System.Drawing.FontStyle Style { get; }
     public GraphicsUnit Unit { get; }
 
-    public float Ascent => -Font.Metrics.Ascent;
-    public float Descent => Font.Metrics.Descent;
+    public float Ascent => _ascent;
+    public float Descent => _descent;
 
     public SkiaFont(string familyName, float size, System.Drawing.FontStyle style, GraphicsUnit unit)
     {
@@ -130,6 +132,101 @@ internal sealed class SkiaFont : IFont
         // fonts we approximate at 96 DPI until the context provides a real DpiY at draw time.
         float pixelSize = unit == GraphicsUnit.Point ? size * (96f / 72f) : size;
         Font = new SKFont(Typeface, pixelSize);
+        (_ascent, _descent) = GetGdiCompatibleCellMetrics(Typeface, Font);
+    }
+
+    internal static bool TryReadGdiCellMetrics(byte[] os2Table, int unitsPerEm, float pixelSize, out float ascent, out float descent)
+    {
+        ascent = 0f;
+        descent = 0f;
+        if (os2Table is null || os2Table.Length < 72 || unitsPerEm <= 0 || pixelSize <= 0)
+        {
+            return false;
+        }
+
+        ushort winAscent = ReadUInt16BigEndian(os2Table, 68);
+        ushort winDescent = ReadUInt16BigEndian(os2Table, 70);
+        if (winAscent == 0 && winDescent == 0)
+        {
+            return false;
+        }
+
+        ascent = pixelSize * winAscent / unitsPerEm;
+        descent = pixelSize * winDescent / unitsPerEm;
+        if (ascent > pixelSize * 3f || descent > pixelSize * 3f)
+        {
+            ascent = 0f;
+            descent = 0f;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static (float Ascent, float Descent) GetGdiCompatibleCellMetrics(SKTypeface typeface, SKFont font)
+    {
+        byte[] os2Table = GetTableData(typeface, "OS/2");
+        if (TryReadGdiCellMetrics(os2Table, typeface?.UnitsPerEm ?? 0, font.Size, out float ascent, out float descent))
+        {
+            return (ascent, descent);
+        }
+
+        SKFontMetrics metrics = font.Metrics;
+        return (-metrics.Ascent, metrics.Descent);
+    }
+
+    private static ushort ReadUInt16BigEndian(byte[] data, int offset)
+        => (ushort)((data[offset] << 8) | data[offset + 1]);
+
+    private static byte[] GetTableData(SKTypeface typeface, string tag)
+    {
+        if (typeface is null)
+        {
+            return null;
+        }
+
+        if (typeface.GetTableTags() is uint[] tags)
+        {
+            foreach (uint candidate in tags)
+            {
+                if (TagEquals(candidate, tag))
+                {
+                    return typeface.GetTableData(candidate);
+                }
+            }
+        }
+
+        return typeface.GetTableData(TableTagBigEndian(tag))
+            ?? typeface.GetTableData(TableTagLittleEndian(tag));
+    }
+
+    private static bool TagEquals(uint value, string tag)
+        => value == TableTagBigEndian(tag) || value == TableTagLittleEndian(tag);
+
+    private static uint TableTagBigEndian(string tag)
+    {
+        if (tag is null || tag.Length != 4)
+        {
+            throw new ArgumentException("OpenType table tags must be four characters.", nameof(tag));
+        }
+
+        return ((uint)tag[0] << 24)
+            | ((uint)tag[1] << 16)
+            | ((uint)tag[2] << 8)
+            | tag[3];
+    }
+
+    private static uint TableTagLittleEndian(string tag)
+    {
+        if (tag is null || tag.Length != 4)
+        {
+            throw new ArgumentException("OpenType table tags must be four characters.", nameof(tag));
+        }
+
+        return tag[0]
+            | ((uint)tag[1] << 8)
+            | ((uint)tag[2] << 16)
+            | ((uint)tag[3] << 24);
     }
 
     private static SKFontStyle MapStyle(System.Drawing.FontStyle style)
@@ -280,8 +377,9 @@ internal sealed class SkiaGraphicsPath : IGraphicsPath
         // Ascent is negative (measured up from baseline), Descent is positive. The line-box
         // height for a single line is (Descent - Ascent), and the baseline sits at lineTop +
         // (-Ascent).
-        SKFontMetrics metrics = skFont.Font.Metrics;
-        float lineHeight = metrics.Descent - metrics.Ascent;
+        float ascent = skFont.Ascent;
+        float descent = skFont.Descent;
+        float lineHeight = ascent + descent;
         float lineTop = layoutRect.Y;
         if (layoutRect.Height > 0f && format != null)
         {
@@ -300,7 +398,7 @@ internal sealed class SkiaGraphicsPath : IGraphicsPath
             }
         }
 
-        float y = lineTop - metrics.Ascent;
+        float y = lineTop + ascent;
 
         for (int i = 0; i < keptGlyphs.Length; i++)
         {

@@ -11,6 +11,7 @@ using LiveSplit.Options;
 using LiveSplit.Model.Input;
 using LiveSplit.UI.Drawing;
 using LiveSplit.UI.Drawing.Skia;
+using LiveSplit.UI.LayoutFactories;
 using LiveSplit.UI.LayoutSavers;
 
 using Xunit;
@@ -128,6 +129,32 @@ public class AvaloniaTimerHostPersistenceMust
             RestoreSettingsFile(settingsBackup);
             TryDelete(layoutPath);
             TryDelete(splitsPath);
+        }
+    }
+
+    [Fact]
+    public void FirstRunTimerOnlyModeUsesEmbeddedDefaultLayoutSettings()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            LayoutSettings defaultSettings = StandardLayoutFactory.CreateDefaultSettings();
+
+            Assert.True(host.InTimerOnlyMode);
+            Assert.Equal(defaultSettings.NotRunningColor.ToArgb(), host.State.LayoutSettings.NotRunningColor.ToArgb());
+            Assert.Equal(defaultSettings.BackgroundColor.ToArgb(), host.State.LayoutSettings.BackgroundColor.ToArgb());
+            Assert.Equal(defaultSettings.BackgroundType, host.State.LayoutSettings.BackgroundType);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
         }
     }
 

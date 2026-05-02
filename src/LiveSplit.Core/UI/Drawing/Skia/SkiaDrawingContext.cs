@@ -135,21 +135,23 @@ public sealed class SkiaDrawingContext : IDrawingContext
         }
 
         var skFont = (SkiaFont)font;
-        using SKPaint paint = CreateFillPaint(brush);
+        using SKFont renderFont = CreateRenderFont(skFont, TextRenderingHint);
+        using SKPaint paint = CreateTextFillPaint(brush);
 
         var skFormat = (SkiaTextFormat)format;
-        SKFontMetrics metrics = skFont.Font.Metrics;
+        float ascent = skFont.Ascent;
+        float descent = skFont.Descent;
 
         // Honor StringTrimming.EllipsisCharacter: GDI+ trims automatically when the string
         // overflows the layout rect; Skia needs an explicit measure + truncate. Other trimming
         // modes are not currently used by any component, so they fall through to plain draw.
         if (skFormat.Trimming == StringTrimming.EllipsisCharacter && bounds.Width > 0)
         {
-            text = TrimWithEllipsis(text, skFont, bounds.Width);
+            text = TrimWithEllipsis(text, renderFont, bounds.Width);
         }
 
-        float textWidth = MeasureText(skFont.Font, text);
-        float textHeight = metrics.Descent - metrics.Ascent;
+        float textWidth = MeasureText(renderFont, text);
+        float textHeight = ascent + descent;
 
         float x = skFormat.Alignment switch
         {
@@ -161,12 +163,12 @@ public sealed class SkiaDrawingContext : IDrawingContext
         // Skia's DrawText y-coordinate is the baseline, not the top, so offset by -ascent.
         float baselineY = skFormat.LineAlignment switch
         {
-            StringAlignment.Center => bounds.Y + ((bounds.Height - textHeight) / 2f) - metrics.Ascent,
-            StringAlignment.Far => bounds.Y + bounds.Height - metrics.Descent,
-            _ => bounds.Y - metrics.Ascent,
+            StringAlignment.Center => bounds.Y + ((bounds.Height - textHeight) / 2f) + ascent,
+            StringAlignment.Far => bounds.Y + bounds.Height - descent,
+            _ => bounds.Y + ascent,
         };
 
-        _canvas.DrawText(text, x, baselineY, skFont.Font, paint);
+        _canvas.DrawText(text, x, baselineY, renderFont, paint);
     }
 
     public SizeF MeasureString(string text, IFont font, int maxWidth, ITextFormat format)
@@ -177,9 +179,9 @@ public sealed class SkiaDrawingContext : IDrawingContext
         }
 
         var skFont = (SkiaFont)font;
-        float width = MeasureText(skFont.Font, text);
-        SKFontMetrics metrics = skFont.Font.Metrics;
-        float height = metrics.Descent - metrics.Ascent;
+        using SKFont renderFont = CreateRenderFont(skFont, TextRenderingHint);
+        float width = MeasureText(renderFont, text);
+        float height = skFont.Ascent + skFont.Descent;
         return new SizeF(width, height);
     }
 
@@ -208,15 +210,15 @@ public sealed class SkiaDrawingContext : IDrawingContext
     /// closely enough for the layout-driven components that already pre-cut at the SimpleLabel
     /// level.
     /// </summary>
-    private static string TrimWithEllipsis(string text, SkiaFont skFont, float maxWidth)
+    private static string TrimWithEllipsis(string text, SKFont skFont, float maxWidth)
     {
         const string Ellipsis = "…";
-        if (MeasureText(skFont.Font, text) <= maxWidth)
+        if (MeasureText(skFont, text) <= maxWidth)
         {
             return text;
         }
 
-        float ellipsisWidth = MeasureText(skFont.Font, Ellipsis);
+        float ellipsisWidth = MeasureText(skFont, Ellipsis);
         if (ellipsisWidth >= maxWidth)
         {
             // The ellipsis itself doesn't fit — fall back to drawing nothing rather than
@@ -230,7 +232,7 @@ public sealed class SkiaDrawingContext : IDrawingContext
         while (low <= high)
         {
             int mid = (low + high) / 2;
-            float width = MeasureText(skFont.Font, text.AsSpan(0, mid)) + ellipsisWidth;
+            float width = MeasureText(skFont, text.AsSpan(0, mid)) + ellipsisWidth;
             if (width <= maxWidth)
             {
                 best = mid;
@@ -243,6 +245,50 @@ public sealed class SkiaDrawingContext : IDrawingContext
         }
 
         return string.Concat(text.AsSpan(0, best), Ellipsis);
+    }
+
+    internal static SKFont CreateRenderFont(SkiaFont source, TextRenderingHint textRenderingHint)
+    {
+        var font = new SKFont(source.Typeface, source.Font.Size, source.Font.ScaleX, source.Font.SkewX);
+        ApplyTextRenderingHint(font, textRenderingHint);
+        return font;
+    }
+
+    private static void ApplyTextRenderingHint(SKFont font, TextRenderingHint textRenderingHint)
+    {
+        switch (textRenderingHint)
+        {
+            case TextRenderingHint.AntiAlias:
+                font.Edging = SKFontEdging.Antialias;
+                font.Hinting = SKFontHinting.None;
+                font.Subpixel = false;
+                break;
+            case TextRenderingHint.AntiAliasGridFit:
+                font.Edging = SKFontEdging.Antialias;
+                font.Hinting = SKFontHinting.Full;
+                font.Subpixel = false;
+                break;
+            case TextRenderingHint.ClearTypeGridFit:
+                font.Edging = SKFontEdging.SubpixelAntialias;
+                font.Hinting = SKFontHinting.Full;
+                font.Subpixel = true;
+                break;
+            case TextRenderingHint.SingleBitPerPixel:
+                font.Edging = SKFontEdging.Alias;
+                font.Hinting = SKFontHinting.None;
+                font.Subpixel = false;
+                break;
+            case TextRenderingHint.SingleBitPerPixelGridFit:
+                font.Edging = SKFontEdging.Alias;
+                font.Hinting = SKFontHinting.Full;
+                font.Subpixel = false;
+                break;
+            default:
+                font.Edging = SKFontEdging.Antialias;
+                font.Hinting = SKFontHinting.Normal;
+                font.Subpixel = false;
+                break;
+        }
     }
 
     public void FillPath(IBrush brush, IGraphicsPath path)
@@ -305,7 +351,7 @@ public sealed class SkiaDrawingContext : IDrawingContext
 
     // --- State save/restore ---
 
-    public IDrawingState Save() => new SkiaDrawingState(_canvas);
+    public IDrawingState Save() => new SkiaDrawingState(this, _canvas);
 
     // --- Helpers ---
 
@@ -336,6 +382,14 @@ public sealed class SkiaDrawingContext : IDrawingContext
         return paint;
     }
 
+    private SKPaint CreateTextFillPaint(IBrush brush)
+    {
+        SKPaint paint = CreateFillPaint(brush);
+        paint.IsAntialias = TextRenderingHint is not TextRenderingHint.SingleBitPerPixel
+            and not TextRenderingHint.SingleBitPerPixelGridFit;
+        return paint;
+    }
+
     private SKPaint CreateStrokePaint(IPen pen)
     {
         var skPen = (SkiaPen)pen;
@@ -356,14 +410,37 @@ public sealed class SkiaDrawingContext : IDrawingContext
 
 internal sealed class SkiaDrawingState : IDrawingState
 {
+    private readonly SkiaDrawingContext _context;
     private readonly SKCanvas _canvas;
     private readonly int _count;
+    private readonly SmoothingMode _smoothingMode;
+    private readonly TextRenderingHint _textRenderingHint;
+    private readonly InterpolationMode _interpolationMode;
+    private readonly CompositingQuality _compositingQuality;
+    private readonly CompositingMode _compositingMode;
+    private readonly PixelOffsetMode _pixelOffsetMode;
 
-    public SkiaDrawingState(SKCanvas canvas)
+    public SkiaDrawingState(SkiaDrawingContext context, SKCanvas canvas)
     {
+        _context = context;
         _canvas = canvas;
         _count = canvas.Save();
+        _smoothingMode = context.SmoothingMode;
+        _textRenderingHint = context.TextRenderingHint;
+        _interpolationMode = context.InterpolationMode;
+        _compositingQuality = context.CompositingQuality;
+        _compositingMode = context.CompositingMode;
+        _pixelOffsetMode = context.PixelOffsetMode;
     }
 
-    public void Dispose() => _canvas.RestoreToCount(_count);
+    public void Dispose()
+    {
+        _canvas.RestoreToCount(_count);
+        _context.SmoothingMode = _smoothingMode;
+        _context.TextRenderingHint = _textRenderingHint;
+        _context.InterpolationMode = _interpolationMode;
+        _context.CompositingQuality = _compositingQuality;
+        _context.CompositingMode = _compositingMode;
+        _context.PixelOffsetMode = _pixelOffsetMode;
+    }
 }

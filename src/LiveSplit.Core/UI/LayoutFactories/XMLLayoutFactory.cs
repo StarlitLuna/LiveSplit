@@ -18,7 +18,7 @@ public class XMLLayoutFactory : ILayoutFactory
         Stream = stream;
     }
 
-    private static LayoutSettings ParseSettings(XmlElement element, Version version)
+    internal static LayoutSettings ParseSettings(XmlElement element, Version version)
     {
         var settings = new LayoutSettings
         {

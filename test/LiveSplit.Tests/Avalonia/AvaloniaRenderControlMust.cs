@@ -20,6 +20,29 @@ namespace LiveSplit.Tests.Avalonia;
 public class AvaloniaRenderControlMust
 {
     [Fact]
+    public void PaintLayoutBackgroundThroughBorderlessCompensation()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        LayoutSettings settings = new()
+        {
+            BackgroundType = BackgroundType.SolidColor,
+            BackgroundColor = System.Drawing.Color.FromArgb(255, 15, 15, 15),
+        };
+
+        using SKSurface surface = SKSurface.Create(new SKImageInfo(255, 51, SKColorType.Bgra8888, SKAlphaType.Premul));
+        surface.Canvas.Clear(SKColors.Black);
+        var ctx = new SkiaDrawingContext(surface.Canvas);
+
+        SkiaRenderControl.DrawLayoutBackground(ctx, settings, 255, 51);
+
+        using SKImage image = surface.Snapshot();
+        using SKBitmap bitmap = SKBitmap.FromImage(image);
+
+        Assert.Equal(new SKColor(15, 15, 15), bitmap.GetPixel(254, 50));
+        Assert.Equal(new SKColor(15, 15, 15), bitmap.GetPixel(252, 49));
+    }
+
+    [Fact]
     public void UpdateTimerComponentsBeforeSnapshotRendering()
     {
         DrawingApi.Register(new SkiaDrawingFactory());
@@ -33,8 +56,9 @@ public class AvaloniaRenderControlMust
                 startBackgroundServices: false,
                 persistOnDispose: false);
             var canvas = new SkiaRenderControl { Host = host };
-            canvas.Measure(new Size(252, 50));
-            canvas.Arrange(new Rect(0, 0, 252, 50));
+            (int windowWidth, int windowHeight) = TimerWindow.GetWindowSizeForLayout(252, 50);
+            canvas.Measure(new Size(windowWidth, windowHeight));
+            canvas.Arrange(new Rect(0, 0, windowWidth, windowHeight));
 
             var timer = Assert.IsType<LiveSplit.UI.Components.Timer>(host.Renderer.VisibleComponents.Single());
             Assert.NotEqual(host.State.LayoutSettings.NotRunningColor.ToArgb(), timer.TimerColor.ToArgb());
@@ -42,10 +66,14 @@ public class AvaloniaRenderControlMust
             byte[] png = canvas.SnapshotPng();
 
             Assert.NotNull(png);
+            AssertSnapshotSize(png, 252, 50);
             Assert.Equal(host.State.LayoutSettings.NotRunningColor.ToArgb(), timer.TimerColor.ToArgb());
             Assert.Equal("0", timer.BigTextLabel.Text);
             Assert.Equal(".00", timer.SmallTextLabel.Text);
-            Assert.True(HasAntialiasedTextEdgePixel(png));
+            Assert.True(HasIntermediateTextPixel(png, host.State.LayoutSettings.BackgroundColor));
+            Assert.False(HasColoredSubpixelFringe(png));
+            Assert.InRange(MaxVisibleLuminance(png), 220, 255);
+            AssertPixelColor(png, 0, 0, host.State.LayoutSettings.BackgroundColor);
         }
         finally
         {
@@ -53,7 +81,73 @@ public class AvaloniaRenderControlMust
         }
     }
 
-    private static bool HasAntialiasedTextEdgePixel(byte[] png)
+    private static void AssertSnapshotSize(byte[] png, int width, int height)
+    {
+        using SKBitmap bitmap = SKBitmap.Decode(png);
+        Assert.NotNull(bitmap);
+
+        Assert.Equal(width, bitmap.Width);
+        Assert.Equal(height, bitmap.Height);
+    }
+
+    private static void AssertPixelColor(byte[] png, int x, int y, System.Drawing.Color expected)
+    {
+        using SKBitmap bitmap = SKBitmap.Decode(png);
+        Assert.NotNull(bitmap);
+
+        SKColor pixel = bitmap.GetPixel(x, y);
+        Assert.Equal(expected.A, pixel.Alpha);
+        Assert.Equal(expected.R, pixel.Red);
+        Assert.Equal(expected.G, pixel.Green);
+        Assert.Equal(expected.B, pixel.Blue);
+    }
+
+    private static bool HasIntermediateTextPixel(byte[] png, System.Drawing.Color background)
+    {
+        using SKBitmap bitmap = SKBitmap.Decode(png);
+        Assert.NotNull(bitmap);
+
+        int backgroundLuminance = Math.Max(background.R, Math.Max(background.G, background.B));
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                SKColor pixel = bitmap.GetPixel(x, y);
+                int luminance = Math.Max(pixel.Red, Math.Max(pixel.Green, pixel.Blue));
+                if (luminance > backgroundLuminance + 3 && luminance < 220)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static int MaxVisibleLuminance(byte[] png)
+    {
+        using SKBitmap bitmap = SKBitmap.Decode(png);
+        Assert.NotNull(bitmap);
+
+        int max = 0;
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                SKColor pixel = bitmap.GetPixel(x, y);
+                if (pixel.Alpha == 0)
+                {
+                    continue;
+                }
+
+                max = Math.Max(max, Math.Max(pixel.Red, Math.Max(pixel.Green, pixel.Blue)));
+            }
+        }
+
+        return max;
+    }
+
+    private static bool HasColoredSubpixelFringe(byte[] png)
     {
         using SKBitmap bitmap = SKBitmap.Decode(png);
         Assert.NotNull(bitmap);
@@ -62,8 +156,15 @@ public class AvaloniaRenderControlMust
         {
             for (int x = 0; x < bitmap.Width; x++)
             {
-                byte alpha = bitmap.GetPixel(x, y).Alpha;
-                if (alpha > 0 && alpha != 128 && alpha < 255)
+                SKColor pixel = bitmap.GetPixel(x, y);
+                if (pixel.Alpha == 0)
+                {
+                    continue;
+                }
+
+                if (Math.Abs(pixel.Red - pixel.Green) > 1
+                    || Math.Abs(pixel.Green - pixel.Blue) > 1
+                    || Math.Abs(pixel.Red - pixel.Blue) > 1)
                 {
                     return true;
                 }

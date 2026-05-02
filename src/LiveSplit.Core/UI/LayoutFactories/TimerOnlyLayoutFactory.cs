@@ -1,4 +1,5 @@
 ﻿using LiveSplit.Model;
+using LiveSplit.Options;
 using LiveSplit.Options.SettingsFactories;
 using LiveSplit.UI.Components;
 
@@ -18,8 +19,20 @@ public class TimerOnlyLayoutFactory : ILayoutFactory
         layout.X = 100;
         layout.Y = 100;
         layout.Mode = LayoutMode.Vertical;
-        layout.Settings = new StandardLayoutSettingsFactory().Create();
+        layout.Settings = CreateDefaultTimerOnlySettings();
         StandardLayoutFactory.CenturyGothicFix(layout);
         return layout;
+    }
+
+    private static LayoutSettings CreateDefaultTimerOnlySettings()
+    {
+        try
+        {
+            return StandardLayoutFactory.CreateDefaultSettings();
+        }
+        catch
+        {
+            return new StandardLayoutSettingsFactory().Create();
+        }
     }
 }

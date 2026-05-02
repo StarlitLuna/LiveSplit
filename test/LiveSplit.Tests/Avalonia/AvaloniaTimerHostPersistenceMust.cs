@@ -200,6 +200,37 @@ public class AvaloniaTimerHostPersistenceMust
         }
     }
 
+    [Fact]
+    public void ReplaceRecentHistoriesFromEditedContextMenuHistory()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            var run = new Run(new StandardComparisonGeneratorsFactory());
+            host.State.Settings.AddToRecentSplits(@"C:\runs\keep.lss", run, TimingMethod.RealTime, HotkeyProfile.DefaultHotkeyProfileName);
+            host.State.Settings.AddToRecentSplits(@"C:\runs\drop.lss", run, TimingMethod.RealTime, HotkeyProfile.DefaultHotkeyProfileName);
+            host.State.Settings.AddToRecentLayouts(@"C:\layouts\keep.lsl");
+            host.State.Settings.AddToRecentLayouts(@"C:\layouts\drop.lsl");
+
+            host.SetRecentSplitsHistory([@"C:\runs\keep.lss"]);
+            host.SetRecentLayoutsHistory([@"C:\layouts\keep.lsl"]);
+
+            Assert.Equal(@"C:\runs\keep.lss", Assert.Single(host.State.Settings.RecentSplits).Path);
+            Assert.Equal(@"C:\layouts\keep.lsl", Assert.Single(host.State.Settings.RecentLayouts));
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
     private static void TryDelete(string path)
     {
         try

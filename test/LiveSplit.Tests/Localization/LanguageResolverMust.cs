@@ -9,6 +9,7 @@ using Xunit;
 
 namespace LiveSplit.Tests.Localization;
 
+[Collection("Localization")]
 public class LanguageResolverMust
 {
     [Fact]

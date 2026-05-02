@@ -15,6 +15,7 @@ using global::Avalonia.Platform.Storage;
 using global::Avalonia.Threading;
 
 using LiveSplit.Avalonia.Dialogs;
+using LiveSplit.Localization;
 using LiveSplit.Model;
 using LiveSplit.Options;
 using LiveSplit.Server;
@@ -140,7 +141,7 @@ public sealed partial class TimerWindow : Window
 
         SizeChanged += OnSizeChanged;
 
-        WireDynamicSubmenus();
+        WireContextMenu();
 
         // Tunnel-phase so the handler runs even when child controls swallow the bubble; the
         // right-click ContextMenu wired via XAML still surfaces normally.
@@ -661,310 +662,81 @@ public sealed partial class TimerWindow : Window
         return this.FindControl<SkiaRenderControl>("Canvas")?.SnapshotPng();
     }
 
-    // --- Component-specific right-click items -----------------------------------------------
+    // --- Context menu -----------------------------------------------------------------------
 
-    // Set when the right-click happens, read when the ContextMenu opens. Captures the
-    // component the cursor was over so we can build its ContextMenuControls into the menu
-    // before the window-level entries.
-    private LiveSplit.UI.Components.IComponent _contextMenuComponent;
-
-    private void WireComponentContextMenu()
+    private void WireContextMenu()
     {
-        if (ContextMenu is null)
+        if (ContextMenu is not null)
         {
-            return;
-        }
-
-        // ContextRequestedEvent fires before ContextMenu.Opening, so we can capture the
-        // pointer position then.
-        AddHandler(ContextRequestedEvent, OnContextRequested, RoutingStrategies.Tunnel);
-        ContextMenu.Opening += OnContextMenuOpening;
-    }
-
-    private void OnContextRequested(object sender, ContextRequestedEventArgs e)
-    {
-        _contextMenuComponent = null;
-        if (Host?.State?.Layout is null)
-        {
-            return;
-        }
-
-        if (this.FindControl<SkiaRenderControl>("Canvas") is not SkiaRenderControl canvas)
-        {
-            return;
-        }
-
-        // ContextRequestedEventArgs.TryGetPosition gives screen-relative coords; ask in the
-        // canvas's coord space to hit-test against the layout.
-        if (!e.TryGetPosition(canvas, out global::Avalonia.Point pos))
-        {
-            return;
-        }
-
-        _contextMenuComponent = HitTestComponent(canvas, pos);
-    }
-
-    private LiveSplit.UI.Components.IComponent HitTestComponent(SkiaRenderControl canvas, global::Avalonia.Point pos)
-    {
-        Model.LiveSplitState state = Host.State;
-        UI.LayoutMode mode = state.Layout.Mode;
-        float overall = Math.Max(0.001f, Host.Renderer.OverallSize);
-
-        float canvasW = (float)canvas.Bounds.Width;
-        float canvasH = (float)canvas.Bounds.Height;
-        float scale = mode == UI.LayoutMode.Vertical ? canvasH / overall : canvasW / overall;
-        if (scale <= 0f || float.IsInfinity(scale) || float.IsNaN(scale))
-        {
-            return null;
-        }
-
-        float cursorAlongAxis = (float)(mode == UI.LayoutMode.Vertical ? pos.Y / scale : pos.X / scale);
-
-        float cursor = 0f;
-        foreach (LiveSplit.UI.Components.IComponent component in Host.Renderer.VisibleComponents)
-        {
-            float size = mode == UI.LayoutMode.Vertical ? component.VerticalHeight : component.HorizontalWidth;
-            if (cursorAlongAxis >= cursor && cursorAlongAxis <= cursor + size)
-            {
-                return component;
-            }
-
-            cursor += size;
-        }
-
-        return null;
-    }
-
-    private void OnContextMenuOpening(object sender, System.ComponentModel.CancelEventArgs e)
-    {
-        if (sender is not ContextMenu menu)
-        {
-            return;
-        }
-
-        // Strip any items we added on the previous open so the menu doesn't grow unbounded.
-        var staticItems = new List<object>();
-        foreach (object item in menu.Items)
-        {
-            if (item is MenuItem mi && (mi.Tag as string) == "__component_action")
-            {
-                continue;
-            }
-
-            if (item is Separator s && (s.Tag as string) == "__component_separator")
-            {
-                continue;
-            }
-
-            staticItems.Add(item);
-        }
-
-        menu.Items.Clear();
-        if (_contextMenuComponent?.ContextMenuControls is { Count: > 0 } actions)
-        {
-            foreach (KeyValuePair<string, Action> kv in actions)
-            {
-                Action handler = kv.Value;
-                var item = new MenuItem { Header = kv.Key, Tag = "__component_action" };
-                item.Click += (_, _) =>
-                {
-                    try
-                    {
-                        handler?.Invoke();
-                        InvalidateVisual();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex);
-                    }
-                };
-                menu.Items.Add(item);
-            }
-
-            menu.Items.Add(new Separator { Tag = "__component_separator" });
-        }
-
-        foreach (object item in staticItems)
-        {
-            menu.Items.Add(item);
+            ContextMenu.Opening += OnContextMenuOpening;
         }
     }
 
-    // --- Dynamic submenus (recents, comparisons, timing methods, server) -------------------
-
-    private void WireDynamicSubmenus()
+    private TimerContextMenuContext CreateContextMenuContext()
     {
-        if (this.FindControl<MenuItem>("RecentSplitsMenu") is MenuItem recentSplits)
+        return new TimerContextMenuContext
         {
-            recentSplits.SubmenuOpened += (_, _) => PopulateRecentSplits(recentSplits);
-        }
-
-        if (this.FindControl<MenuItem>("RecentLayoutsMenu") is MenuItem recentLayouts)
-        {
-            recentLayouts.SubmenuOpened += (_, _) => PopulateRecentLayouts(recentLayouts);
-        }
-
-        if (this.FindControl<MenuItem>("ComparisonMenu") is MenuItem comparisons)
-        {
-            comparisons.SubmenuOpened += (_, _) => PopulateComparisons(comparisons);
-        }
-
-        if (this.FindControl<MenuItem>("ControlMenu") is MenuItem controlMenu)
-        {
-            controlMenu.SubmenuOpened += (_, _) => PopulateControlMenu(controlMenu);
-        }
-
-        if (this.FindControl<MenuItem>("RaceMenu") is MenuItem raceMenu)
-        {
-            raceMenu.SubmenuOpened += (_, _) => PopulateRaceMenu(raceMenu);
-        }
-
-        if (this.FindControl<MenuItem>("LanguageMenu") is MenuItem languageMenu)
-        {
-            languageMenu.SubmenuOpened += (_, _) => PopulateLanguageMenu(languageMenu);
-        }
-    }
-
-    private void PopulateRecentSplits(MenuItem parent)
-    {
-        var children = new List<MenuItem>();
-        // Settings.AddToRecentSplits appends, so the most-recent entry is at the tail; reverse
-        // for menu display.
-        foreach (RecentSplitsFile entry in Host.State.Settings.RecentSplits.Reverse())
-        {
-            if (string.IsNullOrEmpty(entry.Path))
-            {
-                continue;
-            }
-
-            string capturedPath = entry.Path;
-            var item = new MenuItem { Header = Path.GetFileName(capturedPath) };
-            item.Click += async (_, _) =>
-            {
-                if (await ConfirmUnsavedChanges())
-                {
-                    Host.LoadRun(capturedPath);
-                }
-            };
-            children.Add(item);
-        }
-
-        parent.ItemsSource = children;
-    }
-
-    private void PopulateRecentLayouts(MenuItem parent)
-    {
-        var children = new List<MenuItem>();
-        foreach (string path in Host.State.Settings.RecentLayouts.Reverse())
-        {
-            if (string.IsNullOrEmpty(path))
-            {
-                continue;
-            }
-
-            string capturedPath = path;
-            var item = new MenuItem { Header = Path.GetFileName(capturedPath) };
-            item.Click += async (_, _) =>
-            {
-                if (await ConfirmUnsavedChanges())
-                {
-                    Host.LoadLayout(capturedPath);
-                }
-            };
-            children.Add(item);
-        }
-
-        parent.ItemsSource = children;
-    }
-
-    private void PopulateComparisons(MenuItem parent)
-    {
-        var children = new List<object>();
-        string current = Host.State.CurrentComparison;
-        foreach (string name in Host.State.Run.Comparisons)
-        {
-            string captured = name;
-            var item = new MenuItem
-            {
-                Header = name,
-                Icon = string.Equals(name, current, StringComparison.Ordinal)
-                    ? new TextBlock { Text = "•" }
-                    : null,
-            };
-            item.Click += (_, _) =>
-            {
-                Host.State.CurrentComparison = captured;
-                InvalidateVisual();
-            };
-            children.Add(item);
-        }
-
-        children.Add(new Separator());
-        AddTimingMethodItems(children);
-
-        parent.ItemsSource = children;
-    }
-
-    private void AddTimingMethodItems(ICollection<object> children)
-    {
-        TimingMethod current = Host.State.CurrentTimingMethod;
-        var realTime = new MenuItem
-        {
-            Header = "Real Time",
-            Icon = current == TimingMethod.RealTime ? new TextBlock { Text = "•" } : null,
+            State = Host.State,
+            RecentSplits = Host.State.Settings.RecentSplits,
+            RecentLayouts = Host.State.Settings.RecentLayouts,
+            RaceProviderItems = BuildRaceProviderItems(),
+            LayoutComponents = ContextMenuComponents(),
+            EditSplits = OpenEditSplits,
+            OpenSplits = OpenSplits,
+            OpenSplitsFromUrl = OpenSplitsFromUrl,
+            EditSplitsHistory = EditSplitsHistory,
+            SaveSplits = SaveSplits,
+            SaveSplitsAs = SaveSplitsAs,
+            CloseSplits = CloseSplits,
+            OpenRecentSplits = OpenRecentSplits,
+            EditLayout = OpenEditLayout,
+            OpenLayout = OpenLayout,
+            OpenLayoutFromUrl = OpenLayoutFromUrl,
+            LoadDefaultLayout = LoadDefaultLayout,
+            EditLayoutHistory = EditLayoutHistory,
+            SaveLayout = SaveLayout,
+            SaveLayoutAs = SaveLayoutAs,
+            OpenRecentLayout = OpenRecentLayout,
+            Settings = OpenSettings,
+            Share = OpenShare,
+            About = OpenAbout,
+            Exit = Close,
+            StartOrSplit = StartOrSplit,
+            Reset = Reset,
+            UndoSplit = () => Host.Model.UndoSplit(),
+            SkipSplit = () => Host.Model.SkipSplit(),
+            Pause = () => Host.Model.Pause(),
+            UndoAllPauses = () => Host.Model.UndoAllPauses(),
+            ToggleGlobalHotkeys = ToggleGlobalHotkeys,
+            GetServerState = CurrentServerState,
+            ToggleTcpServer = ToggleTcpServer,
+            ToggleWebSocketServer = ToggleWebSocketServer,
+            SwitchComparison = SwitchComparison,
+            SwitchTimingMethod = SwitchTimingMethod,
+            ApplyLanguage = ApplyLanguage,
         };
-        realTime.Click += (_, _) => { Host.State.CurrentTimingMethod = TimingMethod.RealTime; InvalidateVisual(); };
-
-        var gameTime = new MenuItem
-        {
-            Header = "Game Time",
-            Icon = current == TimingMethod.GameTime ? new TextBlock { Text = "•" } : null,
-        };
-        gameTime.Click += (_, _) => { Host.State.CurrentTimingMethod = TimingMethod.GameTime; InvalidateVisual(); };
-
-        children.Add(realTime);
-        children.Add(gameTime);
     }
 
-    private void PopulateLanguageMenu(MenuItem parent)
+    private IEnumerable<LiveSplit.UI.Components.IComponent> ContextMenuComponents()
     {
-        string current = LiveSplit.Localization.LanguageResolver.NormalizeSettingValue(Host.State.Settings.UILanguage);
-
-        parent.Items.Clear();
-
-        var auto = new MenuItem
+        IEnumerable<LiveSplit.UI.Components.IComponent> components =
+            Host.State.Layout.LayoutComponents.Select(x => x.Component);
+        if (Host.State.Run.IsAutoSplitterActive())
         {
-            Header = "Auto (System Default)",
-            Icon = string.IsNullOrEmpty(current) ? new TextBlock { Text = "•" } : null,
-        };
-        auto.Click += async (_, _) => await ApplyLanguage(string.Empty);
-        parent.Items.Add(auto);
-        parent.Items.Add(new Separator());
-
-        foreach (LiveSplit.Localization.AppLanguage language in LiveSplit.Localization.UiTextCatalog.Languages)
-        {
-            string captured = language.Code;
-            var item = new MenuItem
-            {
-                Header = language.DisplayName,
-                Icon = string.Equals(captured, current, StringComparison.OrdinalIgnoreCase)
-                    ? new TextBlock { Text = "•" }
-                    : null,
-            };
-            item.Click += async (_, _) => await ApplyLanguage(captured);
-            parent.Items.Add(item);
+            components = components.Concat([Host.State.Run.AutoSplitter.Component]);
         }
+
+        return components;
     }
 
-    private void PopulateRaceMenu(MenuItem parent)
+    private IReadOnlyList<MenuItem> BuildRaceProviderItems()
     {
-        parent.Items.Clear();
-
-        foreach (KeyValuePair<string, IRaceProviderFactory> entry in ComponentManager.RaceProviderFactories.OrderBy(x => x.Value.UpdateName))
+        var items = new List<MenuItem>();
+        foreach (KeyValuePair<string, IRaceProviderFactory> entry in ComponentManager.RaceProviderFactories)
         {
             RaceProviderSettings settings = Host.State.Settings.RaceProvider.FirstOrDefault(x => x.Name == entry.Key);
             RaceProviderAPI provider = entry.Value.Create(Host.Model, settings ?? entry.Value.CreateSettings());
-            if (settings?.Enabled == false)
+            if (Host.State.Settings.RaceProvider.Any(x => x.DisplayName == provider.ProviderName && !x.Enabled))
             {
                 continue;
             }
@@ -983,13 +755,136 @@ public sealed partial class TimerWindow : Window
                     Dispatcher.UIThread.Post(() => PopulateRaceProviderMenu(providerItem, refreshedProvider));
                 provider.RefreshRacesListAsync();
             };
-
-            parent.Items.Add(providerItem);
+            items.Add(providerItem);
         }
 
-        if (parent.Items.Count == 0)
+        return items;
+    }
+
+    private async Task OpenRecentSplits(string path)
+    {
+        if (await ConfirmUnsavedChanges())
         {
-            parent.Items.Add(new MenuItem { Header = "No race providers enabled.", IsEnabled = false });
+            Host.LoadRun(path);
+        }
+    }
+
+    private async Task OpenRecentLayout(string path)
+    {
+        if (await ConfirmUnsavedChanges())
+        {
+            Host.LoadLayout(path);
+        }
+    }
+
+    private async Task EditSplitsHistory()
+    {
+        var dlg = new EditHistoryDialog(Host.State.Settings.RecentSplits.Select(x => x.Path));
+        if (await dlg.ShowDialogAsync(this))
+        {
+            Host.SetRecentSplitsHistory(dlg.History);
+        }
+    }
+
+    private async Task EditLayoutHistory()
+    {
+        var dlg = new EditHistoryDialog(Host.State.Settings.RecentLayouts);
+        if (await dlg.ShowDialogAsync(this))
+        {
+            Host.SetRecentLayoutsHistory(dlg.History);
+        }
+    }
+
+    private async Task LoadDefaultLayout()
+    {
+        if (await ConfirmUnsavedChanges())
+        {
+            Host.LoadDefaultLayout(Position.X, Position.Y);
+        }
+    }
+
+    private void StartOrSplit()
+    {
+        switch (Host.State.CurrentPhase)
+        {
+            case TimerPhase.Running:
+                Host.Model.Split();
+                break;
+            case TimerPhase.Paused:
+                Host.Model.Pause();
+                break;
+            case TimerPhase.NotRunning:
+                Host.Model.Start();
+                break;
+            case TimerPhase.Ended:
+                Host.Model.Reset();
+                break;
+        }
+    }
+
+    private void ToggleGlobalHotkeys()
+    {
+        if (Host.State.Settings.HotkeyProfiles.TryGetValue(Host.State.CurrentHotkeyProfile, out HotkeyProfile profile))
+        {
+            profile.GlobalHotkeysEnabled = !profile.GlobalHotkeysEnabled;
+        }
+    }
+
+    private ServerStateType CurrentServerState()
+        => _commandServer?.ServerState ?? Host.State.Settings.ServerState;
+
+    private void ToggleTcpServer()
+    {
+        if (CurrentServerState() == ServerStateType.TCP)
+        {
+            StopServer();
+        }
+        else if (CurrentServerState() == ServerStateType.Off)
+        {
+            StartServer(ServerStartupType.TCP);
+        }
+    }
+
+    private void ToggleWebSocketServer()
+    {
+        if (CurrentServerState() == ServerStateType.Websocket)
+        {
+            StopServer();
+        }
+        else if (CurrentServerState() == ServerStateType.Off)
+        {
+            StartServer(ServerStartupType.Websocket);
+        }
+    }
+
+    private void SwitchComparison(string name)
+    {
+        if (!Host.State.Run.Comparisons.Contains(name))
+        {
+            name = Run.PersonalBestComparisonName;
+        }
+
+        Host.State.CurrentComparison = name;
+        InvalidateVisual();
+    }
+
+    private void SwitchTimingMethod(TimingMethod method)
+    {
+        Host.State.CurrentTimingMethod = method;
+        InvalidateVisual();
+    }
+
+    private void OnContextMenuOpening(object sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+        {
+            return;
+        }
+
+        menu.Items.Clear();
+        foreach (object item in TimerContextMenuBuilder.BuildRootItems(CreateContextMenuContext()))
+        {
+            menu.Items.Add(item);
         }
     }
 
@@ -1106,155 +1001,17 @@ public sealed partial class TimerWindow : Window
 
     private async Task ApplyLanguage(string code)
     {
-        Host.State.Settings.UILanguage = code;
-        LiveSplit.Localization.LanguageResolver.SetCurrentLanguageSetting(code);
+        Host.State.Settings.UILanguage = LanguageResolver.NormalizeSettingValue(code);
+        LanguageResolver.SetCurrentLanguageSetting(Host.State.Settings.UILanguage);
+        Host.SaveSettings();
+        AppLanguage language = LanguageResolver.ResolveCurrentCultureLanguage();
         var dlg = new MessageDialog(
-            "Language",
-            "The language change applies the next time LiveSplit starts.");
+            UiLocalizer.TranslateKey(LocalizationKeys.LanguageMenu, "Language", language),
+            UiLocalizer.TranslateKey(
+                LocalizationKeys.LanguageRestartRequired,
+                "Language change will take effect after restarting LiveSplit.",
+                language));
         await dlg.ShowDialogAsync(this);
-    }
-
-    private void PopulateControlMenu(MenuItem parent)
-    {
-        var children = new List<object>();
-        TimerPhase phase = Host.State.CurrentPhase;
-
-        var split = new MenuItem
-        {
-            Header = phase == TimerPhase.NotRunning ? "Start" : "Split",
-            IsEnabled = phase is TimerPhase.NotRunning or TimerPhase.Running,
-        };
-        split.Click += (_, _) =>
-        {
-            if (Host.State.CurrentPhase == TimerPhase.NotRunning)
-            {
-                Host.Model.Start();
-            }
-            else
-            {
-                Host.Model.Split();
-            }
-        };
-        children.Add(split);
-
-        var reset = new MenuItem
-        {
-            Header = "Reset",
-            IsEnabled = phase is not TimerPhase.NotRunning,
-        };
-        reset.Click += async (_, _) => await Reset();
-        children.Add(reset);
-
-        var undo = new MenuItem
-        {
-            Header = "Undo Split",
-            IsEnabled = Host.State.CurrentSplitIndex > 0,
-        };
-        undo.Click += (_, _) => Host.Model.UndoSplit();
-        children.Add(undo);
-
-        var skip = new MenuItem
-        {
-            Header = "Skip Split",
-            IsEnabled = (phase is TimerPhase.Running or TimerPhase.Paused)
-                && Host.State.CurrentSplitIndex < Host.State.Run.Count - 1,
-        };
-        skip.Click += (_, _) => Host.Model.SkipSplit();
-        children.Add(skip);
-
-        var pause = new MenuItem
-        {
-            Header = phase == TimerPhase.Paused ? "Resume" : "Pause",
-            IsEnabled = phase is TimerPhase.NotRunning or TimerPhase.Running or TimerPhase.Paused,
-        };
-        pause.Click += (_, _) => Host.Model.Pause();
-        children.Add(pause);
-
-        var undoPauses = new MenuItem
-        {
-            Header = "Undo All Pauses",
-            IsEnabled = phase is TimerPhase.Running or TimerPhase.Paused or TimerPhase.Ended,
-        };
-        undoPauses.Click += (_, _) => Host.Model.UndoAllPauses();
-        children.Add(undoPauses);
-
-        children.Add(new Separator());
-
-        HotkeyProfile profile = null;
-        Host.State.Settings.HotkeyProfiles?.TryGetValue(Host.State.CurrentHotkeyProfile, out profile);
-        var globalHotkeys = new MenuItem
-        {
-            Header = "Global Hotkeys",
-            Icon = profile?.GlobalHotkeysEnabled == true ? new TextBlock { Text = "*" } : null,
-            IsEnabled = profile != null,
-        };
-        globalHotkeys.Click += (_, _) =>
-        {
-            if (profile != null)
-            {
-                profile.GlobalHotkeysEnabled = !profile.GlobalHotkeysEnabled;
-            }
-        };
-        children.Add(globalHotkeys);
-
-        children.Add(new Separator());
-        AddServerItems(children);
-
-        foreach (LiveSplit.UI.Components.IComponent component in Host.Renderer.VisibleComponents)
-        {
-            if (component.ContextMenuControls is not { Count: > 0 } actions)
-            {
-                continue;
-            }
-
-            children.Add(new Separator());
-            foreach (KeyValuePair<string, Action> kv in actions)
-            {
-                Action handler = kv.Value;
-                var item = new MenuItem { Header = kv.Key };
-                item.Click += (_, _) =>
-                {
-                    try
-                    {
-                        handler?.Invoke();
-                        InvalidateVisual();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex);
-                    }
-                };
-                children.Add(item);
-            }
-        }
-
-        parent.ItemsSource = children;
-    }
-
-    private void PopulateServerMenu(MenuItem parent)
-    {
-        var children = new List<object>();
-        AddServerItems(children);
-        parent.ItemsSource = children;
-    }
-
-    private void AddServerItems(ICollection<object> children)
-    {
-        var startTcp = new MenuItem { Header = "Start TCP Server" };
-        startTcp.Click += (_, _) => StartServer(ServerStartupType.TCP);
-        children.Add(startTcp);
-
-        var startWs = new MenuItem { Header = "Start WebSocket Server" };
-        startWs.Click += (_, _) => StartServer(ServerStartupType.Websocket);
-        children.Add(startWs);
-
-        if (_commandServer is { ServerState: not ServerStateType.Off })
-        {
-            children.Add(new Separator());
-            var stop = new MenuItem { Header = $"Stop Server ({_commandServer.ServerState})" };
-            stop.Click += (_, _) => StopServer();
-            children.Add(stop);
-        }
     }
 
     // --- Server lifecycle -------------------------------------------------------------------

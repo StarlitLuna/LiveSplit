@@ -292,6 +292,44 @@ public sealed class AvaloniaTimerHost : IDisposable
         }
     }
 
+    public void LoadDefaultLayout(int? x = null, int? y = null)
+    {
+        try
+        {
+            ILayout layout = new StandardLayoutFactory().Create(State);
+            if (x.HasValue)
+            {
+                layout.X = x.Value;
+            }
+
+            if (y.HasValue)
+            {
+                layout.Y = y.Value;
+            }
+
+            ApplyLayout(layout);
+            State.Settings.AddToRecentLayouts(string.Empty);
+            Invalidate();
+        }
+        catch (Exception e)
+        {
+            Options.Log.Error(e);
+        }
+    }
+
+    public void SetRecentSplitsHistory(IEnumerable<string> history)
+    {
+        var retained = new HashSet<string>(history ?? [], StringComparer.OrdinalIgnoreCase);
+        State.Settings.RecentSplits = State.Settings.RecentSplits
+            .Where(x => retained.Contains(x.Path))
+            .ToList();
+    }
+
+    public void SetRecentLayoutsHistory(IEnumerable<string> history)
+    {
+        State.Settings.RecentLayouts = (history ?? []).ToList();
+    }
+
     private void ApplyLayout(ILayout layout)
     {
         State.Layout = layout;
@@ -758,6 +796,9 @@ public sealed class AvaloniaTimerHost : IDisposable
         State.Layout.Y = y.Value;
         State.Layout.HasChanged = true;
     }
+
+    public void SaveSettings()
+        => SaveSettingsToDisk(State.Settings);
 
     private void SaveRunIfDirty()
     {

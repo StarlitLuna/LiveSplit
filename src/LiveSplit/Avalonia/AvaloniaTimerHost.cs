@@ -223,6 +223,7 @@ public sealed class AvaloniaTimerHost : IDisposable
 
             CreateAutoSplitter(State, _activateAutoSplitters, _autoSplitterResolver);
             RestoreLayoutForRun(run);
+            InTimerOnlyMode = false;
 
             Invalidate();
             return true;
@@ -249,7 +250,6 @@ public sealed class AvaloniaTimerHost : IDisposable
             StandardLayoutFactory.CenturyGothicFix(layout);
 
             ApplyLayout(layout);
-            InTimerOnlyMode = IsTimerOnlyLayout(layout);
             State.Settings.AddToRecentLayouts(path);
 
             Invalidate();
@@ -350,7 +350,11 @@ public sealed class AvaloniaTimerHost : IDisposable
         State.Layout = layout;
         State.LayoutSettings = layout.Settings;
         Renderer.VisibleComponents = layout.LayoutComponents.Select(lc => lc.Component);
-        InTimerOnlyMode = IsTimerOnlyLayout(layout);
+        if (!IsTimerOnlyLayout(layout))
+        {
+            InTimerOnlyMode = false;
+        }
+
         LayoutApplied?.Invoke();
     }
 
@@ -761,6 +765,11 @@ public sealed class AvaloniaTimerHost : IDisposable
         {
             try
             {
+                if (InTimerOnlyMode)
+                {
+                    ResetTimerOnlyRun();
+                }
+
                 RegenerateComparisons(State);
             }
             catch (Exception e)
@@ -770,6 +779,17 @@ public sealed class AvaloniaTimerHost : IDisposable
 
             Dispatcher.UIThread.Post(invalidateVisual, DispatcherPriority.Background);
         };
+    }
+
+    private void ResetTimerOnlyRun()
+    {
+        IRun timerOnlyRun = new StandardRunFactory().Create(new StandardComparisonGeneratorsFactory());
+        timerOnlyRun.Offset = State.Run.Offset;
+        State.Run.AutoSplitter?.Deactivate();
+        State.Run = timerOnlyRun;
+        SwitchComparisonGenerators(State);
+        SwitchComparison(State, State.CurrentComparison);
+        CreateAutoSplitter(State, _activateAutoSplitters, _autoSplitterResolver);
     }
 
     private static void SwitchComparisonGenerators(LiveSplitState state)

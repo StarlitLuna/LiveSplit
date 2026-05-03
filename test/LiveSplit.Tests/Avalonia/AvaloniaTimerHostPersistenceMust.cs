@@ -14,6 +14,7 @@ using LiveSplit.UI;
 using LiveSplit.UI.Drawing;
 using LiveSplit.UI.Drawing.Skia;
 using LiveSplit.UI.Components;
+using LiveSplit.UI.LayoutFactories;
 using LiveSplit.UI.LayoutSavers;
 
 using Xunit;
@@ -158,6 +159,86 @@ public class AvaloniaTimerHostPersistenceMust
             RestoreSettingsFile(settingsBackup);
             TryDelete(layoutPath);
             TryDelete(splitsPath);
+        }
+    }
+
+    [Fact]
+    public void TimerOnlyResetDiscardsImplicitBestTimesLikeMaster()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            host.State.Settings.HotkeyProfiles[host.State.CurrentHotkeyProfile].DoubleTapPrevention = false;
+
+            Assert.True(host.InTimerOnlyMode);
+
+            host.Model.Start();
+            host.State.AdjustedStartTime = TimeStamp.Now - TimeSpan.FromSeconds(1);
+            host.Model.Split();
+            Assert.Equal(TimerPhase.Ended, host.State.CurrentPhase);
+
+            host.Model.Reset();
+
+            Assert.Equal(TimerPhase.NotRunning, host.State.CurrentPhase);
+            Assert.True(host.InTimerOnlyMode);
+            Assert.Null(host.State.Run[0].PersonalBestSplitTime.RealTime);
+            Assert.Null(host.State.Run[0].BestSegmentTime.RealTime);
+            Assert.Empty(host.State.Run.AttemptHistory);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
+    [Fact]
+    public void TimerOnlyLayoutDoesNotMakeLoadedSplitsTimerOnlyMode()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+        string splitsPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.lss");
+        string layoutPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.lsl");
+
+        try
+        {
+            var run = new Run(new StandardComparisonGeneratorsFactory());
+            run.AddSegment("Finish");
+            using (FileStream stream = File.Open(splitsPath, FileMode.Create, FileAccess.Write))
+            {
+                new XMLRunSaver().Save(run, stream);
+            }
+
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                splitsPath: splitsPath,
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            ILayout timerOnlyLayout = new TimerOnlyLayoutFactory().Create(host.State);
+            using (FileStream stream = File.Open(layoutPath, FileMode.Create, FileAccess.Write))
+            {
+                new XMLLayoutSaver().Save(timerOnlyLayout, stream);
+            }
+
+            Assert.False(host.InTimerOnlyMode);
+
+            Assert.True(host.LoadLayout(layoutPath));
+
+            Assert.False(host.InTimerOnlyMode);
+            Assert.Equal(splitsPath, host.State.Run.FilePath);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+            TryDelete(splitsPath);
+            TryDelete(layoutPath);
         }
     }
 

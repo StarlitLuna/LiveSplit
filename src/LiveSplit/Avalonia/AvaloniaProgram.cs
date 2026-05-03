@@ -1,5 +1,10 @@
 using global::Avalonia;
 
+using System;
+using System.IO;
+
+using LiveSplit.Options;
+using LiveSplit.Options.SettingsFactories;
 using LiveSplit.UI.Drawing;
 using LiveSplit.UI.Drawing.Skia;
 
@@ -23,6 +28,35 @@ public static class AvaloniaProgram
     {
         return AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            .With(new Win32PlatformOptions
+            {
+                DpiAwareness = GetWin32DpiAwareness(LoadEnableDpiAwarenessPreference()),
+            })
             .LogToTrace();
+    }
+
+    internal static string GetWin32DpiAwarenessName(bool enableDpiAwareness)
+        => GetWin32DpiAwareness(enableDpiAwareness).ToString();
+
+    private static Win32DpiAwareness GetWin32DpiAwareness(bool enableDpiAwareness)
+        => enableDpiAwareness ? Win32DpiAwareness.SystemDpiAware : Win32DpiAwareness.Unaware;
+
+    private static bool LoadEnableDpiAwarenessPreference()
+    {
+        try
+        {
+            string path = UserDataPaths.SettingsFile;
+            if (File.Exists(path))
+            {
+                using FileStream stream = File.OpenRead(path);
+                return new XMLSettingsFactory(stream).Create().EnableDPIAwareness;
+            }
+        }
+        catch (Exception e)
+        {
+            Options.Log.Error(e);
+        }
+
+        return new StandardSettingsFactory().Create().EnableDPIAwareness;
     }
 }

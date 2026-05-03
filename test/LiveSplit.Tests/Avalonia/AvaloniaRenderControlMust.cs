@@ -84,7 +84,10 @@ public class AvaloniaRenderControlMust
             Assert.Equal(".00", timer.SmallTextLabel.Text);
             Assert.True(HasIntermediateTextPixel(png, host.State.LayoutSettings.BackgroundColor));
             Assert.False(HasColoredSubpixelFringe(png));
-            Assert.True(MaxVisibleLuminance(png) > host.State.LayoutSettings.NotRunningColor.R + 40);
+            int maxVisibleLuminance = MaxVisibleLuminance(png);
+            Assert.True(
+                maxVisibleLuminance > host.State.LayoutSettings.NotRunningColor.R + 40,
+                $"Expected timer gradient to be visibly brighter than the base not-running color, actual max luminance was {maxVisibleLuminance}.");
             AssertPixelColor(png, 0, 0, host.State.LayoutSettings.BackgroundColor);
         }
         finally

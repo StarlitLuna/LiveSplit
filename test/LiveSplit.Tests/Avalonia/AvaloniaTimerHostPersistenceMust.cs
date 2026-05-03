@@ -84,6 +84,33 @@ public class AvaloniaTimerHostPersistenceMust
     }
 
     [Fact]
+    public void UpdateLayoutPositionTracksWindowPositionWithoutDirtyingLayout()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            host.State.Layout.HasChanged = false;
+
+            host.UpdateLayoutPosition(12, 34);
+
+            Assert.Equal(12, host.State.Layout.X);
+            Assert.Equal(34, host.State.Layout.Y);
+            Assert.False(host.State.Layout.HasChanged);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
+    [Fact]
     public void LoadingRunFromTimerOnlyModeRestoresRunLayoutPath()
     {
         DrawingApi.Register(new SkiaDrawingFactory());

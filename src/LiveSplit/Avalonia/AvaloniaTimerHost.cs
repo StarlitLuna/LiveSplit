@@ -945,7 +945,6 @@ public sealed class AvaloniaTimerHost : IDisposable
 
         State.Layout.X = x.Value;
         State.Layout.Y = y.Value;
-        State.Layout.HasChanged = true;
     }
 
     public void SaveSettings()

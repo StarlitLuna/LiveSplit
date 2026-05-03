@@ -200,7 +200,19 @@ public sealed partial class TimerWindow : Window
 
     private async Task<bool> ConfirmUnsavedChanges()
     {
-        if (Host?.State?.Run is { HasChanged: true })
+        return await ConfirmUnsavedSplits() && await ConfirmUnsavedLayout();
+    }
+
+    private async Task<bool> ConfirmUnsavedSplits()
+    {
+        if (Host?.InTimerOnlyMode == true)
+        {
+            Host.Model.Reset();
+            return true;
+        }
+
+        bool safeToContinue = true;
+        if (ShouldPromptForSplitsSave(Host?.InTimerOnlyMode == true, Host?.State?.Run))
         {
             var dlg = new MessageDialog(
                 "Save Splits?",
@@ -214,10 +226,20 @@ public sealed partial class TimerWindow : Window
 
             if (r == MessageResult.Yes && !await SaveSplits(promptPBMessage: false))
             {
-                return false;
+                safeToContinue = false;
             }
         }
 
+        if (safeToContinue)
+        {
+            Host?.Model.Reset();
+        }
+
+        return safeToContinue;
+    }
+
+    private async Task<bool> ConfirmUnsavedLayout()
+    {
         if (Host?.State?.Layout is { HasChanged: true })
         {
             var dlg = new MessageDialog(
@@ -251,7 +273,7 @@ public sealed partial class TimerWindow : Window
         try
         {
             _resetMessageShown = true;
-            if (Host.State.Settings.WarnOnReset && ResetWarning.ShouldAskToUpdateBestTimes(Host.State))
+            if (ShouldPromptToUpdateTimesOnReset(Host.State, Host.InTimerOnlyMode))
             {
                 var dlg = new MessageDialog(
                     "Update Times?",
@@ -361,20 +383,22 @@ public sealed partial class TimerWindow : Window
     /// persist the new dimensions.
     /// </summary>
     private void OnSizeChanged(object sender, global::Avalonia.Controls.SizeChangedEventArgs e)
+        => UpdateLayoutSizeFromWindowSize(Host?.State?.Layout, e.NewSize);
+
+    internal static bool UpdateLayoutSizeFromWindowSize(UI.ILayout layout, global::Avalonia.Size newWindowSize)
     {
-        UI.ILayout layout = Host?.State?.Layout;
         if (layout is null)
         {
-            return;
+            return false;
         }
 
-        (int w, int h) = GetLayoutSizeForWindow(e.NewSize.Width, e.NewSize.Height);
+        (int w, int h) = GetLayoutSizeForWindow(newWindowSize.Width, newWindowSize.Height);
         bool vertical = layout.Mode == UI.LayoutMode.Vertical;
         int currentW = vertical ? layout.VerticalWidth : layout.HorizontalWidth;
         int currentH = vertical ? layout.VerticalHeight : layout.HorizontalHeight;
         if (currentW == w && currentH == h)
         {
-            return;
+            return false;
         }
 
         if (vertical)
@@ -388,7 +412,7 @@ public sealed partial class TimerWindow : Window
             layout.HorizontalHeight = h;
         }
 
-        layout.HasChanged = true;
+        return true;
     }
 
     public static (int Width, int Height) GetWindowSizeForLayout(int layoutWidth, int layoutHeight)
@@ -439,17 +463,12 @@ public sealed partial class TimerWindow : Window
 #pragma warning disable CS0618 // Avalonia 11 marks FileDialogFilter / OpenFileDialog obsolete in favor of StorageProvider; migration is tracked separately.
     private async Task OpenSplits()
     {
-        if (!await ConfirmUnsavedChanges())
-        {
-            return;
-        }
-
         string path = await PickFile("Open Splits", new[]
         {
             new FileDialogFilter { Name = "LiveSplit Splits", Extensions = { "lss" } },
             new FileDialogFilter { Name = "All Files", Extensions = { "*" } },
         });
-        if (!string.IsNullOrEmpty(path))
+        if (!string.IsNullOrEmpty(path) && await ConfirmBeforeReplacingSplits())
         {
             Host.LoadRun(path);
         }
@@ -457,17 +476,12 @@ public sealed partial class TimerWindow : Window
 
     private async Task OpenLayout()
     {
-        if (!await ConfirmUnsavedChanges())
-        {
-            return;
-        }
-
         string path = await PickFile("Open Layout", new[]
         {
             new FileDialogFilter { Name = "LiveSplit Layout", Extensions = { "lsl" } },
             new FileDialogFilter { Name = "All Files", Extensions = { "*" } },
         });
-        if (!string.IsNullOrEmpty(path))
+        if (!string.IsNullOrEmpty(path) && await ConfirmUnsavedLayout())
         {
             Host.LoadLayout(path);
         }
@@ -475,11 +489,6 @@ public sealed partial class TimerWindow : Window
 
     private async Task OpenSplitsFromUrl()
     {
-        if (!await ConfirmUnsavedChanges())
-        {
-            return;
-        }
-
         var dlg = new TextInputDialog("Open Splits From URL", "Enter the URL of a .lss file:");
         string url = await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this));
         if (string.IsNullOrEmpty(url))
@@ -488,7 +497,7 @@ public sealed partial class TimerWindow : Window
         }
 
         string downloaded = await DownloadToTempFile(url, "splits.lss");
-        if (!string.IsNullOrEmpty(downloaded))
+        if (!string.IsNullOrEmpty(downloaded) && await ConfirmBeforeReplacingSplits())
         {
             Host.LoadRun(downloaded);
         }
@@ -496,11 +505,6 @@ public sealed partial class TimerWindow : Window
 
     private async Task OpenLayoutFromUrl()
     {
-        if (!await ConfirmUnsavedChanges())
-        {
-            return;
-        }
-
         var dlg = new TextInputDialog("Open Layout From URL", "Enter the URL of a .lsl file:");
         string url = await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this));
         if (string.IsNullOrEmpty(url))
@@ -509,7 +513,7 @@ public sealed partial class TimerWindow : Window
         }
 
         string downloaded = await DownloadToTempFile(url, "layout.lsl");
-        if (!string.IsNullOrEmpty(downloaded))
+        if (!string.IsNullOrEmpty(downloaded) && await ConfirmUnsavedLayout())
         {
             Host.LoadLayout(downloaded);
         }
@@ -611,6 +615,15 @@ public sealed partial class TimerWindow : Window
                 && run.Last().SplitTime[method] >= run.Last().PersonalBestSplitTime[method]);
     }
 
+    internal static bool ShouldPromptForSplitsSave(bool inTimerOnlyMode, IRun run)
+        => !inTimerOnlyMode && run?.HasChanged == true;
+
+    internal static bool ShouldPromptToUpdateTimesOnReset(LiveSplitState state, bool inTimerOnlyMode)
+        => !inTimerOnlyMode
+            && state?.Settings?.WarnOnReset == true
+            && state.Run?.Count > 0
+            && ResetWarning.ShouldAskToUpdateBestTimes(state);
+
     private async Task<bool> SaveLayout()
     {
         CaptureLayoutPosition();
@@ -636,11 +649,34 @@ public sealed partial class TimerWindow : Window
 
     private async Task CloseSplits()
     {
-        if (await ConfirmUnsavedChanges())
+        if (!await ConfirmUnsavedSplits())
         {
-            Host.CloseSplits();
+            return;
         }
+
+        if (ShouldPromptForLayoutOnCloseSplits(Host?.State?.Layout) && !await ConfirmUnsavedLayout())
+        {
+            return;
+        }
+
+        Host.CloseSplits();
     }
+
+    private async Task<bool> ConfirmBeforeReplacingSplits()
+    {
+        if (!await ConfirmUnsavedSplits())
+        {
+            return false;
+        }
+
+        return Host?.InTimerOnlyMode != true || await ConfirmUnsavedLayout();
+    }
+
+    internal static bool ShouldPromptForLayoutOnCloseSplits(UI.ILayout layout)
+        => layout?.HasChanged == true && NeedsTimerOnlyLayoutSwap(layout);
+
+    private static bool NeedsTimerOnlyLayoutSwap(UI.ILayout layout)
+        => layout?.Components?.Count() != 1 || layout.Components.FirstOrDefault()?.ComponentName != "Timer";
 
 #pragma warning restore CS0618
 
@@ -853,7 +889,7 @@ public sealed partial class TimerWindow : Window
 
     private async Task OpenRecentSplits(string path)
     {
-        if (await ConfirmUnsavedChanges())
+        if (await ConfirmBeforeReplacingSplits())
         {
             Host.LoadRun(path);
         }
@@ -861,7 +897,7 @@ public sealed partial class TimerWindow : Window
 
     private async Task OpenRecentLayout(string path)
     {
-        if (await ConfirmUnsavedChanges())
+        if (await ConfirmUnsavedLayout())
         {
             Host.LoadLayout(path);
         }
@@ -887,7 +923,7 @@ public sealed partial class TimerWindow : Window
 
     private async Task LoadDefaultLayout()
     {
-        if (await ConfirmUnsavedChanges())
+        if (await ConfirmUnsavedLayout())
         {
             Host.LoadDefaultLayout(Position.X, Position.Y);
         }
@@ -1280,13 +1316,9 @@ public sealed partial class TimerWindow : Window
 
     private async void OnDrop(object sender, DragEventArgs e)
     {
-        if (!await ConfirmUnsavedChanges())
-        {
-            e.Handled = true;
-            return;
-        }
-
         IEnumerable<IStorageItem> files = e.Data.GetFiles() ?? Array.Empty<IStorageItem>();
+        bool lssOpened = false;
+        bool lslOpened = false;
         foreach (IStorageItem item in files)
         {
             string path = item.TryGetLocalPath();
@@ -1296,13 +1328,21 @@ public sealed partial class TimerWindow : Window
             }
 
             string ext = Path.GetExtension(path).ToLowerInvariant();
-            if (ext == ".lss")
+            if (!lslOpened && ext == ".lsl")
             {
-                Host.LoadRun(path);
+                lslOpened = true;
+                if (await ConfirmUnsavedLayout())
+                {
+                    Host.LoadLayout(path);
+                }
             }
-            else if (ext == ".lsl")
+            else if (!lssOpened && ext == ".lss")
             {
-                Host.LoadLayout(path);
+                lssOpened = true;
+                if (await ConfirmBeforeReplacingSplits())
+                {
+                    Host.LoadRun(path);
+                }
             }
         }
 

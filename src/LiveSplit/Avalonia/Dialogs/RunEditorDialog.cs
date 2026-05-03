@@ -14,7 +14,7 @@ using global::Avalonia.Media.Imaging;
 using global::Avalonia.Platform.Storage;
 
 using LiveSplit.Model;
-using LiveSplit.Model.RunSavers;
+using LiveSplit.Model.Comparisons;
 using LiveSplit.TimeFormatters;
 using LiveSplit.UI;
 using LiveSplit.UI.Components;
@@ -43,6 +43,9 @@ public sealed class RunEditorDialog : Window
     private readonly IRun _original;
     private readonly TaskCompletionSource<bool> _result = new();
     private static readonly RegularTimeFormatter TimeFormatter = new(TimeAccuracy.Hundredths);
+    private readonly List<string> _originalActiveAutoSplitters;
+    private readonly System.Xml.XmlElement _originalAutoSplitterSettings;
+    private bool _accepted;
 
     private readonly TextBox _gameBox;
     private readonly TextBox _categoryBox;
@@ -50,6 +53,11 @@ public sealed class RunEditorDialog : Window
     private readonly NumericUpDown _attemptBox;
     private readonly Image _iconImage;
     private readonly TextBlock _iconHint;
+    private readonly CheckBox _linkedLayoutCheckBox;
+    private readonly TextBox _layoutPathBox;
+    private readonly TextBox _platformBox;
+    private readonly TextBox _regionBox;
+    private readonly CheckBox _emulatorCheckBox;
 
     private readonly ListBox _segmentsList;
     private readonly StackPanel _realTimeRows;
@@ -69,6 +77,8 @@ public sealed class RunEditorDialog : Window
         State = state;
         _original = state.Run;
         Run = (state.Run is Run r) ? r.Clone() : state.Run;
+        _originalActiveAutoSplitters = State.Settings.ActiveAutoSplitters.ToList();
+        _originalAutoSplitterSettings = _original.AutoSplitterSettings;
 
         Title = "Edit Splits";
         Width = 880;
@@ -115,6 +125,13 @@ public sealed class RunEditorDialog : Window
         _gameBox = new TextBox { Text = Run.GameName ?? "" };
         _categoryBox = new TextBox { Text = Run.CategoryName ?? "" };
         _offsetBox = new TextBox { Text = TimeFormatter.Format(Run.Offset) };
+        _linkedLayoutCheckBox = new CheckBox { Content = "Use linked layout", IsChecked = !string.IsNullOrEmpty(Run.LayoutPath) };
+        _layoutPathBox = new TextBox { Text = RunEditorDialogModel.DisplayLayoutPath(Run.LayoutPath), Width = 360 };
+        _linkedLayoutCheckBox.IsCheckedChanged += (_, _) => UpdateLayoutControls();
+        UpdateLayoutControls();
+        _platformBox = new TextBox { Text = Run.Metadata.PlatformName ?? string.Empty, Width = 180 };
+        _regionBox = new TextBox { Text = Run.Metadata.RegionName ?? string.Empty, Width = 180 };
+        _emulatorCheckBox = new CheckBox { Content = "Uses Emulator", IsChecked = Run.Metadata.UsesEmulator };
         _attemptBox = new NumericUpDown
         {
             Minimum = 0,
@@ -134,6 +151,7 @@ public sealed class RunEditorDialog : Window
                 LabeledRow("Category:", _categoryBox),
                 LabeledRow("Offset:", _offsetBox),
                 LabeledRow("Attempt Count:", _attemptBox),
+                BuildLayoutRow(),
             },
         };
 
@@ -177,7 +195,7 @@ public sealed class RunEditorDialog : Window
         var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
         ok.Click += (_, _) => OkClicked();
         var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
-        cancel.Click += (_, _) => { _result.TrySetResult(false); Close(); };
+        cancel.Click += (_, _) => CancelAndClose();
 
         var footer = new StackPanel
         {
@@ -200,6 +218,7 @@ public sealed class RunEditorDialog : Window
         {
             if (!_result.Task.IsCompleted)
             {
+                RestoreAutoSplitterChanges();
                 _result.TrySetResult(false);
             }
         };
@@ -248,62 +267,107 @@ public sealed class RunEditorDialog : Window
             Run.AttemptCount = (int)_attemptBox.Value.Value;
         }
 
-        // Promote the working clone back onto State.Run; downstream state listeners pick it
-        // up via WireStateEvents in the Avalonia host.
-        Run.HasChanged = true;
-        if (_original is Run originalRun && Run is Run editedRun)
+        RunEditorDialogModel.SetLinkedLayout(
+            Run,
+            _linkedLayoutCheckBox.IsChecked == true,
+            _layoutPathBox.Text);
+        if (Run is Run editedRunForMetadata)
         {
-            CopyInto(originalRun, editedRun);
+            RunEditorDialogModel.SetAdditionalInfo(
+                editedRunForMetadata,
+                _platformBox.Text,
+                _regionBox.Text,
+                _emulatorCheckBox.IsChecked == true);
         }
 
-        _original.HasChanged = true;
-        PersistIfPossible();
+        // Promote the working clone back onto State.Run; downstream state listeners pick it
+        // up via WireStateEvents in the Avalonia host.
+        if (_original is Run originalRun && Run is Run editedRun)
+        {
+            RunEditorDialogModel.ApplyAcceptedRun(originalRun, editedRun);
+        }
+
+        _accepted = true;
         _result.TrySetResult(true);
         Close();
     }
 
-    private static void CopyInto(Run target, Run source)
+    private void CancelAndClose()
     {
-        target.GameName = source.GameName;
-        target.CategoryName = source.CategoryName;
-        target.Offset = source.Offset;
-        target.AttemptCount = source.AttemptCount;
-        target.GameIcon = source.GameIcon;
-        target.GameIconPng = source.GameIconPng;
-        target.AutoSplitter = source.AutoSplitter;
-        target.AutoSplitterSettings = source.AutoSplitterSettings;
-        target.AttemptHistory = new List<Attempt>(source.AttemptHistory);
-        target.CustomComparisons = new List<string>(source.CustomComparisons);
-        target.Clear();
-        foreach (ISegment seg in source)
-        {
-            target.Add(seg);
-        }
-
-        target.Metadata.CustomVariables.Clear();
-        foreach (KeyValuePair<string, CustomVariable> kv in source.Metadata.CustomVariables)
-        {
-            target.Metadata.CustomVariables[kv.Key] = kv.Value.Clone();
-        }
+        RestoreAutoSplitterChanges();
+        _result.TrySetResult(false);
+        Close();
     }
 
-    private void PersistIfPossible()
+    private void RestoreAutoSplitterChanges()
     {
-        if (string.IsNullOrEmpty(_original.FilePath))
+        if (_accepted)
         {
             return;
         }
 
-        try
+        Run.AutoSplitter?.Deactivate();
+        State.Settings.ActiveAutoSplitters.Clear();
+        foreach (string game in _originalActiveAutoSplitters)
         {
-            using FileStream stream = File.Open(_original.FilePath, FileMode.Create, FileAccess.Write);
-            new XMLRunSaver().Save(_original, stream);
-            _original.HasChanged = false;
-            State.Settings.AddToRecentSplits(_original.FilePath, _original, State.CurrentTimingMethod, State.CurrentHotkeyProfile);
+            State.Settings.ActiveAutoSplitters.Add(game);
         }
-        catch (Exception ex)
+
+        _original.AutoSplitterSettings = _originalAutoSplitterSettings;
+    }
+
+    private Control BuildLayoutRow()
+    {
+        var browseBtn = new Button { Content = "Browse...", Width = 86 };
+        browseBtn.Click += async (_, _) => await PickLayoutPath();
+        var defaultBtn = new Button { Content = "Default", Width = 76 };
+        defaultBtn.Click += (_, _) =>
         {
-            LiveSplit.Options.Log.Error(ex);
+            _linkedLayoutCheckBox.IsChecked = true;
+            _layoutPathBox.Text = string.Empty;
+            UpdateLayoutControls();
+        };
+
+        var pathPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children = { _layoutPathBox, browseBtn, defaultBtn },
+        };
+
+        return new StackPanel
+        {
+            Spacing = 4,
+            Children = { _linkedLayoutCheckBox, pathPanel },
+        };
+    }
+
+    private void UpdateLayoutControls()
+    {
+        if (_layoutPathBox is not null)
+        {
+            _layoutPathBox.IsEnabled = _linkedLayoutCheckBox?.IsChecked == true;
+        }
+    }
+
+    private async Task PickLayoutPath()
+    {
+        IReadOnlyList<IStorageFile> files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select Layout",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("LiveSplit Layout") { Patterns = new[] { "*.lsl" } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        if (files?.FirstOrDefault() is { } picked)
+        {
+            _linkedLayoutCheckBox.IsChecked = true;
+            _layoutPathBox.Text = picked.TryGetLocalPath() ?? picked.Path.LocalPath;
+            UpdateLayoutControls();
         }
     }
 
@@ -580,9 +644,8 @@ public sealed class RunEditorDialog : Window
         var prompt = new TextInputDialog("New Segment", "Segment name:");
         if (await prompt.ShowDialogAsync(this) is { } name && !string.IsNullOrWhiteSpace(name))
         {
-            ISegment seg = new Segment(name);
             int idx = _segmentsList.SelectedIndex < 0 ? Run.Count : _segmentsList.SelectedIndex + 1;
-            Run.Insert(idx, seg);
+            RunEditorDialogModel.InsertSegment(Run, idx, name);
             RefreshSegmentList();
             _segmentsList.SelectedIndex = idx;
         }
@@ -596,7 +659,7 @@ public sealed class RunEditorDialog : Window
             return;
         }
 
-        Run.RemoveAt(idx);
+        RunEditorDialogModel.RemoveSegment(Run, idx);
         RefreshSegmentList();
     }
 
@@ -626,9 +689,7 @@ public sealed class RunEditorDialog : Window
             return;
         }
 
-        ISegment moved = Run[idx];
-        Run.RemoveAt(idx);
-        Run.Insert(newIdx, moved);
+        RunEditorDialogModel.MoveSegment(Run, idx, newIdx);
         RefreshSegmentList();
         _segmentsList.SelectedIndex = newIdx;
     }
@@ -683,10 +744,12 @@ public sealed class RunEditorDialog : Window
         // Header
         var header = MakeTimingRowGrid(comparisons.Count);
         header.Children.Add(MakeHeaderText("Segment", 0));
-        header.Children.Add(MakeHeaderText("Best Segment", 1));
+        header.Children.Add(MakeHeaderText("Split Time", 1));
+        header.Children.Add(MakeHeaderText("Segment Time", 2));
+        header.Children.Add(MakeHeaderText("Best Segment", 3));
         for (int c = 0; c < comparisons.Count; c++)
         {
-            header.Children.Add(MakeHeaderText(comparisons[c], 2 + c));
+            header.Children.Add(MakeHeaderText(comparisons[c], 4 + c));
         }
 
         target.Children.Add(header);
@@ -702,8 +765,20 @@ public sealed class RunEditorDialog : Window
             Grid.SetColumn(segLabel, 0);
             row.Children.Add(segLabel);
 
+            var splitBox = new TextBox { Text = TimeFormatter.Format(segment.PersonalBestSplitTime[method]) };
+            Grid.SetColumn(splitBox, 1);
+            splitBox.LostFocus += (_, _) =>
+                RunEditorDialogModel.SetPersonalBestSplitTime(Run, segIndex, method, TimeSpanParser.ParseNullable(splitBox.Text));
+            row.Children.Add(splitBox);
+
+            var segmentBox = new TextBox { Text = TimeFormatter.Format(GetPersonalBestSegmentTime(segIndex, method)) };
+            Grid.SetColumn(segmentBox, 2);
+            segmentBox.LostFocus += (_, _) =>
+                RunEditorDialogModel.SetPersonalBestSegmentTime(Run, segIndex, method, TimeSpanParser.ParseNullable(segmentBox.Text));
+            row.Children.Add(segmentBox);
+
             var bestBox = new TextBox { Text = TimeFormatter.Format(segment.BestSegmentTime[method]) };
-            Grid.SetColumn(bestBox, 1);
+            Grid.SetColumn(bestBox, 3);
             bestBox.LostFocus += (_, _) =>
             {
                 Time t = segment.BestSegmentTime;
@@ -718,7 +793,7 @@ public sealed class RunEditorDialog : Window
                 string cmp = comparisons[c];
                 int colIndex = c;
                 var box = new TextBox { Text = TimeFormatter.Format(segment.Comparisons[cmp][method]) };
-                Grid.SetColumn(box, 2 + c);
+                Grid.SetColumn(box, 4 + c);
 
                 box.LostFocus += (_, _) =>
                 {
@@ -744,8 +819,8 @@ public sealed class RunEditorDialog : Window
 
     private static Grid MakeTimingRowGrid(int comparisonCount)
     {
-        // 2 fixed columns (Segment, Best Segment) + N comparison columns.
-        var defs = new ColumnDefinitions("180,140");
+        // Fixed columns (Segment, Split, Segment Time, Best Segment) + N comparison columns.
+        var defs = new ColumnDefinitions("180,140,140,140");
         for (int i = 0; i < comparisonCount; i++)
         {
             defs.Add(new ColumnDefinition(140, GridUnitType.Pixel));
@@ -771,18 +846,10 @@ public sealed class RunEditorDialog : Window
     {
         var prompt = new TextInputDialog("New Comparison", "Comparison name:");
         string name = await prompt.ShowDialogAsync(this);
-        if (string.IsNullOrWhiteSpace(name) || Run.CustomComparisons.Contains(name))
+        if (!RunEditorDialogModel.TryAddComparison(Run, name))
         {
             return;
         }
-
-        Run.CustomComparisons.Add(name);
-        foreach (ISegment segment in Run)
-        {
-            segment.Comparisons[name] = new Time();
-        }
-
-        Run.HasChanged = true;
         RebuildTimingRows();
     }
 
@@ -816,13 +883,17 @@ public sealed class RunEditorDialog : Window
         removeBtn.Click += (_, _) => RemoveSelectedAttempt();
         var clearBtn = new Button { Content = "Clear All" };
         clearBtn.Click += (_, _) => ClearHistory();
+        var clearTimesBtn = new Button { Content = "Clear Times" };
+        clearTimesBtn.Click += (_, _) => ClearTimes();
+        var cleanSobBtn = new Button { Content = "Clean Sum of Best" };
+        cleanSobBtn.Click += async (_, _) => await CleanSumOfBest();
 
         var topBar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             Margin = new Thickness(0, 0, 0, 8),
-            Children = { removeBtn, clearBtn },
+            Children = { removeBtn, clearBtn, clearTimesBtn, cleanSobBtn },
         };
 
         var dock = new DockPanel { LastChildFill = true, Margin = new Thickness(8) };
@@ -869,6 +940,30 @@ public sealed class RunEditorDialog : Window
         RebuildHistoryRows();
     }
 
+    private void ClearTimes()
+    {
+        RunEditorDialogModel.ClearTimes(Run);
+        _attemptBox.Value = Run.AttemptCount;
+        RebuildHistoryRows();
+        RebuildTimingRows();
+    }
+
+    private async Task CleanSumOfBest()
+    {
+        var dialog = new MessageDialog(
+            "Clean Sum of Best",
+            "Remove potentially invalid segment history elements from the Sum of Best?",
+            MessageDialog.Buttons.YesNo);
+        if (await dialog.ShowDialogResultAsync(this) != MessageResult.Yes)
+        {
+            return;
+        }
+
+        RunEditorDialogModel.CleanSumOfBest(Run, _ => true);
+        RebuildHistoryRows();
+        RebuildTimingRows();
+    }
+
     // ------------------------------------------------------------------------
     // Variables tab
     // ------------------------------------------------------------------------
@@ -884,6 +979,15 @@ public sealed class RunEditorDialog : Window
     private void RebuildVariablesPanel()
     {
         _variablesPanel.Children.Clear();
+
+        _variablesPanel.Children.Add(new TextBlock
+        {
+            Text = "Additional Info",
+            FontWeight = FontWeight.Bold,
+        });
+        _variablesPanel.Children.Add(LabeledRow("Platform:", _platformBox));
+        _variablesPanel.Children.Add(LabeledRow("Region:", _regionBox));
+        _variablesPanel.Children.Add(_emulatorCheckBox);
 
         // Speedrun.com-bound (read-only)
         if (Run.Metadata.VariableValueNames.Count > 0)
@@ -1062,6 +1166,14 @@ public sealed class RunEditorDialog : Window
         };
     }
 
+    private TimeSpan? GetPersonalBestSegmentTime(int segmentIndex, TimingMethod method)
+    {
+        TimeSpan previous = segmentIndex > 0
+            ? Run[segmentIndex - 1].PersonalBestSplitTime[method] ?? TimeSpan.Zero
+            : TimeSpan.Zero;
+        return Run[segmentIndex].PersonalBestSplitTime[method] - previous;
+    }
+
     /// <summary>Row projection for the History DataGrid. Strings let the grid format dates/times consistently.</summary>
     public sealed class AttemptRow
     {
@@ -1080,6 +1192,202 @@ public sealed class RunEditorDialog : Window
             RealTime = TimeFormatter.Format(attempt.Time.RealTime) ?? string.Empty;
             GameTime = TimeFormatter.Format(attempt.Time.GameTime) ?? string.Empty;
             PauseTime = attempt.PauseTime?.ToString() ?? string.Empty;
+        }
+    }
+}
+
+public static class RunEditorDialogModel
+{
+    private const string DefaultLayoutPath = "?default";
+
+    public static void ApplyAcceptedRun(Run target, Run source)
+    {
+        target.GameName = source.GameName;
+        target.CategoryName = source.CategoryName;
+        target.Offset = source.Offset;
+        target.AttemptCount = source.AttemptCount;
+        target.GameIcon = source.GameIcon;
+        target.GameIconPng = source.GameIconPng;
+        target.AutoSplitter = source.AutoSplitter;
+        target.AutoSplitterSettings = source.AutoSplitterSettings;
+        target.LayoutPath = source.LayoutPath;
+        target.AttemptHistory = new List<Attempt>(source.AttemptHistory);
+        target.CustomComparisons = new List<string>(source.CustomComparisons);
+        target.ComparisonGenerators = new List<IComparisonGenerator>(source.ComparisonGenerators);
+
+        target.Clear();
+        foreach (ISegment seg in source)
+        {
+            target.Add(seg.Clone() as ISegment);
+        }
+
+        CopyMetadata(target.Metadata, source.Metadata);
+        target.HasChanged = true;
+    }
+
+    public static void SetPersonalBestSplitTime(IRun run, int segmentIndex, TimingMethod method, TimeSpan? time)
+    {
+        Time splitTime = run[segmentIndex].PersonalBestSplitTime;
+        splitTime[method] = time;
+        run[segmentIndex].PersonalBestSplitTime = splitTime;
+        run.HasChanged = true;
+    }
+
+    public static void SetPersonalBestSegmentTime(IRun run, int segmentIndex, TimingMethod method, TimeSpan? segmentTime)
+    {
+        TimeSpan previous = segmentIndex > 0
+            ? run[segmentIndex - 1].PersonalBestSplitTime[method] ?? TimeSpan.Zero
+            : TimeSpan.Zero;
+
+        SetPersonalBestSplitTime(run, segmentIndex, method, segmentTime + previous);
+    }
+
+    public static void InsertSegment(IRun run, int index, string name)
+    {
+        var segment = new Segment(name);
+        foreach (string comparison in run.CustomComparisons)
+        {
+            segment.Comparisons[comparison] = new Time();
+        }
+
+        run.Insert(index, segment);
+        run.FixSplits();
+        run.HasChanged = true;
+    }
+
+    public static void RemoveSegment(IRun run, int index)
+    {
+        if (index < 0 || index >= run.Count || run.Count <= 1)
+        {
+            return;
+        }
+
+        run.RemoveAt(index);
+        run.FixSplits();
+        run.HasChanged = true;
+    }
+
+    public static void MoveSegment(IRun run, int oldIndex, int newIndex)
+    {
+        if (oldIndex < 0 || oldIndex >= run.Count || newIndex < 0 || newIndex >= run.Count || oldIndex == newIndex)
+        {
+            return;
+        }
+
+        ISegment moved = run[oldIndex];
+        run.RemoveAt(oldIndex);
+        run.Insert(newIndex, moved);
+        run.HasChanged = true;
+    }
+
+    public static bool TryAddComparison(IRun run, string name)
+    {
+        if (!IsValidNewComparisonName(run, name))
+        {
+            return false;
+        }
+
+        run.CustomComparisons.Add(name);
+        foreach (ISegment segment in run)
+        {
+            segment.Comparisons[name] = new Time();
+        }
+
+        run.HasChanged = true;
+        return true;
+    }
+
+    public static bool TryRenameComparison(IRun run, string oldName, string newName)
+    {
+        if (string.Equals(oldName, Run.PersonalBestComparisonName, StringComparison.Ordinal)
+            || !run.CustomComparisons.Contains(oldName)
+            || !IsValidNewComparisonName(run, newName))
+        {
+            return false;
+        }
+
+        int index = run.CustomComparisons.IndexOf(oldName);
+        run.CustomComparisons[index] = newName;
+        foreach (ISegment segment in run)
+        {
+            Time oldTime = segment.Comparisons[oldName];
+            segment.Comparisons.Remove(oldName);
+            segment.Comparisons[newName] = oldTime;
+        }
+
+        run.HasChanged = true;
+        return true;
+    }
+
+    public static bool TryRemoveComparison(IRun run, string name)
+    {
+        if (string.Equals(name, Run.PersonalBestComparisonName, StringComparison.Ordinal)
+            || !run.CustomComparisons.Remove(name))
+        {
+            return false;
+        }
+
+        foreach (ISegment segment in run)
+        {
+            segment.Comparisons.Remove(name);
+        }
+
+        run.HasChanged = true;
+        return true;
+    }
+
+    public static void SetLinkedLayout(IRun run, bool linked, string selectedPath)
+    {
+        run.LayoutPath = linked
+            ? string.IsNullOrWhiteSpace(selectedPath) ? DefaultLayoutPath : selectedPath
+            : null;
+        run.HasChanged = true;
+    }
+
+    public static void SetAdditionalInfo(Run run, string platformName, string regionName, bool usesEmulator)
+    {
+        run.Metadata.PlatformName = platformName ?? string.Empty;
+        run.Metadata.RegionName = regionName ?? string.Empty;
+        run.Metadata.UsesEmulator = usesEmulator;
+        run.HasChanged = true;
+    }
+
+    public static void ClearTimes(IRun run)
+    {
+        run.ClearTimes();
+        run.HasChanged = true;
+    }
+
+    public static void CleanSumOfBest(IRun run, SumOfBest.CleanUpCallback callback)
+    {
+        SumOfBest.Clean(run, callback);
+        run.HasChanged = true;
+    }
+
+    public static string DisplayLayoutPath(string layoutPath)
+    {
+        return string.Equals(layoutPath, DefaultLayoutPath, StringComparison.Ordinal) ? string.Empty : layoutPath ?? string.Empty;
+    }
+
+    private static bool IsValidNewComparisonName(IRun run, string name)
+    {
+        return !string.IsNullOrWhiteSpace(name)
+            && !name.StartsWith("[Race]", StringComparison.Ordinal)
+            && !run.Comparisons.Contains(name);
+    }
+
+    private static void CopyMetadata(RunMetadata target, RunMetadata source)
+    {
+        target.RunID = source.RunID;
+        target.PlatformName = source.PlatformName;
+        target.RegionName = source.RegionName;
+        target.UsesEmulator = source.UsesEmulator;
+        target.VariableValueNames = source.VariableValueNames.ToDictionary(x => x.Key, x => x.Value);
+
+        target.CustomVariables.Clear();
+        foreach (KeyValuePair<string, CustomVariable> kv in source.CustomVariables)
+        {
+            target.CustomVariables[kv.Key] = kv.Value.Clone();
         }
     }
 }

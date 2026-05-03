@@ -9,14 +9,12 @@ public static class ShareNotesFormatter
 {
     public static string DefaultTwitterFormat(TimerPhase phase)
     {
-        return phase is TimerPhase.NotRunning or TimerPhase.Ended
-            ? "I got a $pb in $title."
-            : "I'm $delta in $title.";
+        return ShareTemplateSettings.Default.GetTwitterFormat(phase);
     }
 
     public static string DefaultTwitchFormat()
     {
-        return "$title Speedrun";
+        return ShareTemplateSettings.Default.GetTwitchFormat();
     }
 
     public static string Format(

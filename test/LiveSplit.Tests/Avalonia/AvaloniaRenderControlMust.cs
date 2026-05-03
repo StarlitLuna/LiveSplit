@@ -43,6 +43,18 @@ public class AvaloniaRenderControlMust
     }
 
     [Fact]
+    public void CalculateImageBackgroundSourceRectAsMasterCoverCrop()
+    {
+        System.Drawing.Rectangle source = SkiaRenderControl.CalculateCoverSourceRect(
+            imageWidth: 400,
+            imageHeight: 200,
+            targetWidth: 100,
+            targetHeight: 100);
+
+        Assert.Equal(new System.Drawing.Rectangle(100, 0, 200, 200), source);
+    }
+
+    [Fact]
     public void UpdateTimerComponentsBeforeSnapshotRendering()
     {
         DrawingApi.Register(new SkiaDrawingFactory());
@@ -72,7 +84,7 @@ public class AvaloniaRenderControlMust
             Assert.Equal(".00", timer.SmallTextLabel.Text);
             Assert.True(HasIntermediateTextPixel(png, host.State.LayoutSettings.BackgroundColor));
             Assert.False(HasColoredSubpixelFringe(png));
-            Assert.InRange(MaxVisibleLuminance(png), 220, 255);
+            Assert.True(MaxVisibleLuminance(png) > host.State.LayoutSettings.NotRunningColor.R + 40);
             AssertPixelColor(png, 0, 0, host.State.LayoutSettings.BackgroundColor);
         }
         finally

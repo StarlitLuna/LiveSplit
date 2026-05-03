@@ -31,6 +31,7 @@ public class RacetimeAPI : RaceProviderAPI
 
     public override string ProviderName => "racetime.gg";
     public override string Username => string.Empty;
+    public override RaceJoinCapability JoinCapability => RaceJoinCapability.OpenViewer;
 
     public static IEnumerable<IRaceInfo> ParseRacesData(string json)
     {

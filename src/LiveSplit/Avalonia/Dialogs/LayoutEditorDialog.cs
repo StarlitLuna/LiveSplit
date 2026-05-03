@@ -1,18 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Xml;
 
 using global::Avalonia;
 using global::Avalonia.Controls;
 using global::Avalonia.Layout;
 
 using LiveSplit.Model;
+using LiveSplit.Options;
 using LiveSplit.UI;
 using LiveSplit.UI.Components;
-using LiveSplit.UI.LayoutSavers;
 
 namespace LiveSplit.Avalonia.Dialogs;
 
@@ -27,17 +27,16 @@ public sealed class LayoutEditorDialog : Window
 
     private readonly TaskCompletionSource<bool> _result = new();
     private readonly ListBox _list;
-    private readonly List<ILayoutComponent> _originalComponents;
+    private readonly LayoutSnapshot _snapshot;
 
     public LayoutEditorDialog(ILayout layout, LiveSplitState state)
     {
         Layout = layout;
         State = state;
 
-        // Snapshot the layout's component list so Cancel can roll back the in-place mutations
-        // performed by Add / Remove / Move Up / Move Down (those buttons edit
-        // Layout.LayoutComponents directly to keep the running window's renderer in sync).
-        _originalComponents = new List<ILayoutComponent>(layout.LayoutComponents);
+        // The editor mutates the live layout so the running renderer stays in sync. Keep a
+        // complete value snapshot so Cancel / X can put every mutable layout field back.
+        _snapshot = LayoutSnapshot.Capture(layout);
 
         Title = "Layout Editor";
         Width = 600;
@@ -61,19 +60,35 @@ public sealed class LayoutEditorDialog : Window
             var dlg = new LayoutSettingsDialog(layout.Settings);
             await dlg.ShowDialogAsync(this);
         };
+        var verticalBtn = new Button { Content = "Vertical", Margin = new Thickness(4) };
+        verticalBtn.Click += (_, _) => SetOrientation(LayoutMode.Vertical);
+        var horizontalBtn = new Button { Content = "Horizontal", Margin = new Thickness(4) };
+        horizontalBtn.Click += (_, _) => SetOrientation(LayoutMode.Horizontal);
+        var setSizeBtn = new Button { Content = "Set Sizeâ€¦", Margin = new Thickness(4) };
+        setSizeBtn.Click += async (_, _) => await SetSize();
 
         var sideBar = new StackPanel
         {
             Spacing = 4,
             Margin = new Thickness(0, 8, 8, 8),
-            Children = { addBtn, removeBtn, upBtn, downBtn, settingsBtn, layoutSettingsBtn },
+            Children =
+            {
+                addBtn,
+                removeBtn,
+                upBtn,
+                downBtn,
+                settingsBtn,
+                layoutSettingsBtn,
+                verticalBtn,
+                horizontalBtn,
+                setSizeBtn,
+            },
         };
 
         var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
         ok.Click += (_, _) =>
         {
-            Layout.HasChanged = true;
-            PersistIfPossible();
+            AcceptLayout(Layout);
             _result.TrySetResult(true);
             Close();
         };
@@ -122,11 +137,8 @@ public sealed class LayoutEditorDialog : Window
 
     private void RestoreOriginalComponents()
     {
-        Layout.LayoutComponents.Clear();
-        foreach (ILayoutComponent c in _originalComponents)
-        {
-            Layout.LayoutComponents.Add(c);
-        }
+        _snapshot.Apply(Layout);
+        Refresh();
     }
 
     private List<string> ComponentNames()
@@ -168,6 +180,72 @@ public sealed class LayoutEditorDialog : Window
         Layout.LayoutComponents.Insert(newIdx, moved);
         Refresh();
         _list.SelectedIndex = newIdx;
+    }
+
+    private void SetOrientation(LayoutMode mode)
+    {
+        if (Layout.Mode == mode)
+        {
+            return;
+        }
+
+        Layout.Mode = mode;
+        Layout.HasChanged = true;
+    }
+
+    private async Task SetSize()
+    {
+        bool vertical = Layout.Mode == LayoutMode.Vertical;
+        var target = new Window
+        {
+            Width = vertical ? Layout.VerticalWidth : Layout.HorizontalWidth,
+            Height = vertical ? Layout.VerticalHeight : Layout.HorizontalHeight,
+        };
+
+        if (target.Width <= 0)
+        {
+            target.Width = Width;
+        }
+
+        if (target.Height <= 0)
+        {
+            target.Height = Height;
+        }
+
+        var dlg = new SetSizeForm(target);
+        if (await dlg.ShowDialogAsync(this))
+        {
+            ApplyCurrentModeSize(Layout, (int)Math.Round(target.Width), (int)Math.Round(target.Height));
+        }
+    }
+
+    internal static void AcceptLayout(ILayout layout)
+    {
+        if (layout != null)
+        {
+            layout.HasChanged = true;
+        }
+    }
+
+    internal static void ApplyCurrentModeSize(ILayout layout, int width, int height)
+    {
+        if (layout == null)
+        {
+            return;
+        }
+
+        if (layout.Mode == LayoutMode.Vertical)
+        {
+            layout.VerticalWidth = width;
+            layout.VerticalHeight = height;
+        }
+        else
+        {
+            layout.HorizontalWidth = width;
+            layout.HorizontalHeight = height;
+        }
+
+        layout.HasChanged = true;
     }
 
     /// <summary>
@@ -314,23 +392,119 @@ public sealed class LayoutEditorDialog : Window
         return await _result.Task;
     }
 
-    private void PersistIfPossible()
+    internal sealed class LayoutSnapshot
     {
-        if (string.IsNullOrEmpty(Layout.FilePath))
+        private readonly List<ComponentSnapshot> _components;
+        private readonly LayoutSettings _settings;
+
+        private LayoutSnapshot(ILayout layout)
         {
-            return;
+            Mode = layout.Mode;
+            VerticalWidth = layout.VerticalWidth;
+            VerticalHeight = layout.VerticalHeight;
+            HorizontalWidth = layout.HorizontalWidth;
+            HorizontalHeight = layout.HorizontalHeight;
+            X = layout.X;
+            Y = layout.Y;
+            HasChanged = layout.HasChanged;
+            FilePath = layout.FilePath;
+            _settings = layout.Settings?.Clone() as LayoutSettings;
+            _components = layout.LayoutComponents.Select(ComponentSnapshot.Capture).ToList();
         }
 
-        try
+        private LayoutMode Mode { get; }
+        private int VerticalWidth { get; }
+        private int VerticalHeight { get; }
+        private int HorizontalWidth { get; }
+        private int HorizontalHeight { get; }
+        private int X { get; }
+        private int Y { get; }
+        private bool HasChanged { get; }
+        private string FilePath { get; }
+
+        public static LayoutSnapshot Capture(ILayout layout) => new(layout);
+
+        public void Apply(ILayout layout)
         {
-            using FileStream stream = File.Open(Layout.FilePath, FileMode.Create, FileAccess.Write);
-            new XMLLayoutSaver().Save(Layout, stream);
-            Layout.HasChanged = false;
-            State.Settings.AddToRecentLayouts(Layout.FilePath);
+            layout.Mode = Mode;
+            layout.VerticalWidth = VerticalWidth;
+            layout.VerticalHeight = VerticalHeight;
+            layout.HorizontalWidth = HorizontalWidth;
+            layout.HorizontalHeight = HorizontalHeight;
+            layout.X = X;
+            layout.Y = Y;
+            layout.HasChanged = HasChanged;
+            layout.FilePath = FilePath;
+
+            if (_settings == null)
+            {
+                layout.Settings = null;
+            }
+            else if (layout.Settings == null)
+            {
+                layout.Settings = _settings.Clone() as LayoutSettings;
+            }
+            else
+            {
+                layout.Settings.Assign(_settings);
+            }
+
+            layout.LayoutComponents.Clear();
+            foreach (ComponentSnapshot component in _components)
+            {
+                layout.LayoutComponents.Add(component.Restore());
+            }
         }
-        catch (Exception ex)
+    }
+
+    private sealed class ComponentSnapshot
+    {
+        private readonly string _path;
+        private readonly IComponent _component;
+        private readonly FontOverrides _fontOverrides;
+        private readonly string _settingsXml;
+
+        private ComponentSnapshot(ILayoutComponent layoutComponent)
         {
-            LiveSplit.Options.Log.Error(ex);
+            _path = layoutComponent.Path;
+            _component = layoutComponent.Component;
+            _fontOverrides = (layoutComponent as LayoutComponent)?.FontOverrides?.Clone() as FontOverrides;
+            _settingsXml = CaptureSettings(layoutComponent.Component);
+        }
+
+        public static ComponentSnapshot Capture(ILayoutComponent layoutComponent) => new(layoutComponent);
+
+        public ILayoutComponent Restore()
+        {
+            RestoreSettings(_component, _settingsXml);
+            return new LayoutComponent(_path, _component)
+            {
+                FontOverrides = _fontOverrides?.Clone() as FontOverrides ?? new FontOverrides(),
+            };
+        }
+
+        private static string CaptureSettings(IComponent component)
+        {
+            if (component == null)
+            {
+                return null;
+            }
+
+            var document = new XmlDocument();
+            XmlNode settings = component.GetSettings(document);
+            return settings?.OuterXml;
+        }
+
+        private static void RestoreSettings(IComponent component, string settingsXml)
+        {
+            if (component == null || string.IsNullOrEmpty(settingsXml))
+            {
+                return;
+            }
+
+            var document = new XmlDocument();
+            document.LoadXml(settingsXml);
+            component.SetSettings(document.DocumentElement);
         }
     }
 }

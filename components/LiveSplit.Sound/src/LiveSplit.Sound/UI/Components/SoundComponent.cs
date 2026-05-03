@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Xml;
 
 using LibVLCSharp.Shared;
@@ -241,8 +242,59 @@ internal sealed class LibVlcSoundPlayer : ISoundPlayer
             return;
         }
 
-        Core.Initialize();
+        string libVlcDirectory = LibVlcRuntime.FindWindowsLibVlcDirectory();
+        if (libVlcDirectory is null)
+        {
+            Core.Initialize();
+        }
+        else
+        {
+            Core.Initialize(libVlcDirectory);
+        }
         _libVlc = new LibVLC("--no-video");
         _player = new MediaPlayer(_libVlc);
+    }
+}
+
+internal static class LibVlcRuntime
+{
+    public static string FindWindowsLibVlcDirectory()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return null;
+        }
+
+        string rid = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X86 => "win-x86",
+            Architecture.X64 => "win-x64",
+            Architecture.Arm64 => "win-arm64",
+            _ => null
+        };
+
+        if (rid is null)
+        {
+            return null;
+        }
+
+        string baseDirectory = AppContext.BaseDirectory;
+        string[] candidates =
+        [
+            Path.Combine(baseDirectory, "Components", "runtimes", rid, "libvlc", rid),
+            Path.Combine(baseDirectory, "Components", "libvlc", rid),
+            Path.Combine(baseDirectory, "libvlc", rid)
+        ];
+
+        foreach (string candidate in candidates)
+        {
+            if (File.Exists(Path.Combine(candidate, "libvlc.dll"))
+                && File.Exists(Path.Combine(candidate, "libvlccore.dll")))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 }

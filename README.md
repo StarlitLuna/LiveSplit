@@ -1,4 +1,4 @@
-﻿<h1> <img src="https://raw.githubusercontent.com/LiveSplit/LiveSplit/master/res/Icon.svg" alt="LiveSplit" height="42" align="top"/> LiveSplit</h1>
+<h1> <img src="https://raw.githubusercontent.com/LiveSplit/LiveSplit/master/res/Icon.svg" alt="LiveSplit" height="42" align="top"/> LiveSplit</h1>
 
 [![GitHub release](https://img.shields.io/github/release/LiveSplit/LiveSplit.svg)](https://github.com/LiveSplit/LiveSplit/releases/latest)
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/LiveSplit/LiveSplit/master/LICENSE)
@@ -45,7 +45,7 @@ You can browse the [Issues](https://github.com/LiveSplit/LiveSplit/issues) to fi
 
 ## Building on Windows
 
-Windows builds use the same Avalonia app as Linux. macOS is not supported.
+Windows builds use the same Avalonia app as Linux.
 
 ### Prerequisites
 
@@ -84,7 +84,7 @@ Zip `dist\LiveSplit-win-x64` if you need a redistributable archive.
 
 ## Building on Linux
 
-Supported Linux distribution artifacts are Flatpak and Fedora RPM. Other distributions can build from source, but this project does not publish Ubuntu packages, AppImages, or macOS builds.
+Supported release artifacts are the Windows ZIP, Flatpak, Fedora RPM, and source builds for other Linux distributions.
 
 ### Source build prerequisites
 
@@ -120,7 +120,7 @@ dotnet bin/release/LiveSplit.dll
 
 ### Packaging: Flatpak
 
-Flatpak is the supported cross-distro Linux package. The manifest at [org.livesplit.LiveSplit.yml](org.livesplit.LiveSplit.yml) builds the native Rust libraries and runs `dotnet publish` inside the Flatpak SDK using the `dotnet8` and `rust-stable` SDK extensions.
+Flatpak is the supported cross-distro Linux package. The manifest at [org.livesplit.LiveSplit.yml](org.livesplit.LiveSplit.yml) builds the native Rust libraries and runs `dotnet publish` inside the Flatpak SDK using the `dotnet8` and `rust-stable` SDK extensions. Sound and Video use LibVLC, so the Flatpak runtime must include VLC/LibVLC libraries before those components can play media inside the sandbox.
 
 #### One-time setup
 
@@ -207,7 +207,9 @@ The `LiveSplit.ComponentUtil` namespace is already imported into the ASL compila
 
 ## The LiveSplit Server
 
-The internal LiveSplit Server allows for other programs and other computers to control LiveSplit. The server can accept connections over either a named pipe located at `\\<hostname>\pipe\LiveSplit` (`.` is the hostname if the client and server are on the same computer), raw TCP/IP, or a WebSocket (WS) server, located at `ws://<hostname>:port/livesplit`.
+The internal LiveSplit Server allows other programs and other computers to control LiveSplit. Cross-platform clients should use raw TCP/IP or WebSocket. The TCP server listens on the configured port, and the WebSocket server is located at `ws://<hostname>:port/livesplit`.
+
+Windows builds also expose a named pipe at `\\<hostname>\pipe\LiveSplit` (`.` is the hostname if the client and server are on the same computer). That path syntax is Windows-specific and is not available to Linux clients. Linux clients should connect through TCP or WebSocket instead.
 
 ### Control
 
@@ -325,7 +327,7 @@ public class MainTest {
 ```
 
 #### Lua
-Software that implements [Lua](https://www.lua.org/) is usable for as a client. However, the lua io library must be available for the script to use, full documentation available [here](https://www.lua.org/manual/5.3/manual.html#6.8).
+Software that implements [Lua](https://www.lua.org/) is usable as a client. For cross-platform scripts, prefer a TCP or WebSocket Lua library. The lua io example below uses the Windows named pipe and only applies on Windows.
 
 ```lua
 require "io"
@@ -342,16 +344,15 @@ Node.js client implementation available here: https://github.com/satanch/node-li
 
 ## Releasing
 
-1. Update versions of any components that changed (create a Git tag and update the factory file for each component) to match the new LiveSplit version.
+1. Update versions of any components that changed to match the new LiveSplit version.
 2. Create a Git tag for the new version.
-3. Download `LiveSplit_Build` and `UpdateManagerExe` from the GitHub Actions build for the new Git tag.
-4. Create a GitHub release for the new version, and upload the LiveSplit build ZIP file with the correct filename (e.g. `LiveSplit_1.8.21.zip`).
-5. Modify files in [the update folder of LiveSplit.github.io](https://github.com/LiveSplit/LiveSplit.github.io/tree/master/update) and commit the changes:
-    - Copy changed files from the downloaded LiveSplit build ZIP file to the [update folder](https://github.com/LiveSplit/LiveSplit.github.io/tree/master/update).
-    - Copy changed files from the download Update Manager ZIP file to replace [`UpdateManagerV2.exe`](https://github.com/LiveSplit/LiveSplit.github.io/blob/master/update/UpdateManagerV2.exe) and [`UpdateManagerV2.exe.config`](https://github.com/LiveSplit/LiveSplit.github.io/blob/master/update/UpdateManagerV2.exe.config).
-    - Add new versions to the update XMLs for (`update.xml`, `update.updater.xml`, and the update XMLs for any components that changed).
-    - Modify the [DLL](https://github.com/therungg/LiveSplit.TheRun/blob/main/Components/LiveSplit.TheRun.dll) and [update XML](https://github.com/therungg/LiveSplit.TheRun/blob/main/update.LiveSplit.TheRun.xml) for LiveSplit.TheRun in its repo.
-    - Update the version on the [downloads page](https://github.com/LiveSplit/LiveSplit.github.io/blob/master/downloads.md).
+3. Build and verify the release artifacts:
+   - Windows ZIP from the `win-x64` publish output.
+   - Flatpak from `scripts/package-linux.sh`.
+   - Fedora RPM from `scripts/package-fedora-rpm.sh`.
+   - Source build instructions for other Linux distributions.
+4. Create a GitHub release for the new version and upload the Windows ZIP, Flatpak, Fedora RPM, and source archive.
+5. Update the downloads page and any update metadata that applies to the Windows ZIP.
 
 ## License
 

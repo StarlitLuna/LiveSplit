@@ -102,6 +102,7 @@ public class SpeedRunsLiveAPI : RaceProviderAPI
     }
 
     public override string ProviderName => "SRL";
+    public override RaceJoinCapability JoinCapability => RaceJoinCapability.OpenViewer;
 
     public override string Username
     {

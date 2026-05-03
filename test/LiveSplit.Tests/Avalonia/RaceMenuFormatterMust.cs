@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 using LiveSplit.Avalonia;
 using LiveSplit.Model;
+using LiveSplit.UI.Components;
+using LiveSplit.Web.SRL;
 
 using Xunit;
 
@@ -21,6 +23,20 @@ public class RaceMenuFormatterMust
         };
 
         Assert.Equal("Example Game - Any% (2 Entrants)", RaceMenuFormatter.FormatOpenRaceTitle(race));
+    }
+
+    [Theory]
+    [InlineData(RaceJoinCapability.JoinRace, "Join Race")]
+    [InlineData(RaceJoinCapability.OpenViewer, "Open Viewer")]
+    public void FormatOpenRaceActionFromProviderCapability(RaceJoinCapability capability, string expected)
+    {
+        Assert.Equal(expected, RaceMenuFormatter.FormatOpenRaceAction(capability));
+    }
+
+    [Fact]
+    public void MarkSpeedRunsLiveBrowserFallbackAsOpenViewer()
+    {
+        Assert.Equal(RaceJoinCapability.OpenViewer, SpeedRunsLiveAPI.Instance.JoinCapability);
     }
 
     [Fact]

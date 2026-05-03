@@ -357,7 +357,12 @@ public sealed class SettingsDialog : Window
             },
         });
 
-        var allowGamepads = new CheckBox { Content = "Allow Gamepads as Hotkeys", IsChecked = profile.AllowGamepadsAsHotkeys };
+        var allowGamepads = new CheckBox
+        {
+            Content = "Allow Gamepads as Hotkeys",
+            IsChecked = profile.AllowGamepadsAsHotkeys,
+            IsEnabled = false,
+        };
         allowGamepads.IsCheckedChanged += (_, _) => profile.AllowGamepadsAsHotkeys = allowGamepads.IsChecked == true;
 
         var dpiAware = new CheckBox { Content = "Enable DPI Aware", IsChecked = _settings.EnableDPIAwareness };

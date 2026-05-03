@@ -2,6 +2,7 @@ using System;
 
 using LiveSplit.Model;
 using LiveSplit.TimeFormatters;
+using LiveSplit.UI.Components;
 
 namespace LiveSplit.Avalonia;
 
@@ -12,6 +13,11 @@ public static class RaceMenuFormatter
         int entrants = race.NumEntrants;
         string plural = entrants == 1 ? string.Empty : "s";
         return $"{FormatGameAndGoal(race)} ({entrants} Entrant{plural})";
+    }
+
+    public static string FormatOpenRaceAction(RaceJoinCapability capability)
+    {
+        return capability == RaceJoinCapability.OpenViewer ? "Open Viewer" : "Join Race";
     }
 
     public static string FormatInProgressRaceTitle(IRaceInfo race, DateTime utcNow)

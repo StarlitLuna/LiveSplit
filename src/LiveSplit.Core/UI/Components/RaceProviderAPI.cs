@@ -25,6 +25,14 @@ public abstract class RaceProviderAPI
     public abstract void RefreshRacesListAsync();
     public abstract string ProviderName { get; }
     public abstract string Username { get; }
+    public virtual RaceJoinCapability JoinCapability
+        => JoinRace is null ? RaceJoinCapability.OpenViewer : RaceJoinCapability.JoinRace;
+}
+
+public enum RaceJoinCapability
+{
+    JoinRace,
+    OpenViewer,
 }
 
 public delegate void RacesRefreshedCallback(RaceProviderAPI api);

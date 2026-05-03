@@ -26,8 +26,11 @@ public interface IDrawingContext
 
     void DrawImage(IImage image, RectangleF destRect);
     void DrawImage(IImage image, Rectangle destRect, Rectangle srcRect);
-    /// <summary>Draw a sub-rectangle of <paramref name="image"/> with a uniform opacity in [0, 1].</summary>
-    void DrawImageWithOpacity(IImage image, Rectangle destRect, Rectangle srcRect, float opacity);
+    /// <summary>
+    /// Draw a sub-rectangle of <paramref name="image"/> with a uniform opacity in [0, 1].
+    /// <paramref name="blurSigma"/> is backend-specific blur radius in pixels.
+    /// </summary>
+    void DrawImageWithOpacity(IImage image, Rectangle destRect, Rectangle srcRect, float opacity, float blurSigma = 0f);
 
     void DrawString(string text, IFont font, IBrush brush, RectangleF bounds, ITextFormat format);
     SizeF MeasureString(string text, IFont font, int maxWidth, ITextFormat format);

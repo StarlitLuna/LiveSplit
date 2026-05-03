@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Xml;
 
 using LibVLCSharp.Shared;
@@ -8,6 +9,8 @@ using LibVLCSharp.Shared;
 using LiveSplit.Model;
 using LiveSplit.Options;
 using LiveSplit.UI.Drawing;
+
+using SkiaSharp;
 
 namespace LiveSplit.UI.Components;
 
@@ -18,6 +21,11 @@ public interface IVideoPlayer : IDisposable
     void Pause();
     void Stop();
     void SetTime(TimeSpan time);
+}
+
+public interface IVideoFrameSource
+{
+    IImage CurrentFrame { get; }
 }
 
 public class VideoComponent : IComponent, IDeactivatableComponent
@@ -155,17 +163,26 @@ public class VideoComponent : IComponent, IDeactivatableComponent
             return;
         }
 
+        if (_player is IVideoFrameSource frameSource && frameSource.CurrentFrame is IImage frame)
+        {
+            ctx.DrawImage(frame, new RectangleF(0, 0, width, height));
+            return;
+        }
+
         using ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(Color.Black);
         ctx.FillRectangle(brush, 0, 0, width, height);
     }
 }
 
-internal sealed class LibVlcVideoPlayer : IVideoPlayer
+internal sealed class LibVlcVideoPlayer : IVideoPlayer, IVideoFrameSource
 {
     private readonly object _sync = new();
+    private readonly LibVlcVideoFrameBuffer _frames = new();
     private LibVLC _libVlc;
     private MediaPlayer _player;
     private Media _media;
+
+    public IImage CurrentFrame => _frames.CurrentFrame;
 
     public void Load(string path)
     {
@@ -259,6 +276,7 @@ internal sealed class LibVlcVideoPlayer : IVideoPlayer
             _player = null;
             _libVlc?.Dispose();
             _libVlc = null;
+            _frames.Dispose();
         }
     }
 
@@ -269,11 +287,222 @@ internal sealed class LibVlcVideoPlayer : IVideoPlayer
             return;
         }
 
-        Core.Initialize();
+        string libVlcDirectory = LibVlcRuntime.FindWindowsLibVlcDirectory();
+        if (libVlcDirectory is null)
+        {
+            Core.Initialize();
+        }
+        else
+        {
+            Core.Initialize(libVlcDirectory);
+        }
         _libVlc = new LibVLC();
         _player = new MediaPlayer(_libVlc)
         {
             Mute = true
         };
+        _player.SetVideoFormatCallbacks(_frames.Format, _frames.Cleanup);
+        _player.SetVideoCallbacks(_frames.Lock, _frames.Unlock, _frames.Display);
+    }
+}
+
+internal sealed class LibVlcVideoFrameBuffer : IDisposable
+{
+    private readonly object _sync = new();
+    private byte[] _pixels;
+    private GCHandle _pixelsHandle;
+    private uint _width;
+    private uint _height;
+    private uint _pitch;
+    private IImage _currentFrame;
+
+    public IImage CurrentFrame
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _currentFrame;
+            }
+        }
+    }
+
+    public uint Format(ref IntPtr opaque, IntPtr chroma, ref uint width, ref uint height, ref uint pitches, ref uint lines)
+    {
+        byte[] rv32 = [(byte)'R', (byte)'V', (byte)'3', (byte)'2'];
+        Marshal.Copy(rv32, 0, chroma, rv32.Length);
+
+        uint pitch = Align(width * 4, 32);
+        uint lineCount = Align(height, 32);
+
+        pitches = pitch;
+        lines = lineCount;
+
+        lock (_sync)
+        {
+            Allocate(width, height, pitch, lineCount);
+        }
+
+        return 1;
+    }
+
+    public void Cleanup(ref IntPtr opaque)
+    {
+    }
+
+    public IntPtr Lock(IntPtr opaque, IntPtr planes)
+    {
+        lock (_sync)
+        {
+            if (!_pixelsHandle.IsAllocated)
+            {
+                return IntPtr.Zero;
+            }
+
+            IntPtr buffer = _pixelsHandle.AddrOfPinnedObject();
+            Marshal.WriteIntPtr(planes, buffer);
+            return buffer;
+        }
+    }
+
+    public void Unlock(IntPtr opaque, IntPtr picture, IntPtr planes)
+    {
+    }
+
+    public void Display(IntPtr opaque, IntPtr picture)
+    {
+        byte[] snapshot;
+        uint width;
+        uint height;
+        uint pitch;
+
+        lock (_sync)
+        {
+            if (_pixels is null || _width == 0 || _height == 0)
+            {
+                return;
+            }
+
+            snapshot = (byte[])_pixels.Clone();
+            width = _width;
+            height = _height;
+            pitch = _pitch;
+        }
+
+        IImage image = CreateImage(snapshot, width, height, pitch);
+        lock (_sync)
+        {
+            IImage previous = _currentFrame;
+            _currentFrame = image;
+            previous?.Dispose();
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_sync)
+        {
+            _currentFrame?.Dispose();
+            _currentFrame = null;
+            if (_pixelsHandle.IsAllocated)
+            {
+                _pixelsHandle.Free();
+            }
+
+            _pixels = null;
+            _width = 0;
+            _height = 0;
+            _pitch = 0;
+        }
+    }
+
+    private void Allocate(uint width, uint height, uint pitch, uint lines)
+    {
+        int byteCount = checked((int)(pitch * lines));
+        if (_pixels != null && _pixels.Length == byteCount && _width == width && _height == height && _pitch == pitch)
+        {
+            return;
+        }
+
+        if (_pixelsHandle.IsAllocated)
+        {
+            _pixelsHandle.Free();
+        }
+
+        _pixels = new byte[byteCount];
+        _pixelsHandle = GCHandle.Alloc(_pixels, GCHandleType.Pinned);
+        _width = width;
+        _height = height;
+        _pitch = pitch;
+    }
+
+    private static IImage CreateImage(byte[] pixels, uint width, uint height, uint pitch)
+    {
+        var info = new SKImageInfo(checked((int)width), checked((int)height), SKColorType.Bgra8888, SKAlphaType.Premul);
+        using var bitmap = new SKBitmap(info);
+
+        unsafe
+        {
+            fixed (byte* sourceBase = pixels)
+            {
+                for (int y = 0; y < info.Height; y++)
+                {
+                    byte* source = sourceBase + checked((int)(y * pitch));
+                    void* dest = bitmap.GetAddress(0, y).ToPointer();
+                    Buffer.MemoryCopy(source, dest, info.RowBytes, info.RowBytes);
+                }
+            }
+        }
+
+        using SKImage image = SKImage.FromBitmap(bitmap);
+        using SKData data = image.Encode(SKEncodedImageFormat.Png, 100);
+        using var stream = new MemoryStream(data.ToArray());
+        return DrawingApi.Factory.LoadImage(stream);
+    }
+
+    private static uint Align(uint value, uint alignment)
+        => ((value + alignment - 1) / alignment) * alignment;
+}
+
+internal static class LibVlcRuntime
+{
+    public static string FindWindowsLibVlcDirectory()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return null;
+        }
+
+        string rid = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X86 => "win-x86",
+            Architecture.X64 => "win-x64",
+            Architecture.Arm64 => "win-arm64",
+            _ => null
+        };
+
+        if (rid is null)
+        {
+            return null;
+        }
+
+        string baseDirectory = AppContext.BaseDirectory;
+        string[] candidates =
+        [
+            Path.Combine(baseDirectory, "Components", "runtimes", rid, "libvlc", rid),
+            Path.Combine(baseDirectory, "Components", "libvlc", rid),
+            Path.Combine(baseDirectory, "libvlc", rid)
+        ];
+
+        foreach (string candidate in candidates)
+        {
+            if (File.Exists(Path.Combine(candidate, "libvlc.dll"))
+                && File.Exists(Path.Combine(candidate, "libvlccore.dll")))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 }

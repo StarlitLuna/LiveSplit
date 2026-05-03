@@ -72,6 +72,94 @@ public class SharePlatformMust
     }
 
     [Theory]
+    [InlineData(TimerPhase.NotRunning, "I got a $pb in $title.")]
+    [InlineData(TimerPhase.Ended, "I got a $pb in $title.")]
+    [InlineData(TimerPhase.Running, "I'm $delta in $title.")]
+    [InlineData(TimerPhase.Paused, "I'm $delta in $title.")]
+    public void SelectDefaultTwitterTemplateForTimerPhase(TimerPhase phase, string expected)
+    {
+        Assert.Equal(expected, ShareTemplateSettings.Default.GetTwitterFormat(phase));
+    }
+
+    [Fact]
+    public void SaveAndLoadShareTemplatesCrossPlatform()
+    {
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"{System.Guid.NewGuid():N}.xml");
+        try
+        {
+            var saved = new ShareTemplateSettings
+            {
+                TwitterCompletedFormat = "completed $title $pb",
+                TwitterRunningFormat = "running $title $delta",
+                TwitchFormat = "twitch $title",
+            };
+
+            var store = new ShareTemplateSettingsStore(path);
+            store.Save(saved);
+
+            ShareTemplateSettings loaded = store.Load();
+
+            Assert.Equal("completed $title $pb", loaded.TwitterCompletedFormat);
+            Assert.Equal("running $title $delta", loaded.TwitterRunningFormat);
+            Assert.Equal("twitch $title", loaded.TwitchFormat);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(path))
+            {
+                System.IO.File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
+    public void MigrateLegacyMasterTwitterTemplatesWhenNewStoreDoesNotExist()
+    {
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"{System.Guid.NewGuid():N}.xml");
+        string legacyPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"{System.Guid.NewGuid():N}.config");
+        try
+        {
+            System.IO.File.WriteAllText(
+                legacyPath,
+                """
+                <?xml version="1.0" encoding="utf-8"?>
+                <configuration>
+                  <userSettings>
+                    <LiveSplit.Web.Share.ShareSettings>
+                      <setting name="TwitterFormat" serializeAs="String">
+                        <value>legacy completed $title</value>
+                      </setting>
+                      <setting name="TwitterFormatRunning" serializeAs="String">
+                        <value>legacy running $delta</value>
+                      </setting>
+                    </LiveSplit.Web.Share.ShareSettings>
+                  </userSettings>
+                </configuration>
+                """);
+
+            var store = new ShareTemplateSettingsStore(path, legacyPath);
+
+            ShareTemplateSettings loaded = store.Load();
+
+            Assert.Equal("legacy completed $title", loaded.TwitterCompletedFormat);
+            Assert.Equal("legacy running $delta", loaded.TwitterRunningFormat);
+            Assert.Equal(ShareTemplateSettings.DefaultTwitchFormatText, loaded.TwitchFormat);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(path))
+            {
+                System.IO.File.Delete(path);
+            }
+
+            if (System.IO.File.Exists(legacyPath))
+            {
+                System.IO.File.Delete(legacyPath);
+            }
+        }
+    }
+
+    [Theory]
     [InlineData("https://livesplit.org/twitch/#access_token=abc123&scope=channel%3Amanage%3Abroadcast", "abc123")]
     [InlineData("http://livesplit.org/twitch/?ignored=true#access_token=token_value_42&token_type=bearer", "token_value_42")]
     [InlineData("token_value_42", "token_value_42")]

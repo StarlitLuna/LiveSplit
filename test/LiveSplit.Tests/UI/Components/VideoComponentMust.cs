@@ -1,4 +1,11 @@
 using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Drawing.Text;
+using System.Numerics;
 using System.Xml;
 
 using LiveSplit.Model;
@@ -7,6 +14,7 @@ using LiveSplit.Model.RunFactories;
 using LiveSplit.Options.SettingsFactories;
 using LiveSplit.UI;
 using LiveSplit.UI.Components;
+using LiveSplit.UI.Drawing;
 
 using Xunit;
 
@@ -80,6 +88,81 @@ public class VideoComponentMust
         Assert.True(player.Disposed);
     }
 
+    [Fact]
+    public void DrawCurrentVideoFrameWhenPlayerHasDecodedFrame()
+    {
+        LiveSplitState state = CreateState();
+        var frame = new FakeImage(16, 9);
+        var player = new FakeVideoPlayer { CurrentFrame = frame };
+        var component = new VideoComponent(state, player);
+        var model = new TimerModel { CurrentState = state };
+        var ctx = new RecordingDrawingContext();
+
+        model.Start();
+        component.DrawHorizontal(ctx, state, 90);
+
+        Assert.Same(frame, ctx.DrawnImage);
+        Assert.Equal(new RectangleF(0, 0, component.HorizontalWidth, 90), ctx.DrawnDestination);
+        Assert.Equal(0, ctx.FilledRectangles);
+    }
+
+    [Fact]
+    public void ConvertReceivedLibVlcFrameIntoSharedDrawingImage()
+    {
+        IDrawingFactory previousFactory = null;
+        try
+        {
+            previousFactory = DrawingApi.Factory;
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        var factory = new RecordingDrawingFactory();
+        DrawingApi.Register(factory);
+        using var buffer = new LibVlcVideoFrameBuffer();
+        IntPtr chroma = Marshal.AllocHGlobal(4);
+        IntPtr planes = Marshal.AllocHGlobal(IntPtr.Size);
+
+        try
+        {
+            IntPtr opaque = IntPtr.Zero;
+            uint width = 2;
+            uint height = 1;
+            uint pitch = 0;
+            uint lines = 0;
+
+            Assert.Equal(1u, buffer.Format(ref opaque, chroma, ref width, ref height, ref pitch, ref lines));
+            IntPtr picture = buffer.Lock(IntPtr.Zero, planes);
+            var pixels = new byte[pitch * lines];
+            pixels[0] = 0x10;
+            pixels[1] = 0x20;
+            pixels[2] = 0x30;
+            pixels[3] = 0xFF;
+            pixels[4] = 0x40;
+            pixels[5] = 0x50;
+            pixels[6] = 0x60;
+            pixels[7] = 0xFF;
+            Marshal.Copy(pixels, 0, picture, pixels.Length);
+
+            buffer.Display(IntPtr.Zero, picture);
+
+            Assert.Same(factory.LoadedImage, buffer.CurrentFrame);
+            Assert.True(
+                factory.LoadedBytes.Take(4).SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47 }),
+                "Expected the received video frame to be encoded through the PNG image path.");
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(chroma);
+            Marshal.FreeHGlobal(planes);
+            if (previousFactory != null)
+            {
+                DrawingApi.Register(previousFactory);
+            }
+        }
+    }
+
     private static LiveSplitState CreateState()
     {
         IRun run = new StandardRunFactory().Create(new StandardComparisonGeneratorsFactory());
@@ -95,7 +178,7 @@ public class VideoComponentMust
         };
     }
 
-    private sealed class FakeVideoPlayer : IVideoPlayer
+    private sealed class FakeVideoPlayer : IVideoPlayer, IVideoFrameSource
     {
         public string LoadedPath { get; private set; }
         public TimeSpan? LastTime { get; private set; }
@@ -103,6 +186,7 @@ public class VideoComponentMust
         public bool Paused { get; private set; }
         public bool Stopped { get; private set; }
         public bool Disposed { get; private set; }
+        public IImage CurrentFrame { get; set; }
 
         public void Load(string path)
         {
@@ -133,5 +217,93 @@ public class VideoComponentMust
         {
             Disposed = true;
         }
+    }
+
+    private sealed class FakeImage(int width, int height) : IImage
+    {
+        public int Width { get; } = width;
+        public int Height { get; } = height;
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class RecordingDrawingFactory : IDrawingFactory
+    {
+        public FakeImage LoadedImage { get; } = new(2, 1);
+        public byte[] LoadedBytes { get; private set; }
+
+        public ISolidBrush CreateSolidBrush(Color color) => throw new NotSupportedException();
+        public ILinearGradientBrush CreateLinearGradientBrush(PointF start, PointF end, Color startColor, Color endColor)
+            => throw new NotSupportedException();
+        public IPen CreatePen(Color color, float width) => throw new NotSupportedException();
+        public IFont CreateFont(string familyName, float size, FontStyle style, GraphicsUnit unit)
+            => throw new NotSupportedException();
+        public IImage CreateImage(int width, int height) => throw new NotSupportedException();
+
+        public IImage LoadImage(Stream stream)
+        {
+            using var memory = new MemoryStream();
+            stream.CopyTo(memory);
+            LoadedBytes = memory.ToArray();
+            return LoadedImage;
+        }
+
+        public IGraphicsPath CreateGraphicsPath() => throw new NotSupportedException();
+        public ITextFormat CreateTextFormat() => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingDrawingContext : IDrawingContext
+    {
+        public IImage DrawnImage { get; private set; }
+        public RectangleF DrawnDestination { get; private set; }
+        public int FilledRectangles { get; private set; }
+
+        public SmoothingMode SmoothingMode { get; set; }
+        public TextRenderingHint TextRenderingHint { get; set; }
+        public InterpolationMode InterpolationMode { get; set; }
+        public CompositingQuality CompositingQuality { get; set; }
+        public CompositingMode CompositingMode { get; set; }
+        public PixelOffsetMode PixelOffsetMode { get; set; }
+        public float DpiX => 96;
+        public float DpiY => 96;
+
+        public void FillRectangle(IBrush brush, RectangleF rect) => FilledRectangles++;
+        public void FillRectangle(IBrush brush, float x, float y, float width, float height) => FilledRectangles++;
+        public void DrawRectangle(IPen pen, RectangleF rect) => throw new NotSupportedException();
+        public void DrawLine(IPen pen, PointF p1, PointF p2) => throw new NotSupportedException();
+        public void FillPolygon(IBrush brush, PointF[] points) => throw new NotSupportedException();
+        public void FillEllipse(IBrush brush, float x, float y, float width, float height) => throw new NotSupportedException();
+
+        public void DrawImage(IImage image, RectangleF destRect)
+        {
+            DrawnImage = image;
+            DrawnDestination = destRect;
+        }
+
+        public void DrawImage(IImage image, Rectangle destRect, Rectangle srcRect)
+            => DrawImage(image, new RectangleF(destRect.X, destRect.Y, destRect.Width, destRect.Height));
+
+        public void DrawImageWithOpacity(IImage image, Rectangle destRect, Rectangle srcRect, float opacity, float blurSigma = 0f)
+            => DrawImage(image, destRect, srcRect);
+
+        public void DrawString(string text, IFont font, IBrush brush, RectangleF bounds, ITextFormat format)
+            => throw new NotSupportedException();
+
+        public SizeF MeasureString(string text, IFont font, int maxWidth, ITextFormat format)
+            => throw new NotSupportedException();
+
+        public void FillPath(IBrush brush, IGraphicsPath path) => throw new NotSupportedException();
+        public void DrawPath(IPen pen, IGraphicsPath path) => throw new NotSupportedException();
+        public void TranslateTransform(float dx, float dy) => throw new NotSupportedException();
+        public void ScaleTransform(float sx, float sy) => throw new NotSupportedException();
+        public void ResetTransform() => throw new NotSupportedException();
+        public Matrix3x2 GetTransform() => Matrix3x2.Identity;
+        public void ClearClip() => throw new NotSupportedException();
+        public void SetClip(RectangleF rect) => throw new NotSupportedException();
+        public void IntersectClip(RectangleF rect) => throw new NotSupportedException();
+        public bool IsVisible(RectangleF rect) => true;
+        public IDrawingState Save() => throw new NotSupportedException();
     }
 }

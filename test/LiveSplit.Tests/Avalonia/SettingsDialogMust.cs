@@ -33,6 +33,7 @@ public class SettingsDialogMust
             "\"Double Tap Prevention\"",
             "\"Hotkey Delay (Seconds):\"",
             "\"Allow Gamepads as Hotkeys\"",
+            "IsEnabled = false",
             "\"Hotkey Profiles\"",
             "\"Active Hotkey Profile:\"",
             "\"New\"",

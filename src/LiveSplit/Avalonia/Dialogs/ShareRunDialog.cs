@@ -26,6 +26,8 @@ public sealed class ShareRunDialog : Window
     private readonly IRun _run;
     private readonly TaskCompletionSource<bool> _result = new();
     private readonly IReadOnlyList<SharePlatformChoice> _platforms;
+    private readonly ShareTemplateSettingsStore _templateStore;
+    private readonly ShareTemplateSettings _templates;
     private readonly List<Button> _insertButtons = [];
     private ComboBox _platformBox;
     private TextBlock _descriptionBlock;
@@ -40,6 +42,8 @@ public sealed class ShareRunDialog : Window
         _screenshotPng = screenshotPng;
         _run = SelectRunForSharing(_state);
         _platforms = BuildPlatformList();
+        _templateStore = ShareTemplateSettingsStore.CreateDefault();
+        _templates = _templateStore.Load();
 
         Title = "Share Run";
         Width = 560;
@@ -231,11 +235,11 @@ public sealed class ShareRunDialog : Window
 
         if (platform == SharePlatformChoice.Twitter)
         {
-            _notesBox.Text = ShareNotesFormatter.DefaultTwitterFormat(_state.CurrentPhase);
+            _notesBox.Text = _templates.GetTwitterFormat(_state.CurrentPhase);
         }
         else if (platform == SharePlatformChoice.Twitch)
         {
-            _notesBox.Text = ShareNotesFormatter.DefaultTwitchFormat();
+            _notesBox.Text = _templates.GetTwitchFormat();
         }
         else if (platform == SharePlatformChoice.Imgur)
         {
@@ -256,6 +260,7 @@ public sealed class ShareRunDialog : Window
     private async Task Submit()
     {
         SharePlatformChoice platform = CurrentPlatform;
+        PersistCurrentTemplate(platform);
         if (platform == SharePlatformChoice.Twitter)
         {
             Twitter.Instance.SubmitRun(_run, method: _state.CurrentTimingMethod, comment: FormatNotes());
@@ -280,6 +285,31 @@ public sealed class ShareRunDialog : Window
         else if (platform == SharePlatformChoice.SpeedrunCom)
         {
             await SubmitToSpeedrunCom();
+        }
+    }
+
+    private void PersistCurrentTemplate(SharePlatformChoice platform)
+    {
+        if (platform == SharePlatformChoice.Twitter)
+        {
+            _templates.SetTwitterFormat(_state.CurrentPhase, _notesBox.Text ?? string.Empty);
+        }
+        else if (platform == SharePlatformChoice.Twitch)
+        {
+            _templates.TwitchFormat = _notesBox.Text ?? string.Empty;
+        }
+        else
+        {
+            return;
+        }
+
+        try
+        {
+            _templateStore.Save(_templates);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
         }
     }
 

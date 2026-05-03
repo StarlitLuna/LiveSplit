@@ -116,15 +116,29 @@ public sealed class SkiaDrawingContext : IDrawingContext
         _canvas.DrawImage(skImage, ToSk(srcRect), ToSk(destRect));
     }
 
-    public void DrawImageWithOpacity(IImage image, Rectangle destRect, Rectangle srcRect, float opacity)
+    public void DrawImageWithOpacity(IImage image, Rectangle destRect, Rectangle srcRect, float opacity, float blurSigma = 0f)
     {
         var skImage = ((SkiaImage)image).SkImage;
-        using var paint = new SKPaint
+        SKImageFilter imageFilter = null;
+        try
         {
-            Color = new SKColor(255, 255, 255, (byte)(Math.Clamp(opacity, 0f, 1f) * 255)),
-            IsAntialias = IsAntialias,
-        };
-        _canvas.DrawImage(skImage, ToSk(srcRect), ToSk(destRect), paint);
+            if (blurSigma > 0f)
+            {
+                imageFilter = SKImageFilter.CreateBlur(blurSigma, blurSigma);
+            }
+
+            using var paint = new SKPaint
+            {
+                Color = new SKColor(255, 255, 255, (byte)(Math.Clamp(opacity, 0f, 1f) * 255)),
+                IsAntialias = IsAntialias,
+                ImageFilter = imageFilter,
+            };
+            _canvas.DrawImage(skImage, ToSk(srcRect), ToSk(destRect), paint);
+        }
+        finally
+        {
+            imageFilter?.Dispose();
+        }
     }
 
     public void DrawString(string text, IFont font, IBrush brush, RectangleF bounds, ITextFormat format)

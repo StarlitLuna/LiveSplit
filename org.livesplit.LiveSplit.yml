@@ -11,6 +11,7 @@ finish-args:
   - --share=network            # speedrun.com / update checks
   - --socket=x11
   - --socket=wayland
+  - --socket=pulseaudio
   - --device=dri
   - --filesystem=home          # so users can save splits/layouts wherever
   # Autosplitter support: --allow=devel lifts the seccomp filter that blocks

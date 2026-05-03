@@ -28,8 +28,8 @@ namespace LiveSplit.Avalonia;
 /// and pumps repaints at the configured refresh rate so the running clock updates without user
 /// interaction. The <see cref="SkiaRenderControl"/> pulls state + renderer from here on each paint.
 ///
-/// On <see cref="Dispose"/>, settings.cfg, the run (if dirty), and the layout (if dirty) are
-/// written back through their XML savers.
+/// On <see cref="Dispose"/>, settings.cfg is written back. Dirty runs/layouts are only saved
+/// through TimerWindow's explicit save prompts, matching master's shutdown behavior.
 /// </summary>
 public sealed class AvaloniaTimerHost : IDisposable
 {
@@ -83,7 +83,7 @@ public sealed class AvaloniaTimerHost : IDisposable
 
         _timerModel = new TimerModel();
         Model = new DoubleTapPrevention(_timerModel) { CurrentState = State };
-        State.CurrentHotkeyProfile = HotkeyProfile.DefaultHotkeyProfileName;
+        State.CurrentHotkeyProfile = SelectInitialHotkeyProfile(settings);
         InTimerOnlyMode = loadedFallbackLayout && string.IsNullOrEmpty(resolvedSplitsPath);
 
         // Restore the per-splits-file timing method and hotkey profile from the MRU entry.
@@ -143,8 +143,6 @@ public sealed class AvaloniaTimerHost : IDisposable
             {
                 State.Settings.LastComparison = State.CurrentComparison;
                 UpdateRecentSplitsTimingForCurrentRun();
-                SaveRunIfDirty();
-                SaveLayoutIfDirty();
                 SaveSettingsToDisk(State.Settings);
             }
         }
@@ -165,6 +163,15 @@ public sealed class AvaloniaTimerHost : IDisposable
         try
         {
             _hotkeys?.Dispose();
+        }
+        catch (Exception e)
+        {
+            Options.Log.Error(e);
+        }
+
+        try
+        {
+            DisposeLayoutComponents(State.Layout);
         }
         catch (Exception e)
         {
@@ -333,11 +340,102 @@ public sealed class AvaloniaTimerHost : IDisposable
 
     private void ApplyLayout(ILayout layout)
     {
+        ILayout previousLayout = State.Layout;
+        if (!ReferenceEquals(previousLayout, layout))
+        {
+            DisposeRemovedComponents(previousLayout, layout);
+            ActivateAddedComponents(previousLayout, layout);
+        }
+
         State.Layout = layout;
         State.LayoutSettings = layout.Settings;
         Renderer.VisibleComponents = layout.LayoutComponents.Select(lc => lc.Component);
         InTimerOnlyMode = IsTimerOnlyLayout(layout);
         LayoutApplied?.Invoke();
+    }
+
+    private static string SelectInitialHotkeyProfile(ISettings settings)
+    {
+        if (settings?.HotkeyProfiles is null || settings.HotkeyProfiles.Count == 0)
+        {
+            return HotkeyProfile.DefaultHotkeyProfileName;
+        }
+
+        if (settings.HotkeyProfiles.ContainsKey(HotkeyProfile.DefaultHotkeyProfileName))
+        {
+            return HotkeyProfile.DefaultHotkeyProfileName;
+        }
+
+        return settings.HotkeyProfiles.First().Key;
+    }
+
+    private static void DisposeRemovedComponents(ILayout previousLayout, ILayout nextLayout)
+    {
+        if (previousLayout is null)
+        {
+            return;
+        }
+
+        HashSet<IComponent> nextComponents = nextLayout?.LayoutComponents
+            .Select(x => x.Component)
+            .Where(x => x is not null)
+            .ToHashSet() ?? [];
+
+        foreach (IComponent component in previousLayout.LayoutComponents
+            .Select(x => x.Component)
+            .Where(x => x is not null && !nextComponents.Contains(x))
+            .Distinct())
+        {
+            DeactivateAndDispose(component);
+        }
+    }
+
+    private static void ActivateAddedComponents(ILayout previousLayout, ILayout nextLayout)
+    {
+        if (nextLayout is null)
+        {
+            return;
+        }
+
+        HashSet<IComponent> previousComponents = previousLayout?.LayoutComponents
+            .Select(x => x.Component)
+            .Where(x => x is not null)
+            .ToHashSet() ?? [];
+
+        foreach (IDeactivatableComponent component in nextLayout.LayoutComponents
+            .Select(x => x.Component)
+            .OfType<IDeactivatableComponent>()
+            .Where(x => !previousComponents.Contains(x))
+            .Distinct())
+        {
+            component.Activated = true;
+        }
+    }
+
+    private static void DisposeLayoutComponents(ILayout layout)
+    {
+        if (layout is null)
+        {
+            return;
+        }
+
+        foreach (IComponent component in layout.LayoutComponents
+            .Select(x => x.Component)
+            .Where(x => x is not null)
+            .Distinct())
+        {
+            DeactivateAndDispose(component);
+        }
+    }
+
+    private static void DeactivateAndDispose(IComponent component)
+    {
+        if (component is IDeactivatableComponent deactivatable)
+        {
+            deactivatable.Activated = false;
+        }
+
+        component.Dispose();
     }
 
     /// <summary>
@@ -745,9 +843,16 @@ public sealed class AvaloniaTimerHost : IDisposable
 
         try
         {
+            State.Run.FixSplits();
+            IRun runToSave = CreateRunSnapshotForSave();
             using FileStream stream = File.Open(State.Run.FilePath, FileMode.Create, FileAccess.Write);
-            new XMLRunSaver().Save(State.Run, stream);
+            new XMLRunSaver().Save(runToSave, stream);
             State.Run.HasChanged = false;
+            State.Settings.AddToRecentSplits(
+                State.Run.FilePath,
+                runToSave,
+                State.CurrentTimingMethod,
+                State.CurrentHotkeyProfile);
             return true;
         }
         catch (Exception e)
@@ -755,6 +860,19 @@ public sealed class AvaloniaTimerHost : IDisposable
             Options.Log.Error(e);
             return false;
         }
+    }
+
+    private IRun CreateRunSnapshotForSave()
+    {
+        if (State.CurrentPhase == TimerPhase.NotRunning)
+        {
+            return State.Run;
+        }
+
+        var stateCopy = (LiveSplitState)State.Clone();
+        var modelCopy = new TimerModel { CurrentState = stateCopy };
+        modelCopy.Reset();
+        return stateCopy.Run;
     }
 
     public bool SaveRunAs(string path)

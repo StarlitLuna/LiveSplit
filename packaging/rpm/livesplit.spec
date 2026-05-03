@@ -18,6 +18,8 @@ Source3:        LICENSE
 ExclusiveArch:  x86_64
 BuildRequires:  desktop-file-utils
 Requires:       hicolor-icon-theme
+Requires:       vlc-libs
+Requires:       vlc-plugin-ffmpeg
 
 %description
 LiveSplit is a timer program for speedrunners that tracks splits, comparisons,

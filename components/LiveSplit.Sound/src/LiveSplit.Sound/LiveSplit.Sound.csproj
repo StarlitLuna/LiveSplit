@@ -6,11 +6,27 @@
 
   <ItemGroup>
     <PackageReference Include="LibVLCSharp" Version="3.9.6" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="$(LsSrcPath)\LiveSplit.Core\LiveSplit.Core.csproj" Private="false" ExcludeAssets="runtime" />
     <ProjectReference Include="$(LsSrcPath)\UpdateManager\UpdateManager.csproj" Private="false" ExcludeAssets="runtime" />
   </ItemGroup>
+
+  <Target Name="StageLibVlcWindowsRuntimeAssets" AfterTargets="Build">
+    <ItemGroup>
+      <_LibVlcWinX64 Include="$(OutputPath)libvlc\win-x64\**\*" />
+      <_LibVlcWinX86 Include="$(OutputPath)libvlc\win-x86\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LibVlcWinX64)"
+          DestinationFiles="@(_LibVlcWinX64->'$(OutputPath)runtimes\win-x64\libvlc\win-x64\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(_LibVlcWinX64)' != ''" />
+    <Copy SourceFiles="@(_LibVlcWinX86)"
+          DestinationFiles="@(_LibVlcWinX86->'$(OutputPath)runtimes\win-x86\libvlc\win-x86\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(_LibVlcWinX86)' != ''" />
+  </Target>
 
 </Project>

@@ -206,13 +206,13 @@ public sealed partial class TimerWindow : Window
                 "Save Splits?",
                 "Your splits have been updated but not yet saved.\nDo you want to save your splits now?",
                 MessageDialog.Buttons.YesNoCancel);
-            MessageResult r = await dlg.ShowDialogResultAsync(this);
+            MessageResult r = await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogResultAsync(this));
             if (r == MessageResult.Cancel)
             {
                 return false;
             }
 
-            if (r == MessageResult.Yes && !await SaveSplits())
+            if (r == MessageResult.Yes && !await SaveSplits(promptPBMessage: false))
             {
                 return false;
             }
@@ -224,7 +224,7 @@ public sealed partial class TimerWindow : Window
                 "Save Layout?",
                 "Your layout has been updated but not yet saved.\nDo you want to save your layout now?",
                 MessageDialog.Buttons.YesNoCancel);
-            MessageResult r = await dlg.ShowDialogResultAsync(this);
+            MessageResult r = await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogResultAsync(this));
             if (r == MessageResult.Cancel)
             {
                 return false;
@@ -257,7 +257,7 @@ public sealed partial class TimerWindow : Window
                     "Update Times?",
                     "You have beaten some of your best times.\nDo you want to update them?",
                     MessageDialog.Buttons.YesNoCancel);
-                MessageResult result = await dlg.ShowDialogResultAsync(this);
+                MessageResult result = await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogResultAsync(this));
                 if (result == MessageResult.Cancel)
                 {
                     return;
@@ -316,8 +316,8 @@ public sealed partial class TimerWindow : Window
 
         if (this.FindControl<SkiaRenderControl>("Canvas") is SkiaRenderControl canvas)
         {
-            bool passThrough = settings.MousePassThroughWhileRunning
-                && Host.State.CurrentPhase == TimerPhase.Running;
+            bool passThrough = ShouldUseMousePassThrough(settings, Host.State.CurrentPhase, IsActive);
+            IsHitTestVisible = !passThrough;
             canvas.IsHitTestVisible = !passThrough;
         }
     }
@@ -348,7 +348,10 @@ public sealed partial class TimerWindow : Window
 
         if (layout.X != 0 || layout.Y != 0)
         {
-            Position = new global::Avalonia.PixelPoint(layout.X, layout.Y);
+            var desired = new global::Avalonia.PixelPoint(layout.X, layout.Y);
+            var windowSize = new global::Avalonia.Size(Width, Height);
+            IEnumerable<global::Avalonia.PixelRect> screens = Screens?.All?.Select(x => x.WorkingArea) ?? [];
+            Position = ClampLayoutPosition(desired, windowSize, screens);
         }
     }
 
@@ -398,6 +401,41 @@ public sealed partial class TimerWindow : Window
             Math.Max(1, (int)Math.Round(windowWidth) - BorderlessWidthCompensation),
             Math.Max(1, (int)Math.Round(windowHeight) - BorderlessHeightCompensation));
 
+    internal static bool ShouldUseMousePassThrough(LayoutSettings settings, TimerPhase phase, bool isForeground)
+        => settings?.MousePassThroughWhileRunning == true
+            && phase == TimerPhase.Running
+            && !isForeground;
+
+    internal static global::Avalonia.PixelPoint ClampLayoutPosition(
+        global::Avalonia.PixelPoint position,
+        global::Avalonia.Size windowSize,
+        IEnumerable<global::Avalonia.PixelRect> workingAreas)
+    {
+        global::Avalonia.PixelRect[] areas = workingAreas?.ToArray() ?? [];
+        if (areas.Length == 0)
+        {
+            return position;
+        }
+
+        int width = Math.Max(1, (int)Math.Ceiling(windowSize.Width));
+        int height = Math.Max(1, (int)Math.Ceiling(windowSize.Height));
+        global::Avalonia.PixelRect area = areas.FirstOrDefault(x =>
+            position.X < x.X + x.Width
+            && position.X + width > x.X
+            && position.Y < x.Y + x.Height
+            && position.Y + height > x.Y);
+        if (area.Width <= 0 || area.Height <= 0)
+        {
+            area = areas[0];
+        }
+
+        int maxX = Math.Max(area.X, area.X + area.Width - width);
+        int maxY = Math.Max(area.Y, area.Y + area.Height - height);
+        return new global::Avalonia.PixelPoint(
+            Math.Clamp(position.X, area.X, maxX),
+            Math.Clamp(position.Y, area.Y, maxY));
+    }
+
 #pragma warning disable CS0618 // Avalonia 11 marks FileDialogFilter / OpenFileDialog obsolete in favor of StorageProvider; migration is tracked separately.
     private async Task OpenSplits()
     {
@@ -443,7 +481,7 @@ public sealed partial class TimerWindow : Window
         }
 
         var dlg = new TextInputDialog("Open Splits From URL", "Enter the URL of a .lss file:");
-        string url = await dlg.ShowDialogAsync(this);
+        string url = await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this));
         if (string.IsNullOrEmpty(url))
         {
             return;
@@ -464,7 +502,7 @@ public sealed partial class TimerWindow : Window
         }
 
         var dlg = new TextInputDialog("Open Layout From URL", "Enter the URL of a .lsl file:");
-        string url = await dlg.ShowDialogAsync(this);
+        string url = await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this));
         if (string.IsNullOrEmpty(url))
         {
             return;
@@ -486,7 +524,7 @@ public sealed partial class TimerWindow : Window
             Filters = filters.ToList(),
         };
 
-        string[] paths = await picker.ShowAsync(this);
+        string[] paths = await RunWithNormalHotkeysSuppressed(() => picker.ShowAsync(this));
         return paths is { Length: > 0 } ? paths[0] : null;
     }
 
@@ -499,19 +537,25 @@ public sealed partial class TimerWindow : Window
             Filters = filters.ToList(),
         };
 
-        return await picker.ShowAsync(this);
+        return await RunWithNormalHotkeysSuppressed(() => picker.ShowAsync(this));
     }
-    private async Task<bool> SaveSplits()
+
+    private async Task<bool> SaveSplits(bool promptPBMessage = true)
     {
         if (!string.IsNullOrEmpty(Host.State.Run?.FilePath))
         {
+            if (!await ConfirmSaveAsPersonalBest(promptPBMessage))
+            {
+                return false;
+            }
+
             return Host.SaveRun();
         }
 
-        return await SaveSplitsAs();
+        return await SaveSplitsAs(promptPBMessage);
     }
 
-    private async Task<bool> SaveSplitsAs()
+    private async Task<bool> SaveSplitsAs(bool promptPBMessage = true)
     {
         string path = await PickSaveFile("Save Splits", "lss", new[]
         {
@@ -519,7 +563,52 @@ public sealed partial class TimerWindow : Window
             new FileDialogFilter { Name = "All Files", Extensions = { "*" } },
         });
 
-        return !string.IsNullOrEmpty(path) && Host.SaveRunAs(path);
+        if (string.IsNullOrEmpty(path) || !await ConfirmSaveAsPersonalBest(promptPBMessage))
+        {
+            return false;
+        }
+
+        return Host.SaveRunAs(path);
+    }
+
+    private async Task<bool> ConfirmSaveAsPersonalBest(bool promptPBMessage)
+    {
+        if (!promptPBMessage || !ShouldPromptSaveAsPersonalBest())
+        {
+            return true;
+        }
+
+        var dlg = new MessageDialog(
+            "Save as Personal Best?",
+            "This run did not beat your current splits. Would you like to save this run as a Personal Best?",
+            MessageDialog.Buttons.YesNoCancel);
+        MessageResult result = await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogResultAsync(this));
+        if (result == MessageResult.Cancel)
+        {
+            return false;
+        }
+
+        if (result == MessageResult.Yes)
+        {
+            Host.Model.ResetAndSetAttemptAsPB();
+        }
+
+        return true;
+    }
+
+    private bool ShouldPromptSaveAsPersonalBest()
+    {
+        IRun run = Host.State.Run;
+        if (run is null || run.Count == 0)
+        {
+            return false;
+        }
+
+        TimingMethod method = Host.State.CurrentTimingMethod;
+        return Host.State.CurrentPhase is TimerPhase.Running or TimerPhase.Paused
+            || (Host.State.CurrentPhase == TimerPhase.Ended
+                && run.Last().PersonalBestSplitTime[method] != null
+                && run.Last().SplitTime[method] >= run.Last().PersonalBestSplitTime[method]);
     }
 
     private async Task<bool> SaveLayout()
@@ -569,7 +658,7 @@ public sealed partial class TimerWindow : Window
         catch (Exception ex)
         {
             Log.Error(ex);
-            await new MessageDialog("Download Failed", ex.Message).ShowDialogAsync(this);
+            await RunWithNormalHotkeysSuppressed(() => new MessageDialog("Download Failed", ex.Message).ShowDialogAsync(this));
             return null;
         }
     }
@@ -577,7 +666,7 @@ public sealed partial class TimerWindow : Window
     private async Task OpenEditSplits()
     {
         var dlg = new RunEditorDialog(Host.State);
-        if (await dlg.ShowDialogAsync(this))
+        if (await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this)))
         {
             InvalidateVisual();
         }
@@ -586,7 +675,7 @@ public sealed partial class TimerWindow : Window
     private async Task OpenEditLayout()
     {
         var dlg = new LayoutEditorDialog(Host.State.Layout, Host.State);
-        if (await dlg.ShowDialogAsync(this))
+        if (await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this)))
         {
             InvalidateVisual();
         }
@@ -595,8 +684,9 @@ public sealed partial class TimerWindow : Window
     private async Task OpenLayoutSettings()
     {
         var dlg = new LayoutSettingsDialog(Host.State.LayoutSettings);
-        if (await dlg.ShowDialogAsync(this))
+        if (await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this)))
         {
+            Host.State.Layout.HasChanged = true;
             ApplyLayoutWindowSettings();
             InvalidateVisual();
         }
@@ -607,26 +697,18 @@ public sealed partial class TimerWindow : Window
         ISettings previous = (ISettings)Host.State.Settings.Clone();
         ISettings edited = (ISettings)Host.State.Settings.Clone();
         var dlg = new SettingsDialog(edited, Host.State.CurrentHotkeyProfile);
-        Host.SetNormalHotkeysSuppressed(true);
-        try
+        if (await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this)))
         {
-            if (await dlg.ShowDialogAsync(this))
-            {
-                Host.ApplySettings(edited, dlg.SelectedHotkeyProfile);
-                ApplyServerSettings(previous, edited);
-                InvalidateVisual();
-            }
-        }
-        finally
-        {
-            Host.SetNormalHotkeysSuppressed(false);
+            Host.ApplySettings(edited, dlg.SelectedHotkeyProfile);
+            ApplyServerSettings(previous, edited);
+            InvalidateVisual();
         }
     }
 
     private async Task OpenSetSize()
     {
         var dlg = new SetSizeForm(this);
-        bool ok = await dlg.ShowDialogAsync(this);
+        bool ok = await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this));
         if (!ok)
         {
             return;
@@ -655,14 +737,14 @@ public sealed partial class TimerWindow : Window
 
     private async Task OpenShare()
     {
-        var dlg = new ShareRunDialog(Host.State, Host.State.Settings, RenderToPng);
-        await dlg.ShowDialogAsync(this);
+        var dlg = new ShareRunDialog((LiveSplitState)Host.State.Clone(), Host.State.Settings, RenderToPng);
+        await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this));
     }
 
     private async Task OpenAbout()
     {
         var dlg = new AboutBox();
-        await dlg.ShowDialog(this);
+        await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialog(this));
     }
 
     private byte[] RenderToPng()
@@ -693,8 +775,8 @@ public sealed partial class TimerWindow : Window
             OpenSplits = OpenSplits,
             OpenSplitsFromUrl = OpenSplitsFromUrl,
             EditSplitsHistory = EditSplitsHistory,
-            SaveSplits = SaveSplits,
-            SaveSplitsAs = SaveSplitsAs,
+            SaveSplits = () => SaveSplits(),
+            SaveSplitsAs = () => SaveSplitsAs(),
             CloseSplits = CloseSplits,
             OpenRecentSplits = OpenRecentSplits,
             EditLayout = OpenEditLayout,
@@ -788,7 +870,7 @@ public sealed partial class TimerWindow : Window
     private async Task EditSplitsHistory()
     {
         var dlg = new EditHistoryDialog(Host.State.Settings.RecentSplits.Select(x => x.Path));
-        if (await dlg.ShowDialogAsync(this))
+        if (await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this)))
         {
             Host.SetRecentSplitsHistory(dlg.History);
         }
@@ -797,7 +879,7 @@ public sealed partial class TimerWindow : Window
     private async Task EditLayoutHistory()
     {
         var dlg = new EditHistoryDialog(Host.State.Settings.RecentLayouts);
-        if (await dlg.ShowDialogAsync(this))
+        if (await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this)))
         {
             Host.SetRecentLayoutsHistory(dlg.History);
         }
@@ -845,11 +927,11 @@ public sealed partial class TimerWindow : Window
     {
         if (CurrentServerState() == ServerStateType.TCP)
         {
-            StopServer();
+            StopServer(updateStartupSetting: false);
         }
         else if (CurrentServerState() == ServerStateType.Off)
         {
-            StartServer(ServerStartupType.TCP);
+            StartServer(ServerStartupType.TCP, updateStartupSetting: false);
         }
     }
 
@@ -857,11 +939,11 @@ public sealed partial class TimerWindow : Window
     {
         if (CurrentServerState() == ServerStateType.Websocket)
         {
-            StopServer();
+            StopServer(updateStartupSetting: false);
         }
         else if (CurrentServerState() == ServerStateType.Off)
         {
-            StartServer(ServerStartupType.Websocket);
+            StartServer(ServerStartupType.Websocket, updateStartupSetting: false);
         }
     }
 
@@ -906,7 +988,7 @@ public sealed partial class TimerWindow : Window
         {
             var item = new MenuItem
             {
-                Header = RaceMenuFormatter.FormatOpenRaceTitle(race),
+                Header = $"{RaceMenuFormatter.FormatOpenRaceTitle(race)} - {RaceMenuFormatter.FormatOpenRaceAction(provider.JoinCapability)}",
                 Tag = race.Id
             };
             item.Click += async (_, _) => await JoinRaceOrOpenViewer(provider, race);
@@ -932,7 +1014,7 @@ public sealed partial class TimerWindow : Window
             {
                 if (!race.IsParticipant(provider.Username))
                 {
-                    OpenRaceViewer(race);
+                    await JoinRaceOrOpenViewer(provider, race);
                 }
                 else
                 {
@@ -957,7 +1039,7 @@ public sealed partial class TimerWindow : Window
     {
         try
         {
-            if (provider.JoinRace != null)
+            if (provider.JoinCapability == RaceJoinCapability.JoinRace && provider.JoinRace != null)
             {
                 provider.JoinRace(Host.Model, race.Id);
             }
@@ -969,7 +1051,7 @@ public sealed partial class TimerWindow : Window
         catch (Exception ex)
         {
             Log.Error(ex);
-            await new MessageDialog("Enter Race", ex.Message).ShowDialogAsync(this);
+            await RunWithNormalHotkeysSuppressed(() => new MessageDialog("Enter Race", ex.Message).ShowDialogAsync(this));
         }
     }
 
@@ -998,13 +1080,13 @@ public sealed partial class TimerWindow : Window
         catch (Exception ex)
         {
             Log.Error(ex);
-            await new MessageDialog("New Race", ex.Message).ShowDialogAsync(this);
+            await RunWithNormalHotkeysSuppressed(() => new MessageDialog("New Race", ex.Message).ShowDialogAsync(this));
             return;
         }
 
-        await new MessageDialog(
+        await RunWithNormalHotkeysSuppressed(() => new MessageDialog(
             "New Race",
-            $"{provider.ProviderName} does not expose race creation.").ShowDialogAsync(this);
+            $"{provider.ProviderName} does not expose race creation.").ShowDialogAsync(this));
     }
 
     private async Task ApplyLanguage(string code)
@@ -1019,7 +1101,7 @@ public sealed partial class TimerWindow : Window
                 LocalizationKeys.LanguageRestartRequired,
                 "Language change will take effect after restarting LiveSplit.",
                 language));
-        await dlg.ShowDialogAsync(this);
+        await RunWithNormalHotkeysSuppressed(() => dlg.ShowDialogAsync(this));
     }
 
     // --- Server lifecycle -------------------------------------------------------------------
@@ -1068,7 +1150,11 @@ public sealed partial class TimerWindow : Window
         {
             _commandServer?.StopTcp();
             _commandServer?.StopWs();
-            Host.State.Settings.ServerState = ServerStateType.Off;
+            ServerStateType restoreState = ResolveServerStateForSettingsRestart(
+                current.ServerStartup,
+                _commandServer?.ServerState ?? ServerStateType.Off,
+                current.ServerState);
+            Host.State.Settings.ServerState = restoreState;
             StartConfiguredServer();
         }
         catch (Exception e)
@@ -1118,7 +1204,7 @@ public sealed partial class TimerWindow : Window
         }
     }
 
-    private void StopServer()
+    private void StopServer(bool updateStartupSetting = true)
     {
         try
         {
@@ -1131,13 +1217,55 @@ public sealed partial class TimerWindow : Window
                 _commandServer.StopWs();
             }
 
-            Host.State.Settings.ServerStartup = ServerStartupType.Off;
+            if (updateStartupSetting)
+            {
+                Host.State.Settings.ServerStartup = ServerStartupType.Off;
+            }
+
             Host.State.Settings.ServerState = _commandServer?.ServerState ?? ServerStateType.Off;
         }
         catch (Exception e)
         {
             Log.Error(e);
         }
+    }
+
+    internal static ServerStateType ResolveServerStateForSettingsRestart(
+        ServerStartupType startup,
+        ServerStateType runningServerState,
+        ServerStateType savedServerState)
+        => startup == ServerStartupType.PreviousState && runningServerState != ServerStateType.Off
+            ? runningServerState
+            : savedServerState;
+
+    private int _normalHotkeySuppressionDepth;
+
+    private async Task<T> RunWithNormalHotkeysSuppressed<T>(Func<Task<T>> action)
+    {
+        _normalHotkeySuppressionDepth++;
+        Host.SetNormalHotkeysSuppressed(true);
+        try
+        {
+            return await action();
+        }
+        finally
+        {
+            _normalHotkeySuppressionDepth--;
+            if (_normalHotkeySuppressionDepth <= 0)
+            {
+                _normalHotkeySuppressionDepth = 0;
+                Host.SetNormalHotkeysSuppressed(false);
+            }
+        }
+    }
+
+    private async Task RunWithNormalHotkeysSuppressed(Func<Task> action)
+    {
+        await RunWithNormalHotkeysSuppressed(async () =>
+        {
+            await action();
+            return true;
+        });
     }
 
     // --- Drag and drop ----------------------------------------------------------------------

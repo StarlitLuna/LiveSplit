@@ -193,15 +193,9 @@ public sealed class SkiaRenderControl : Control
                 }
 
                 var dest = new System.Drawing.Rectangle(0, 0, (int)System.Math.Ceiling(width), (int)System.Math.Ceiling(height));
-                var src = new System.Drawing.Rectangle(0, 0, image.Width, image.Height);
-                if (opacity >= 1f)
-                {
-                    ctx.DrawImage(image, dest, src);
-                }
-                else
-                {
-                    ctx.DrawImageWithOpacity(image, dest, src, opacity);
-                }
+                var src = CalculateCoverSourceRect(image.Width, image.Height, width, height);
+                float blurSigma = System.Math.Max(0f, settings.ImageBlur * 10f);
+                ctx.DrawImageWithOpacity(image, dest, src, opacity, blurSigma);
 
                 break;
             }
@@ -233,6 +227,27 @@ public sealed class SkiaRenderControl : Control
                 break;
             }
         }
+    }
+
+    internal static System.Drawing.Rectangle CalculateCoverSourceRect(int imageWidth, int imageHeight, float targetWidth, float targetHeight)
+    {
+        if (imageWidth <= 0 || imageHeight <= 0 || targetWidth <= 0f || targetHeight <= 0f)
+        {
+            return System.Drawing.Rectangle.Empty;
+        }
+
+        float imageAspect = imageWidth / (float)imageHeight;
+        float targetAspect = targetWidth / targetHeight;
+        if (imageAspect > targetAspect)
+        {
+            int sourceWidth = System.Math.Max(1, (int)System.Math.Round(imageHeight * targetAspect));
+            int sourceX = (imageWidth - sourceWidth) / 2;
+            return new System.Drawing.Rectangle(sourceX, 0, sourceWidth, imageHeight);
+        }
+
+        int sourceHeight = System.Math.Max(1, (int)System.Math.Round(imageWidth / targetAspect));
+        int sourceY = (imageHeight - sourceHeight) / 2;
+        return new System.Drawing.Rectangle(0, sourceY, imageWidth, sourceHeight);
     }
 
     internal static void ApplyMasterRenderSettings(IDrawingContext ctx, LayoutSettings settings)

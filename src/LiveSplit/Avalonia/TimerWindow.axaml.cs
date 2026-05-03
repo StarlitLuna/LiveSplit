@@ -32,9 +32,6 @@ namespace LiveSplit.Avalonia;
 /// </summary>
 public sealed partial class TimerWindow : Window
 {
-    private const int BorderlessWidthCompensation = 3;
-    private const int BorderlessHeightCompensation = 1;
-
     public AvaloniaTimerHost Host { get; }
 
     public ICommand SplitCommand { get; }
@@ -417,13 +414,13 @@ public sealed partial class TimerWindow : Window
 
     public static (int Width, int Height) GetWindowSizeForLayout(int layoutWidth, int layoutHeight)
         => (
-            Math.Max(1, layoutWidth + BorderlessWidthCompensation),
-            Math.Max(1, layoutHeight + BorderlessHeightCompensation));
+            Math.Max(1, layoutWidth),
+            Math.Max(1, layoutHeight));
 
     public static (int Width, int Height) GetLayoutSizeForWindow(double windowWidth, double windowHeight)
         => (
-            Math.Max(1, (int)Math.Round(windowWidth) - BorderlessWidthCompensation),
-            Math.Max(1, (int)Math.Round(windowHeight) - BorderlessHeightCompensation));
+            Math.Max(1, (int)Math.Round(windowWidth)),
+            Math.Max(1, (int)Math.Round(windowHeight)));
 
     internal static bool ShouldUseMousePassThrough(LayoutSettings settings, TimerPhase phase, bool isForeground)
         => settings?.MousePassThroughWhileRunning == true

@@ -20,7 +20,7 @@ namespace LiveSplit.Tests.Avalonia;
 public class AvaloniaRenderControlMust
 {
     [Fact]
-    public void PaintLayoutBackgroundThroughBorderlessCompensation()
+    public void PaintLayoutBackgroundToWindowEdges()
     {
         DrawingApi.Register(new SkiaDrawingFactory());
         LayoutSettings settings = new()
@@ -29,17 +29,17 @@ public class AvaloniaRenderControlMust
             BackgroundColor = System.Drawing.Color.FromArgb(255, 15, 15, 15),
         };
 
-        using SKSurface surface = SKSurface.Create(new SKImageInfo(255, 51, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using SKSurface surface = SKSurface.Create(new SKImageInfo(252, 50, SKColorType.Bgra8888, SKAlphaType.Premul));
         surface.Canvas.Clear(SKColors.Black);
         var ctx = new SkiaDrawingContext(surface.Canvas);
 
-        SkiaRenderControl.DrawLayoutBackground(ctx, settings, 255, 51);
+        SkiaRenderControl.DrawLayoutBackground(ctx, settings, 252, 50);
 
         using SKImage image = surface.Snapshot();
         using SKBitmap bitmap = SKBitmap.FromImage(image);
 
-        Assert.Equal(new SKColor(15, 15, 15), bitmap.GetPixel(254, 50));
-        Assert.Equal(new SKColor(15, 15, 15), bitmap.GetPixel(252, 49));
+        Assert.Equal(new SKColor(15, 15, 15), bitmap.GetPixel(251, 49));
+        Assert.Equal(new SKColor(15, 15, 15), bitmap.GetPixel(249, 48));
     }
 
     [Fact]

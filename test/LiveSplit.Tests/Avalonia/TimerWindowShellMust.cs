@@ -24,14 +24,14 @@ public class TimerWindowShellMust
     }
 
     [Fact]
-    public void CompensateAvaloniaBorderlessBoundsToMatchMasterFormSize()
+    public void UseLayoutDimensionsAsBorderlessWindowDimensions()
     {
         (int windowWidth, int windowHeight) = TimerWindow.GetWindowSizeForLayout(252, 50);
 
-        Assert.Equal(255, windowWidth);
-        Assert.Equal(51, windowHeight);
+        Assert.Equal(252, windowWidth);
+        Assert.Equal(50, windowHeight);
 
-        (int layoutWidth, int layoutHeight) = TimerWindow.GetLayoutSizeForWindow(255, 51);
+        (int layoutWidth, int layoutHeight) = TimerWindow.GetLayoutSizeForWindow(252, 50);
 
         Assert.Equal(252, layoutWidth);
         Assert.Equal(50, layoutHeight);

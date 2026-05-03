@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 
 using LiveSplit.Avalonia;
@@ -24,6 +25,41 @@ namespace LiveSplit.Tests.Avalonia;
 [Collection("DrawingApi")]
 public class AvaloniaTimerHostPersistenceMust
 {
+    [Theory]
+    [InlineData(40, 25)]
+    [InlineData(60, 16)]
+    [InlineData(300, 3)]
+    public void RefreshDelayUsesMasterIntegerFloorTiming(int refreshRate, int expectedDelay)
+    {
+        Assert.Equal(expectedDelay, GetRefreshDelay(refreshRate));
+    }
+
+    [Fact]
+    public void ApplySettingsUpdatesActiveRefreshDelay()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            ISettings settings = (ISettings)host.State.Settings.Clone();
+            settings.RefreshRate = 60;
+
+            host.ApplySettings(settings, host.State.CurrentHotkeyProfile);
+
+            Assert.Equal(16, GetRefreshDelayField(host));
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
     [Fact]
     public void SaveRunAsAssignsFilePathAndClearsDirtyFlag()
     {
@@ -593,6 +629,24 @@ public class AvaloniaTimerHostPersistenceMust
         }
 
         File.WriteAllText(path, backup);
+    }
+
+    private static int GetRefreshDelay(int refreshRate)
+    {
+        MethodInfo method = typeof(AvaloniaTimerHost).GetMethod(
+            "GetRefreshDelay",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return (int)method.Invoke(null, new object[] { refreshRate });
+    }
+
+    private static int GetRefreshDelayField(AvaloniaTimerHost host)
+    {
+        FieldInfo field = typeof(AvaloniaTimerHost).GetField(
+            "_refreshDelayMs",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        return (int)field.GetValue(host);
     }
 
     private sealed class TrackingComponent : IComponent

@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
 using global::Avalonia;
 using global::Avalonia.Controls;
+using global::Avalonia.Controls.Primitives;
 using global::Avalonia.Layout;
 using global::Avalonia.Media;
+using global::Avalonia.Styling;
 
 using LiveSplit.Model.Input;
 using LiveSplit.Options;
@@ -21,8 +24,13 @@ public sealed class SettingsDialog : Window
     private readonly TaskCompletionSource<bool> _result = new();
     private readonly ISettings _settings;
     private readonly ComboBox _profileBox;
-    private readonly StackPanel _hotkeyRows;
+    private readonly Grid _hotkeyRows;
     private readonly Button _removeProfile;
+    private readonly Control _profileSection;
+    private TextBox _hotkeyDelayBox;
+    private TextBox _serverPortBox;
+    private TextBox _refreshRateBox;
+    private string _validationError;
 
     public string SelectedHotkeyProfile { get; private set; }
 
@@ -35,16 +43,22 @@ public sealed class SettingsDialog : Window
                 : settings.HotkeyProfiles.FirstOrDefault().Key;
 
         Title = "Settings";
-        Width = 520;
-        Height = 820;
-        MinWidth = 458;
-        MinHeight = 360;
+        Width = SettingsDialogLayoutSpec.Master.InitialWindowWidth;
+        Height = SettingsDialogLayoutSpec.Master.InitialWindowHeight;
+        MinWidth = SettingsDialogLayoutSpec.Master.InitialWindowWidth;
+        MinHeight = 200;
+        FontSize = 12;
+        RequestedThemeVariant = ThemeVariant.Dark;
+        Background = DialogTheme.WindowBackgroundBrush;
 
         _profileBox = new ComboBox
         {
-            MinWidth = 220,
+            Name = "ActiveHotkeyProfileComboBox",
             ItemsSource = settings.HotkeyProfiles.Keys.ToList(),
             SelectedItem = SelectedHotkeyProfile,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Height = SettingsDialogLayoutSpec.Master.ComboBoxHeight,
+            MinHeight = 0,
         };
         _profileBox.SelectionChanged += (_, _) =>
         {
@@ -53,28 +67,55 @@ public sealed class SettingsDialog : Window
             RefreshRemoveButton();
         };
 
-        _hotkeyRows = new StackPanel { Spacing = 6 };
-        _removeProfile = new Button { Content = "Remove", Width = 90 };
-        _removeProfile.Click += (_, _) => RemoveProfile();
+        DialogTheme.Apply(_profileBox);
 
-        var ok = new Button { Content = "OK", Width = 90, IsDefault = true };
-        ok.Click += (_, _) => { _result.TrySetResult(true); Close(); };
-        var cancel = new Button { Content = "Cancel", Width = 90, IsCancel = true };
+        _hotkeyRows = CreateHotkeyGrid();
+        _removeProfile = CompactButton("Remove", "RemoveHotkeyProfileButton", SettingsDialogLayoutSpec.Master.ProfileButtonWidth);
+        _removeProfile.Click += (_, _) => RemoveProfile();
+        _profileSection = BuildProfileSection();
+
+        var ok = CompactButton("OK", "OkButton", SettingsDialogLayoutSpec.Master.ProfileButtonWidth);
+        ok.IsDefault = true;
+        ok.Click += async (_, _) =>
+        {
+            if (!TryApplyPendingTextSettings())
+            {
+                await new MessageDialog(
+                    "Invalid Settings",
+                    _validationError ?? "Please enter valid numeric settings.").ShowDialogAsync(this);
+                return;
+            }
+
+            _result.TrySetResult(true);
+            Close();
+        };
+        var cancel = CompactButton("Cancel", "CancelButton", SettingsDialogLayoutSpec.Master.ProfileButtonWidth);
+        cancel.IsCancel = true;
         cancel.Click += (_, _) => { _result.TrySetResult(false); Close(); };
 
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 12, 12),
+            Spacing = 6,
+            Margin = new Thickness(0, 6, 16, 12),
             Children = { ok, cancel },
         };
 
-        var root = new DockPanel { LastChildFill = true };
+        var root = new DockPanel
+        {
+            LastChildFill = true,
+            Background = DialogTheme.WindowBackgroundBrush,
+        };
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
-        root.Children.Add(new ScrollViewer { Content = BuildSettingsSurface() });
+        root.Children.Add(new ScrollViewer
+        {
+            Content = BuildSettingsSurface(),
+            Margin = new Thickness(7, 7, 7, 0),
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        });
         Content = root;
 
         Closed += (_, _) =>
@@ -91,61 +132,91 @@ public sealed class SettingsDialog : Window
         RebuildHotkeyRows();
         RefreshRemoveButton();
 
-        return new StackPanel
+        var grid = new Grid
         {
-            Margin = new Thickness(14, 12, 14, 8),
-            Spacing = 9,
-            Children =
+            Width = 422,
+            RowDefinitions =
             {
-                Heading("Hotkeys"),
-                _hotkeyRows,
-                BuildProfileSection(),
-                BuildGeneralRows(),
-                BuildServerRows(),
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(new GridLength(29)),
+            },
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(206)),
+                new ColumnDefinition(new GridLength(135)),
+                new ColumnDefinition(new GridLength(26)),
+                new ColumnDefinition(new GridLength(55)),
             },
         };
+
+        AddToGrid(grid, GroupBox("HotkeysGroup", "Hotkeys", _hotkeyRows, 421), 0, 0, 4);
+        AddToGrid(grid, CompactCheckBox("Simple Sum of Best Calculation", _settings.SimpleSumOfBest, value => _settings.SimpleSumOfBest = value), 1, 0);
+        AddToGrid(grid, CompactCheckBox("Warn On Reset If Better Times", _settings.WarnOnReset, value => _settings.WarnOnReset = value), 1, 1, 3);
+
+        AddToGrid(grid, Label("Race Viewer:"), 2, 0);
+        AddToGrid(grid, BuildRaceViewer(), 2, 1, 3);
+        AddToGrid(grid, Label("Racing Services:"), 3, 0);
+        AddToGrid(grid, BuildProvidersButton(), 3, 1, 3);
+        AddToGrid(grid, Label("Active Comparisons:"), 4, 0);
+        AddToGrid(grid, BuildComparisonsButton(), 4, 1, 3);
+        AddToGrid(grid, Label("Saved Accounts:"), 5, 0);
+        AddToGrid(grid, BuildLogoutButton(), 5, 1, 3);
+        AddToGrid(grid, GroupBox("LiveSplitServerGroup", "LiveSplit Server", BuildServerRows(), 78), 6, 0, 4);
+        AddToGrid(grid, BuildRefreshRatePanel(), 7, 0);
+
+        return grid;
     }
 
     private Control BuildProfileSection()
     {
-        var add = new Button { Content = "New", Width = 90 };
+        var add = CompactButton("New", "NewHotkeyProfileButton", SettingsDialogLayoutSpec.Master.ProfileButtonWidth);
         add.Click += async (_, _) => await AddProfile();
-        var rename = new Button { Content = "Rename", Width = 90 };
+        var rename = CompactButton("Rename", "RenameHotkeyProfileButton", SettingsDialogLayoutSpec.Master.ProfileButtonWidth);
         rename.Click += async (_, _) => await RenameProfile();
 
-        return new StackPanel
+        var grid = new Grid
         {
-            Spacing = 6,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children =
+            RowDefinitions =
             {
-                Heading("Hotkey Profiles"),
-                Row("Active Hotkey Profile:", _profileBox),
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    Spacing = 8,
-                    Children = { add, rename, _removeProfile },
-                },
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+            },
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(194)),
+                new ColumnDefinition(new GridLength(41)),
+                new ColumnDefinition(new GridLength(81)),
+                new ColumnDefinition(new GridLength(82)),
             },
         };
+
+        AddToGrid(grid, Label("Active Hotkey Profile:"), 0, 0);
+        AddToGrid(grid, _profileBox, 0, 1, 3);
+        AddToGrid(grid, add, 1, 0, 2, HorizontalAlignment.Right);
+        AddToGrid(grid, rename, 1, 2, 1, HorizontalAlignment.Right);
+        AddToGrid(grid, _removeProfile, 1, 3, 1, HorizontalAlignment.Right);
+
+        return GroupBox("HotkeyProfilesGroup", "Hotkey Profiles", grid, 77);
     }
 
-    private Control BuildGeneralRows()
+    private Control BuildRaceViewer()
     {
-        var simpleSob = new CheckBox { Content = "Simple Sum of Best Calculation", IsChecked = _settings.SimpleSumOfBest };
-        simpleSob.IsCheckedChanged += (_, _) => _settings.SimpleSumOfBest = simpleSob.IsChecked == true;
-
-        var warnReset = new CheckBox { Content = "Warn On Reset If Better Times", IsChecked = _settings.WarnOnReset };
-        warnReset.IsCheckedChanged += (_, _) => _settings.WarnOnReset = warnReset.IsChecked == true;
-
         var raceViewer = new ComboBox
         {
+            Name = "RaceViewerComboBox",
             ItemsSource = new[] { "SpeedRunsLive", "MultiTwitch", "Kadgar", "Speedrun.tv" },
             SelectedItem = _settings.RaceViewer?.Name ?? "SpeedRunsLive",
-            MinWidth = 220,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Height = SettingsDialogLayoutSpec.Master.ComboBoxHeight,
+            MinHeight = 0,
         };
+        DialogTheme.Apply(raceViewer);
         raceViewer.SelectionChanged += (_, _) =>
         {
             if (raceViewer.SelectedItem is string name)
@@ -154,7 +225,12 @@ public sealed class SettingsDialog : Window
             }
         };
 
-        var providers = new Button { Content = "Manage Racing Services...", MinWidth = 220 };
+        return raceViewer;
+    }
+
+    private Control BuildProvidersButton()
+    {
+        var providers = CompactButton("Manage Racing Services...", "ManageRacingServicesButton", double.NaN);
         providers.Click += async (_, _) =>
         {
             var edited = _settings.RaceProvider.Select(x => (RaceProviderSettings)x.Clone()).ToList();
@@ -165,7 +241,12 @@ public sealed class SettingsDialog : Window
             }
         };
 
-        var comparisons = new Button { Content = "Choose Active Comparisons...", MinWidth = 220 };
+        return providers;
+    }
+
+    private Control BuildComparisonsButton()
+    {
+        var comparisons = CompactButton("Choose Active Comparisons...", "ChooseActiveComparisonsButton", double.NaN);
         comparisons.Click += async (_, _) =>
         {
             var dialog = new ChooseComparisonsDialog
@@ -183,12 +264,13 @@ public sealed class SettingsDialog : Window
             }
         };
 
-        var logout = new Button
-        {
-            Content = "Log Out of All Accounts",
-            MinWidth = 220,
-            IsEnabled = WebCredentials.AnyCredentialsExist(),
-        };
+        return comparisons;
+    }
+
+    private Control BuildLogoutButton()
+    {
+        var logout = CompactButton("Log Out of All Accounts", "LogOutAccountsButton", double.NaN);
+        logout.IsEnabled = WebCredentials.AnyCredentialsExist();
         logout.Click += (_, _) =>
         {
             SpeedrunCom.ClearAccessToken();
@@ -197,46 +279,20 @@ public sealed class SettingsDialog : Window
             logout.IsEnabled = WebCredentials.AnyCredentialsExist();
         };
 
-        return new StackPanel
-        {
-            Spacing = 7,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children =
-            {
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 16,
-                    Children = { simpleSob, warnReset },
-                },
-                Row("Race Viewer:", raceViewer),
-                Row("Racing Services:", providers),
-                Row("Active Comparisons:", comparisons),
-                Row("Saved Accounts:", logout),
-            },
-        };
+        return logout;
     }
 
     private Control BuildServerRows()
     {
-        var serverPort = new NumericUpDown
-        {
-            Minimum = 1,
-            Maximum = 65535,
-            Increment = 1,
-            Value = _settings.ServerPort,
-            Width = 120,
-        };
-        serverPort.ValueChanged += (_, e) =>
-        {
-            if (e.NewValue.HasValue)
-            {
-                _settings.ServerPort = (int)e.NewValue.Value;
-            }
-        };
+        _serverPortBox = CompactTextBox(
+            "ServerPortTextBox",
+            SettingsDialogModel.FormatServerPort(_settings),
+            SettingsDialogLayoutSpec.Master.ServerPortTextBoxWidth,
+            TextAlignment.Right);
 
         var startup = new ComboBox
         {
+            Name = "ServerStartupComboBox",
             ItemsSource = new[]
             {
                 "Don't start the Server",
@@ -245,8 +301,11 @@ public sealed class SettingsDialog : Window
                 "Restore Previous State",
             },
             SelectedIndex = (int)_settings.ServerStartup,
-            MinWidth = 220,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Height = SettingsDialogLayoutSpec.Master.ComboBoxHeight,
+            MinHeight = 0,
         };
+        DialogTheme.Apply(startup);
         startup.SelectionChanged += (_, _) =>
         {
             if (Enum.IsDefined(typeof(ServerStartupType), startup.SelectedIndex))
@@ -255,34 +314,51 @@ public sealed class SettingsDialog : Window
             }
         };
 
-        var refresh = new NumericUpDown
+        var grid = new Grid
         {
-            Minimum = 20,
-            Maximum = 300,
-            Increment = 1,
-            Value = _settings.RefreshRate,
-            Width = 120,
-        };
-        refresh.ValueChanged += (_, e) =>
-        {
-            if (e.NewValue.HasValue)
+            RowDefinitions =
             {
-                _settings.RefreshRate = Math.Min(Math.Max((int)e.NewValue.Value, 20), 300);
-            }
-        };
-
-        return new StackPanel
-        {
-            Spacing = 7,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children =
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+            },
+            ColumnDefinitions =
             {
-                Heading("LiveSplit Server"),
-                Row("Server Port:", serverPort),
-                Row("Startup Behavior:", startup),
-                Row("Refresh Rate (Hz):", refresh),
+                new ColumnDefinition(new GridLength(200)),
+                new ColumnDefinition(new GridLength(SettingsDialogLayoutSpec.Master.InputCellWidth)),
             },
         };
+
+        AddToGrid(grid, Label("Server Port:"), 0, 0);
+        AddToGrid(grid, _serverPortBox, 0, 1);
+        AddToGrid(grid, Label("Startup Behavior:"), 1, 0);
+        AddToGrid(grid, startup, 1, 1);
+
+        return grid;
+    }
+
+    private Control BuildRefreshRatePanel()
+    {
+        _refreshRateBox = CompactTextBox(
+            "RefreshRateTextBox",
+            SettingsDialogModel.FormatRefreshRate(_settings),
+            SettingsDialogLayoutSpec.Master.RefreshRateTextBoxVisibleWidth,
+            TextAlignment.Right,
+            new Thickness(0));
+
+        var grid = new Grid
+        {
+            Width = 184,
+            Height = 29,
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(130)),
+                new ColumnDefinition(new GridLength(51)),
+            },
+        };
+
+        AddToGrid(grid, Label("Refresh Rate (Hz):"), 0, 0);
+        AddToGrid(grid, _refreshRateBox, 0, 1);
+        return grid;
     }
 
     private void RebuildHotkeyRows()
@@ -294,89 +370,81 @@ public sealed class SettingsDialog : Window
             return;
         }
 
-        _hotkeyRows.Children.Add(KeyRow("Start / Split:", () => profile.SplitKey, v => profile.SplitKey = v));
-        _hotkeyRows.Children.Add(KeyRow("Reset:", () => profile.ResetKey, v => profile.ResetKey = v));
-        _hotkeyRows.Children.Add(KeyRow("Undo Split:", () => profile.UndoKey, v => profile.UndoKey = v));
-        _hotkeyRows.Children.Add(KeyRow("Skip Split:", () => profile.SkipKey, v => profile.SkipKey = v));
-        _hotkeyRows.Children.Add(KeyRow("Pause:", () => profile.PauseKey, v => profile.PauseKey = v));
-        _hotkeyRows.Children.Add(KeyRow("Switch Comparison (Previous):", () => profile.SwitchComparisonPrevious, v => profile.SwitchComparisonPrevious = v));
-        _hotkeyRows.Children.Add(KeyRow("Switch Comparison (Next):", () => profile.SwitchComparisonNext, v => profile.SwitchComparisonNext = v));
-        _hotkeyRows.Children.Add(KeyRow("Toggle Global Hotkeys:", () => profile.ToggleGlobalHotkeys, v => profile.ToggleGlobalHotkeys = v));
+        AddKeyRow(0, "Start / Split:", "StartSplitHotkeyTextBox", () => profile.SplitKey, v => profile.SplitKey = v);
+        AddKeyRow(1, "Reset:", "ResetHotkeyTextBox", () => profile.ResetKey, v => profile.ResetKey = v);
+        AddKeyRow(2, "Undo Split:", "UndoSplitHotkeyTextBox", () => profile.UndoKey, v => profile.UndoKey = v);
+        AddKeyRow(3, "Skip Split:", "SkipSplitHotkeyTextBox", () => profile.SkipKey, v => profile.SkipKey = v);
+        AddKeyRow(4, "Pause:", "PauseHotkeyTextBox", () => profile.PauseKey, v => profile.PauseKey = v);
+        AddKeyRow(5, "Switch Comparison (Previous):", "SwitchComparisonPreviousHotkeyTextBox", () => profile.SwitchComparisonPrevious, v => profile.SwitchComparisonPrevious = v);
+        AddKeyRow(6, "Switch Comparison (Next):", "SwitchComparisonNextHotkeyTextBox", () => profile.SwitchComparisonNext, v => profile.SwitchComparisonNext = v);
+        AddKeyRow(7, "Toggle Global Hotkeys:", "ToggleGlobalHotkeysTextBox", () => profile.ToggleGlobalHotkeys, v => profile.ToggleGlobalHotkeys = v);
 
-        var deactivate = new CheckBox { Content = "Deactivate For Other Programs", IsChecked = profile.DeactivateHotkeysForOtherPrograms };
-        deactivate.IsCheckedChanged += (_, _) =>
+        var deactivate = CompactCheckBox("Deactivate For Other Programs", profile.DeactivateHotkeysForOtherPrograms, value => profile.DeactivateHotkeysForOtherPrograms = value);
+        deactivate.CheckedChanged += (_, _) =>
         {
             if (deactivate.IsEnabled)
             {
-                profile.DeactivateHotkeysForOtherPrograms = deactivate.IsChecked == true;
+                profile.DeactivateHotkeysForOtherPrograms = deactivate.IsChecked;
             }
         };
 
-        var global = new CheckBox { Content = "Global Hotkeys", IsChecked = profile.GlobalHotkeysEnabled };
-        global.IsCheckedChanged += (_, _) =>
+        var global = CompactCheckBox("Global Hotkeys", profile.GlobalHotkeysEnabled, value => profile.GlobalHotkeysEnabled = value);
+        global.CheckedChanged += (_, _) =>
         {
-            profile.GlobalHotkeysEnabled = global.IsChecked == true;
+            profile.GlobalHotkeysEnabled = global.IsChecked;
             RefreshDeactivateHotkeysCheckbox(profile, deactivate);
         };
-        _hotkeyRows.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 16,
-            Children = { global, deactivate },
-        });
+        AddToGrid(_hotkeyRows, global, 8, 0);
+        AddToGrid(_hotkeyRows, deactivate, 8, 1, 2);
         RefreshDeactivateHotkeysCheckbox(profile, deactivate);
 
-        var doubleTap = new CheckBox { Content = "Double Tap Prevention", IsChecked = profile.DoubleTapPrevention };
-        doubleTap.IsCheckedChanged += (_, _) => profile.DoubleTapPrevention = doubleTap.IsChecked == true;
+        AddToGrid(_hotkeyRows, CompactCheckBox("Double Tap Prevention", profile.DoubleTapPrevention, value => profile.DoubleTapPrevention = value), 9, 0);
+        AddToGrid(_hotkeyRows, Label("Hotkey Delay (Seconds):"), 9, 1);
+        _hotkeyDelayBox = CompactTextBox(
+            "HotkeyDelayTextBox",
+            SettingsDialogModel.FormatHotkeyDelay(profile),
+            SettingsDialogLayoutSpec.Master.HotkeyDelayTextBoxVisibleWidth,
+            TextAlignment.Right,
+            new Thickness(0, 0, SettingsDialogLayoutSpec.Master.ControlHorizontalMargin, 0));
+        AddToGrid(_hotkeyRows, _hotkeyDelayBox, 9, 2, 1, HorizontalAlignment.Right);
 
-        var delay = new NumericUpDown
-        {
-            Minimum = 0,
-            Maximum = 60,
-            Increment = 0.1m,
-            Value = (decimal)profile.HotkeyDelay,
-            Width = 80,
-        };
-        delay.ValueChanged += (_, e) =>
-        {
-            if (e.NewValue.HasValue)
-            {
-                profile.HotkeyDelay = Math.Max((float)e.NewValue.Value, 0f);
-            }
-        };
+        var allowGamepads = CompactCheckBox("Allow Gamepads as Hotkeys", profile.AllowGamepadsAsHotkeys, value => profile.AllowGamepadsAsHotkeys = value);
+        allowGamepads.Name = "AllowGamepadsHotkeysCheckBox";
+        allowGamepads.IsEnabled = false;
+        allowGamepads.SetTextBrush(DialogTheme.DisabledTextBrush);
 
-        _hotkeyRows.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 16,
-            Children =
-            {
-                doubleTap,
-                new TextBlock { Text = "Hotkey Delay (Seconds):", VerticalAlignment = VerticalAlignment.Center },
-                delay,
-            },
-        });
+        var dpiAware = CompactCheckBox("Enable DPI Aware", _settings.EnableDPIAwareness, value => _settings.EnableDPIAwareness = value);
+        dpiAware.Name = "EnableDpiAwareCheckBox";
 
-        var allowGamepads = new CheckBox
-        {
-            Content = "Allow Gamepads as Hotkeys",
-            IsChecked = profile.AllowGamepadsAsHotkeys,
-            IsEnabled = false,
-        };
-        allowGamepads.IsCheckedChanged += (_, _) => profile.AllowGamepadsAsHotkeys = allowGamepads.IsChecked == true;
-
-        var dpiAware = new CheckBox { Content = "Enable DPI Aware", IsChecked = _settings.EnableDPIAwareness };
-        dpiAware.IsCheckedChanged += (_, _) => _settings.EnableDPIAwareness = dpiAware.IsChecked == true;
-
-        _hotkeyRows.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 16,
-            Children = { allowGamepads, dpiAware },
-        });
+        AddToGrid(_hotkeyRows, allowGamepads, 10, 0);
+        AddToGrid(_hotkeyRows, dpiAware, 10, 1, 2);
+        AddToGrid(_hotkeyRows, _profileSection, 11, 0, 3);
     }
 
-    private static void RefreshDeactivateHotkeysCheckbox(HotkeyProfile profile, CheckBox deactivate)
+    private void AddKeyRow(int row, string label, string name, Func<KeyOrButton> get, Action<KeyOrButton> set)
+    {
+        AddToGrid(_hotkeyRows, Label(label), row, 0);
+        AddToGrid(_hotkeyRows, KeyTextBox(name, get, set), row, 1, 2);
+    }
+
+    internal bool TryApplyPendingTextSettings()
+    {
+        bool ok = SettingsDialogModel.TryApplyNumericTextSettings(
+            _settings,
+            SelectedHotkeyProfile,
+            _hotkeyDelayBox?.Text,
+            _serverPortBox?.Text,
+            _refreshRateBox?.Text);
+        _validationError = ok ? null : "Hotkey Delay, Server Port, and Refresh Rate must be valid numbers.";
+        if (ok && _hotkeyDelayBox is not null && CurrentProfile() is HotkeyProfile profile)
+        {
+            _hotkeyDelayBox.Text = SettingsDialogModel.FormatHotkeyDelay(profile);
+        }
+
+        return ok;
+    }
+
+    private static void RefreshDeactivateHotkeysCheckbox(HotkeyProfile profile, CompactSettingCheckBox deactivate)
     {
         deactivate.IsEnabled = profile.GlobalHotkeysEnabled;
         deactivate.IsChecked = profile.GlobalHotkeysEnabled && profile.DeactivateHotkeysForOtherPrograms;
@@ -495,14 +563,10 @@ public sealed class SettingsDialog : Window
                 : null;
     }
 
-    private static Control KeyRow(string label, Func<KeyOrButton> get, Action<KeyOrButton> set)
+    private static TextBox KeyTextBox(string name, Func<KeyOrButton> get, Action<KeyOrButton> set)
     {
-        var box = new TextBox
-        {
-            Text = FormatKey(get()),
-            Width = 230,
-            IsReadOnly = true,
-        };
+        var box = CompactTextBox(name, FormatKey(get()), SettingsDialogLayoutSpec.Master.HotkeyTextBoxWidth, TextAlignment.Left);
+        box.IsReadOnly = true;
 
         bool capturing = false;
         string oldText = null;
@@ -593,7 +657,7 @@ public sealed class SettingsDialog : Window
             e.Handled = true;
         };
 
-        return Row(label, box);
+        return box;
     }
 
     private static Key ModifierForKey(Key keyCode)
@@ -607,28 +671,149 @@ public sealed class SettingsDialog : Window
         };
     }
 
-    private static StackPanel Row(string label, Control control)
+    private static Grid CreateHotkeyGrid()
     {
-        return new StackPanel
+        var grid = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children =
+            RowDefinitions =
             {
-                new TextBlock { Text = label, Width = 205, VerticalAlignment = VerticalAlignment.Center },
-                control,
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(29)),
+                new RowDefinition(new GridLength(83)),
+            },
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(200)),
+                new ColumnDefinition(new GridLength(154)),
+                new ColumnDefinition(new GridLength(56)),
             },
         };
+
+        return grid;
     }
 
-    private static TextBlock Heading(string text)
+    private static TextBlock Label(string text)
     {
         return new TextBlock
         {
             Text = text,
-            FontWeight = FontWeight.Bold,
-            Margin = new Thickness(0, 4, 0, 2),
+            Foreground = DialogTheme.TextBrush,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+            Margin = new Thickness(SettingsDialogLayoutSpec.Master.ControlHorizontalMargin, 0),
         };
+    }
+
+    private static CompactSettingCheckBox CompactCheckBox(string text, bool value, Action<bool> update)
+    {
+        var box = new CompactSettingCheckBox(text, value);
+        box.CheckedChanged += (_, _) => update(box.IsChecked);
+        return box;
+    }
+
+    private static TextBox CompactTextBox(string name, string text, double width, TextAlignment alignment, Thickness? margin = null)
+    {
+        var box = new TextBox
+        {
+            Name = name,
+            Text = text,
+            Width = width,
+            Height = SettingsDialogLayoutSpec.Master.TextBoxHeight,
+            MinHeight = 0,
+            Margin = margin ?? new Thickness(SettingsDialogLayoutSpec.Master.ControlHorizontalMargin, 0),
+            Background = DialogTheme.ControlBackgroundBrush,
+            Foreground = DialogTheme.TextBrush,
+            BorderBrush = DialogTheme.ControlBorderBrush,
+            BorderThickness = new Thickness(1),
+            TextAlignment = alignment,
+            FontSize = 12,
+            Padding = new Thickness(4, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        return box;
+    }
+
+    private static Button CompactButton(string text, string name, double width)
+    {
+        var button = new Button
+        {
+            Name = name,
+            Content = text,
+            Width = width,
+            Height = SettingsDialogLayoutSpec.Master.ButtonHeight,
+            MinHeight = 0,
+            Margin = new Thickness(SettingsDialogLayoutSpec.Master.ControlHorizontalMargin, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Background = DialogTheme.ButtonBackgroundBrush,
+            Foreground = DialogTheme.TextBrush,
+            BorderBrush = DialogTheme.ControlBorderBrush,
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            Padding = new Thickness(8, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+
+        return button;
+    }
+
+    private static Control GroupBox(string name, string title, Control content, double height)
+    {
+        var root = new Grid
+        {
+            Height = height,
+            Margin = new Thickness(SettingsDialogLayoutSpec.Master.GroupHorizontalMargin, 0),
+        };
+
+        var border = new Border
+        {
+            Name = name,
+            BorderBrush = DialogTheme.GroupBorderBrush,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(
+                SettingsDialogLayoutSpec.Master.GroupContentHorizontalPadding,
+                SettingsDialogLayoutSpec.Master.GroupContentTopPadding,
+                SettingsDialogLayoutSpec.Master.GroupContentHorizontalPadding,
+                6),
+            Margin = new Thickness(0, 7, 0, 0),
+            Child = content,
+            Background = DialogTheme.WindowBackgroundBrush,
+        };
+
+        var label = Label(title);
+        label.FontWeight = FontWeight.Bold;
+        label.Background = DialogTheme.WindowBackgroundBrush;
+        label.Padding = new Thickness(4, 0);
+        label.Margin = new Thickness(8, 0, 0, 0);
+        label.HorizontalAlignment = HorizontalAlignment.Left;
+        label.VerticalAlignment = VerticalAlignment.Top;
+
+        root.Children.Add(border);
+        root.Children.Add(label);
+        return root;
+    }
+
+    private static void AddToGrid(Grid grid, Control control, int row, int column, int columnSpan = 1, HorizontalAlignment horizontalAlignment = HorizontalAlignment.Stretch)
+    {
+        control.HorizontalAlignment = horizontalAlignment;
+        control.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetRow(control, row);
+        Grid.SetColumn(control, column);
+        if (columnSpan > 1)
+        {
+            Grid.SetColumnSpan(control, columnSpan);
+        }
+
+        grid.Children.Add(control);
     }
 
     private static string FormatKey(KeyOrButton binding)
@@ -663,5 +848,210 @@ public sealed class SettingsDialog : Window
         }
 
         return await _result.Task;
+    }
+}
+
+internal sealed class SettingsDialogLayoutSpec
+{
+    public static SettingsDialogLayoutSpec Master { get; } = new();
+
+    public IReadOnlyList<string> StructuralOrder { get; } = new[]
+    {
+        "HotkeysGroup",
+        "HotkeyProfilesGroup",
+        "LiveSplitServerGroup",
+        "RefreshRateTextBox",
+    };
+
+    public int LabelColumnWidth { get; } = 200;
+    public int HotkeyTextBoxWidth { get; } = 204;
+    public int ServerPortTextBoxWidth { get; } = 204;
+    public int HotkeyDelayTextBoxWidth { get; } = 50;
+    public int RefreshRateTextBoxWidth { get; } = 51;
+    public int HotkeyDelayTextBoxVisibleWidth { get; } = 42;
+    public int RefreshRateTextBoxVisibleWidth { get; } = 48;
+    public int ProfileButtonWidth { get; } = 75;
+    public int InitialWindowWidth { get; } = 442;
+    public int InitialWindowHeight { get; } = 734;
+    public int TextBoxHeight { get; } = 20;
+    public int ComboBoxHeight { get; } = 26;
+    public int ButtonHeight { get; } = 23;
+    public int CheckBoxHeight { get; } = 17;
+    public int CheckBoxGlyphSize { get; } = 13;
+    public int ControlHorizontalMargin { get; } = 3;
+    public int GroupContentHorizontalPadding { get; } = 3;
+    public int GroupContentTopPadding { get; } = 8;
+    public int GroupHorizontalMargin { get; } = 3;
+    public int InputCellWidth { get; } = 210;
+    public int ModernCheckBoxCornerRadius { get; } = 2;
+    public IReadOnlyList<string> NumericSpinnerControlNames { get; } = Array.Empty<string>();
+}
+
+internal static class SettingsDialogModel
+{
+    public static bool TryApplyNumericTextSettings(
+        ISettings settings,
+        string selectedHotkeyProfile,
+        string hotkeyDelayText,
+        string serverPortText,
+        string refreshRateText)
+    {
+        if (settings is null
+            || string.IsNullOrEmpty(selectedHotkeyProfile)
+            || !settings.HotkeyProfiles.TryGetValue(selectedHotkeyProfile, out HotkeyProfile profile)
+            || !TryParseFloat(hotkeyDelayText, out float hotkeyDelay)
+            || !TryParseInt(serverPortText, out int serverPort)
+            || !TryParseInt(refreshRateText, out int refreshRate))
+        {
+            return false;
+        }
+
+        profile.HotkeyDelay = Math.Max(hotkeyDelay, 0f);
+        settings.ServerPort = serverPort;
+        settings.RefreshRate = Math.Min(Math.Max(refreshRate, 20), 300);
+        return true;
+    }
+
+    public static string FormatHotkeyDelay(HotkeyProfile profile)
+        => (profile?.HotkeyDelay ?? 0f).ToString(CultureInfo.CurrentCulture);
+
+    public static string FormatServerPort(ISettings settings)
+        => (settings?.ServerPort ?? 16834).ToString(CultureInfo.CurrentCulture);
+
+    public static string FormatRefreshRate(ISettings settings)
+        => (settings?.RefreshRate ?? 40).ToString(CultureInfo.CurrentCulture);
+
+    private static bool TryParseInt(string text, out int value)
+        => int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out value)
+            || int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+
+    private static bool TryParseFloat(string text, out float value)
+        => float.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value)
+            || float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+}
+
+internal static class DialogTheme
+{
+    public static Color WindowBackgroundColor { get; } = Color.Parse("#202020");
+    public static IBrush WindowBackgroundBrush { get; } = new SolidColorBrush(WindowBackgroundColor);
+    public static IBrush TextBrush { get; } = new SolidColorBrush(Colors.White);
+    public static IBrush DisabledTextBrush { get; } = new SolidColorBrush(Color.Parse("#9A9A9A"));
+    public static IBrush GroupBorderBrush { get; } = new SolidColorBrush(Color.Parse("#3D3D3D"));
+    public static IBrush ControlBackgroundBrush { get; } = new SolidColorBrush(Color.Parse("#2A2A2A"));
+    public static IBrush ButtonBackgroundBrush { get; } = new SolidColorBrush(Color.Parse("#3A3A3A"));
+    public static IBrush ControlBorderBrush { get; } = new SolidColorBrush(Color.Parse("#8A8A8A"));
+    public static IBrush AccentBrush { get; } = new SolidColorBrush(Color.Parse("#0078D4"));
+
+    public static void Apply(Control control)
+    {
+        switch (control)
+        {
+            case TextBlock text:
+                text.Foreground = TextBrush;
+                text.FontSize = 12;
+                break;
+            case ComboBox combo:
+                combo.Foreground = TextBrush;
+                combo.Background = ControlBackgroundBrush;
+                combo.BorderBrush = ControlBorderBrush;
+                combo.BorderThickness = new Thickness(1);
+                combo.FontSize = 12;
+                combo.MinHeight = 0;
+                combo.Margin = new Thickness(SettingsDialogLayoutSpec.Master.ControlHorizontalMargin, 0);
+                break;
+        }
+    }
+}
+
+internal sealed class CompactSettingCheckBox : StackPanel
+{
+    private readonly Border _box;
+    private readonly TextBlock _mark;
+    private readonly TextBlock _label;
+    private bool _isChecked;
+
+    public event EventHandler CheckedChanged;
+
+    public CompactSettingCheckBox(string text, bool isChecked)
+    {
+        Orientation = Orientation.Horizontal;
+        Spacing = 4;
+        Height = SettingsDialogLayoutSpec.Master.CheckBoxHeight;
+        MinHeight = 0;
+        Margin = new Thickness(7, 0, SettingsDialogLayoutSpec.Master.ControlHorizontalMargin, 0);
+        VerticalAlignment = VerticalAlignment.Center;
+
+        _mark = new TextBlock
+        {
+            Text = "\u2713",
+            Foreground = DialogTheme.TextBrush,
+            FontSize = 10,
+            FontWeight = FontWeight.Bold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsVisible = isChecked,
+        };
+
+        _box = new Border
+        {
+            Width = SettingsDialogLayoutSpec.Master.CheckBoxGlyphSize,
+            Height = SettingsDialogLayoutSpec.Master.CheckBoxGlyphSize,
+            CornerRadius = new CornerRadius(SettingsDialogLayoutSpec.Master.ModernCheckBoxCornerRadius),
+            BorderThickness = new Thickness(1),
+            BorderBrush = DialogTheme.ControlBorderBrush,
+            Background = isChecked ? DialogTheme.AccentBrush : DialogTheme.WindowBackgroundBrush,
+            Child = _mark,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        _label = new TextBlock
+        {
+            Text = text,
+            Foreground = DialogTheme.TextBrush,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        Children.Add(_box);
+        Children.Add(_label);
+
+        _isChecked = isChecked;
+        PointerPressed += (_, e) =>
+        {
+            if (!IsEnabled)
+            {
+                return;
+            }
+
+            IsChecked = !IsChecked;
+            e.Handled = true;
+        };
+    }
+
+    public bool IsChecked
+    {
+        get => _isChecked;
+        set
+        {
+            if (_isChecked == value)
+            {
+                return;
+            }
+
+            _isChecked = value;
+            UpdateVisual();
+            CheckedChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    public void SetTextBrush(IBrush brush)
+    {
+        _label.Foreground = brush;
+    }
+
+    private void UpdateVisual()
+    {
+        _mark.IsVisible = _isChecked;
+        _box.Background = _isChecked ? DialogTheme.AccentBrush : DialogTheme.WindowBackgroundBrush;
     }
 }

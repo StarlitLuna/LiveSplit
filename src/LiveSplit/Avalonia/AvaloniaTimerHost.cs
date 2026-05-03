@@ -701,7 +701,7 @@ public sealed class AvaloniaTimerHost : IDisposable
     }
 
     private static int GetRefreshDelay(int refreshRate)
-        => Math.Max(1, (int)Math.Round(1000.0 / Math.Max(1, refreshRate)));
+        => Math.Max(1, 1000 / Math.Max(1, refreshRate));
 
     private static void ApplyRecentSplitsFileState(string path, ISettings settings, LiveSplitState state)
     {

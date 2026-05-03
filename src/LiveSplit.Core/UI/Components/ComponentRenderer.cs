@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Numerics;
 
 using LiveSplit.Model;
 using LiveSplit.Options;
@@ -37,15 +36,11 @@ public class ComponentRenderer
         float bottomPadding = Math.Min(GetPaddingBelow(index), component.PaddingBottom) / 2f;
         ctx.IntersectClip(new RectangleF(0, topPadding, width, component.VerticalHeight - topPadding - bottomPadding));
 
-        Matrix3x2 t = ctx.GetTransform();
-        float scale = t.M11;
-        int separatorOffset = component.VerticalHeight * scale < 3 ? 1 : 0;
-
         if (ctx.IsVisible(new RectangleF(
-            t.M31,
-            -separatorOffset + t.M32 - (topPadding * scale),
+            0f,
+            topPadding,
             width,
-            (separatorOffset * 2f) + (scale * (component.VerticalHeight + bottomPadding)))))
+            component.VerticalHeight - topPadding - bottomPadding)))
         {
             component.DrawVertical(ctx, state, width);
         }
@@ -58,14 +53,10 @@ public class ComponentRenderer
         float rightPadding = Math.Min(GetPaddingToRight(index), component.PaddingRight) / 2f;
         ctx.IntersectClip(new RectangleF(leftPadding, 0, component.HorizontalWidth - leftPadding - rightPadding, height));
 
-        Matrix3x2 t = ctx.GetTransform();
-        float scale = t.M11;
-        int separatorOffset = component.VerticalHeight * scale < 3 ? 1 : 0;
-
         if (ctx.IsVisible(new RectangleF(
-            -separatorOffset + t.M31 - (leftPadding * scale),
-            t.M32,
-            (separatorOffset * 2f) + (scale * (component.HorizontalWidth + rightPadding)),
+            leftPadding,
+            0f,
+            component.HorizontalWidth - leftPadding - rightPadding,
             height)))
         {
             component.DrawHorizontal(ctx, state, height);

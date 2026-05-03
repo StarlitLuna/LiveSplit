@@ -96,6 +96,41 @@ public class AvaloniaRenderControlMust
         }
     }
 
+    [Fact]
+    public void DefaultLayoutSnapshotRendersComponentsBelowTitle()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            host.LoadDefaultLayout();
+            var canvas = new SkiaRenderControl { Host = host };
+            (int windowWidth, int windowHeight) = TimerWindow.GetWindowSizeForLayout(
+                host.State.Layout.VerticalWidth,
+                host.State.Layout.VerticalHeight);
+            canvas.Measure(new Size(windowWidth, windowHeight));
+            canvas.Arrange(new Rect(0, 0, windowWidth, windowHeight));
+
+            byte[] png = canvas.SnapshotPng();
+
+            Assert.NotNull(png);
+            AssertSnapshotSize(png, host.State.Layout.VerticalWidth, host.State.Layout.VerticalHeight);
+            Assert.True(
+                HasBrightPixelInBand(png, host.State.Layout.VerticalHeight - 140, host.State.Layout.VerticalHeight - 20, 180),
+                "Expected the default layout timer/footer components to render below the title band.");
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
     private static void AssertSnapshotSize(byte[] png, int width, int height)
     {
         using SKBitmap bitmap = SKBitmap.Decode(png);
@@ -160,6 +195,28 @@ public class AvaloniaRenderControlMust
         }
 
         return max;
+    }
+
+    private static bool HasBrightPixelInBand(byte[] png, int startY, int endY, int threshold)
+    {
+        using SKBitmap bitmap = SKBitmap.Decode(png);
+        Assert.NotNull(bitmap);
+
+        startY = Math.Max(0, startY);
+        endY = Math.Min(bitmap.Height, endY);
+        for (int y = startY; y < endY; y++)
+        {
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                SKColor pixel = bitmap.GetPixel(x, y);
+                if (Math.Max(pixel.Red, Math.Max(pixel.Green, pixel.Blue)) >= threshold)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static bool HasColoredSubpixelFringe(byte[] png)

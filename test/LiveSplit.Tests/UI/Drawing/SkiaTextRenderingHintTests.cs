@@ -1,7 +1,10 @@
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 
+using LiveSplit.UI;
+using LiveSplit.UI.Drawing;
 using LiveSplit.UI.Drawing.Skia;
 
 using SkiaSharp;
@@ -10,6 +13,7 @@ using Xunit;
 
 namespace LiveSplit.Tests.UI.Drawing;
 
+[Collection("DrawingApi")]
 public class SkiaTextRenderingHintTests
 {
     [Fact]
@@ -75,5 +79,75 @@ public class SkiaTextRenderingHintTests
         Assert.Equal(CompositingQuality.GammaCorrected, context.CompositingQuality);
         Assert.Equal(CompositingMode.SourceOver, context.CompositingMode);
         Assert.Equal(PixelOffsetMode.Half, context.PixelOffsetMode);
+    }
+
+    [Fact]
+    public void SimpleLabelWithoutEffectsMatchesSingleDrawString()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        var bounds = new RectangleF(4f, 4f, 160f, 60f);
+        var font = new FontDescriptor("Arial", 32f, FontStyle.Bold, GraphicsUnit.Pixel);
+        Color color = Color.FromArgb(172, 172, 172);
+
+        using SKBitmap direct = RenderText(ctx =>
+        {
+            using IFont drawFont = DrawingApi.Factory.CreateFont(font.FamilyName, font.Size, font.Style, font.Unit);
+            using IBrush brush = DrawingApi.Factory.CreateSolidBrush(color);
+            ITextFormat format = CreateLabelTextFormat();
+            ctx.DrawString("0.00", drawFont, brush, bounds, format);
+        });
+
+        using SKBitmap label = RenderText(ctx =>
+        {
+            using IBrush brush = DrawingApi.Factory.CreateSolidBrush(color);
+            var simpleLabel = new SimpleLabel("0.00", bounds.X, bounds.Y, font, bounds.Width, bounds.Height)
+            {
+                HasShadow = false,
+                OutlineColor = Color.Transparent,
+                Brush = brush,
+            };
+            simpleLabel.Draw(ctx);
+        });
+
+        AssertSamePixels(direct, label);
+    }
+
+    private static SKBitmap RenderText(Action<IDrawingContext> draw)
+    {
+        using SKSurface surface = SKSurface.Create(new SKImageInfo(180, 80, SKColorType.Bgra8888, SKAlphaType.Premul));
+        surface.Canvas.Clear(SKColors.Black);
+        var context = new SkiaDrawingContext(surface.Canvas)
+        {
+            SmoothingMode = SmoothingMode.AntiAlias,
+            TextRenderingHint = TextRenderingHint.AntiAlias,
+            InterpolationMode = InterpolationMode.Bilinear,
+            CompositingQuality = CompositingQuality.GammaCorrected,
+            CompositingMode = CompositingMode.SourceOver,
+        };
+
+        draw(context);
+        using SKImage image = surface.Snapshot();
+        return SKBitmap.FromImage(image);
+    }
+
+    private static ITextFormat CreateLabelTextFormat()
+    {
+        ITextFormat format = DrawingApi.Factory.CreateTextFormat();
+        format.FormatFlags = StringFormatFlags.NoWrap;
+        format.Trimming = StringTrimming.EllipsisCharacter;
+        return format;
+    }
+
+    private static void AssertSamePixels(SKBitmap expected, SKBitmap actual)
+    {
+        Assert.Equal(expected.Width, actual.Width);
+        Assert.Equal(expected.Height, actual.Height);
+        for (int y = 0; y < expected.Height; y++)
+        {
+            for (int x = 0; x < expected.Width; x++)
+            {
+                Assert.Equal(expected.GetPixel(x, y), actual.GetPixel(x, y));
+            }
+        }
     }
 }

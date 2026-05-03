@@ -118,6 +118,8 @@ internal sealed class SkiaFont : IFont
     public float Ascent => _ascent;
     public float Descent => _descent;
 
+    internal float GdiMeasureHeightPadding => Font.Size * 0.125f;
+
     public SkiaFont(string familyName, float size, System.Drawing.FontStyle style, GraphicsUnit unit)
     {
         FamilyName = familyName;

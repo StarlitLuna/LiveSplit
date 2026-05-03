@@ -112,6 +112,37 @@ public class SkiaTextRenderingHintTests
         AssertSamePixels(direct, label);
     }
 
+    [Fact]
+    public void DefaultTextFontMeasureStringHeightMatchesGdiOnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var font = new FontDescriptor("Segoe UI", 16f, FontStyle.Regular, GraphicsUnit.Pixel);
+        using var bitmap = new Bitmap(200, 80);
+        using Graphics graphics = Graphics.FromImage(bitmap);
+        using var gdiFont = new Font(font.FamilyName, font.Size, font.Style, font.Unit);
+        using var format = new StringFormat
+        {
+            FormatFlags = StringFormatFlags.NoWrap,
+            Trimming = StringTrimming.EllipsisCharacter,
+        };
+        SizeF gdiSize = graphics.MeasureString("A", gdiFont, 9999, format);
+
+        DrawingApi.Register(new SkiaDrawingFactory());
+        using SKSurface surface = SKSurface.Create(new SKImageInfo(200, 80));
+        var context = new SkiaDrawingContext(surface.Canvas);
+        using IFont skiaFont = DrawingApi.Factory.CreateFont(font.FamilyName, font.Size, font.Style, font.Unit);
+        ITextFormat skiaFormat = DrawingApi.Factory.CreateTextFormat();
+        skiaFormat.FormatFlags = StringFormatFlags.NoWrap;
+        skiaFormat.Trimming = StringTrimming.EllipsisCharacter;
+        SizeF skiaSize = context.MeasureString("A", skiaFont, 9999, skiaFormat);
+
+        Assert.InRange(skiaSize.Height, gdiSize.Height - 0.25f, gdiSize.Height + 0.25f);
+    }
+
     private static SKBitmap RenderText(Action<IDrawingContext> draw)
     {
         using SKSurface surface = SKSurface.Create(new SKImageInfo(180, 80, SKColorType.Bgra8888, SKAlphaType.Premul));

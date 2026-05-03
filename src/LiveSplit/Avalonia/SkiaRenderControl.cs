@@ -18,10 +18,10 @@ namespace LiveSplit.Avalonia;
 
 /// <summary>
 /// Avalonia <see cref="Control"/> that runs <see cref="ComponentRenderer"/> through a
-/// <see cref="SkiaDrawingContext"/>. Avalonia's desktop rendering backend is Skia-based, so we
-/// lease its <see cref="SKCanvas"/> directly via <see cref="ISkiaSharpApiLeaseFeature"/> rather
-/// than maintaining a separate framebuffer. <see cref="AvaloniaTimerHost"/> pumps
-/// <c>InvalidateVisual</c> at ~30 Hz to drive the running clock.
+/// <see cref="SkiaDrawingContext"/>. We render into a raster frame first so the drawing context
+/// can emulate master WinForms' gamma-corrected GDI+ alpha compositing for transparent
+/// separators without changing opaque gradient interpolation. <see cref="AvaloniaTimerHost"/>
+/// pumps <c>InvalidateVisual</c> at the configured refresh rate to drive the running clock.
 /// </summary>
 public sealed class SkiaRenderControl : Control
 {
@@ -44,36 +44,16 @@ public sealed class SkiaRenderControl : Control
 
         Host.UpdateComponentsForRender(w, h);
 
-        using var surface = SKSurface.Create(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using SKSurface surface = CreateFrameSurface(w, h);
         if (surface == null)
         {
             return null;
         }
 
-        SKCanvas canvas = surface.Canvas;
-        canvas.Clear(SKColors.Transparent);
-
-        IDrawingContext ctx = new SkiaDrawingContext(canvas);
-        ApplyMasterRenderSettings(ctx, Host.State.LayoutSettings);
-        LayoutMode mode = Host.State.Layout.Mode;
-
-        DrawLayoutBackground(ctx, Host.State.LayoutSettings, w, h);
-
-        float overallSize = System.Math.Max(Host.Renderer.OverallSize, 1f);
-        float scale = mode == LayoutMode.Vertical ? h / overallSize : w / overallSize;
-        if (scale > 0 && !float.IsInfinity(scale) && !float.IsNaN(scale))
-        {
-            ctx.ScaleTransform(scale, scale);
-        }
-        else
+        if (!RenderFrame(surface, Host, w, h, clearToBlack: false))
         {
             return null;
         }
-
-        float drawWidth = mode == LayoutMode.Vertical ? w / scale : overallSize;
-        float drawHeight = mode == LayoutMode.Vertical ? overallSize : h / scale;
-        ctx.TranslateTransform(-0.5f, -0.5f);
-        Host.Renderer.Render(ctx, Host.State, drawWidth, drawHeight, mode);
 
         using SKImage image = surface.Snapshot();
         using SKData data = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -120,51 +100,79 @@ public sealed class SkiaRenderControl : Control
                 return;
             }
 
-            using ISkiaSharpApiLease lease = leaseFeature.Lease();
-            SKCanvas canvas = lease.SkCanvas;
-            canvas.DrawRect(
-                (float)Bounds.X,
-                (float)Bounds.Y,
-                (float)Bounds.Width,
-                (float)Bounds.Height,
-                BlackBackgroundPaint);
-
-            IDrawingContext ctx = new SkiaDrawingContext(canvas);
-            ApplyMasterRenderSettings(ctx, _host.State.LayoutSettings);
-
-            LiveSplitState state = _host.State;
-            (float width, float height) = GetLayoutRenderSize(_host, (float)Bounds.Width, (float)Bounds.Height);
-            _host.UpdateComponentsForRender(width, height);
-            LayoutMode mode = state.Layout.Mode;
-
-            // Layout-level background (solid, gradient, or image). Drawn before the per-component
-            // scale transform so the fill spans the full window. Per-component backgrounds
-            // (set via BackgroundHelper.DrawBackground) layer on top inside each component's
-            // own clip region.
-            DrawLayoutBackground(ctx, state.LayoutSettings, (float)Bounds.Width, (float)Bounds.Height);
-
-            // Scale so components paint at their natural size; the layout mode picks which
-            // axis is the constraint (full height for vertical, full width for horizontal).
-            float overallSize = System.Math.Max(_host.Renderer.OverallSize, 1f);
-            float scale = mode == LayoutMode.Vertical
-                ? height / overallSize
-                : width / overallSize;
-            if (scale > 0 && !float.IsInfinity(scale) && !float.IsNaN(scale))
-            {
-                ctx.ScaleTransform(scale, scale);
-            }
-            else
+            int width = (int)System.Math.Max(1, System.Math.Ceiling(Bounds.Width));
+            int height = (int)System.Math.Max(1, System.Math.Ceiling(Bounds.Height));
+            using SKSurface surface = CreateFrameSurface(width, height);
+            if (surface is null || !RenderFrame(surface, _host, width, height, clearToBlack: true))
             {
                 return;
             }
 
-            float drawWidth = mode == LayoutMode.Vertical ? width / scale : overallSize;
-            float drawHeight = mode == LayoutMode.Vertical ? overallSize : height / scale;
-
-            ctx.TranslateTransform(-0.5f, -0.5f);
-            _host.Renderer.Render(ctx, state, drawWidth, drawHeight, mode);
+            using SKImage image = surface.Snapshot();
+            using ISkiaSharpApiLease lease = leaseFeature.Lease();
+            SKCanvas canvas = lease.SkCanvas;
+            canvas.DrawImage(
+                image,
+                SKRect.Create(0f, 0f, image.Width, image.Height),
+                SKRect.Create((float)Bounds.X, (float)Bounds.Y, (float)Bounds.Width, (float)Bounds.Height),
+                NoSamplingPaint);
         }
 
+    }
+
+    internal static SKSurface CreateFrameSurface(int width, int height)
+    {
+        var info = new SKImageInfo(
+            System.Math.Max(1, width),
+            System.Math.Max(1, height),
+            SKColorType.Bgra8888,
+            SKAlphaType.Premul,
+            SKColorSpace.CreateSrgb());
+        return SKSurface.Create(info);
+    }
+
+    private static bool RenderFrame(SKSurface surface, AvaloniaTimerHost host, float width, float height, bool clearToBlack)
+    {
+        SKCanvas canvas = surface.Canvas;
+        canvas.Clear(SKColors.Transparent);
+        if (clearToBlack)
+        {
+            canvas.DrawRect(0f, 0f, width, height, BlackBackgroundPaint);
+        }
+
+        IDrawingContext ctx = new SkiaDrawingContext(surface);
+        ApplyMasterRenderSettings(ctx, host.State.LayoutSettings);
+
+        LiveSplitState state = host.State;
+        (float layoutWidth, float layoutHeight) = GetLayoutRenderSize(host, width, height);
+        host.UpdateComponentsForRender(layoutWidth, layoutHeight);
+        LayoutMode mode = state.Layout.Mode;
+
+        // Layout-level background (solid, gradient, or image). Drawn before the per-component
+        // scale transform so the fill spans the full window. Per-component backgrounds
+        // (set via BackgroundHelper.DrawBackground) layer on top inside each component's
+        // own clip region.
+        DrawLayoutBackground(ctx, state.LayoutSettings, width, height);
+
+        // Scale so components paint at their natural size; the layout mode picks which
+        // axis is the constraint (full height for vertical, full width for horizontal).
+        float overallSize = System.Math.Max(host.Renderer.OverallSize, 1f);
+        float scale = mode == LayoutMode.Vertical
+            ? layoutHeight / overallSize
+            : layoutWidth / overallSize;
+        if (scale <= 0 || float.IsInfinity(scale) || float.IsNaN(scale))
+        {
+            return false;
+        }
+
+        ctx.ScaleTransform(scale, scale);
+
+        float drawWidth = mode == LayoutMode.Vertical ? layoutWidth / scale : overallSize;
+        float drawHeight = mode == LayoutMode.Vertical ? overallSize : layoutHeight / scale;
+
+        ctx.TranslateTransform(-0.5f, -0.5f);
+        host.Renderer.Render(ctx, state, drawWidth, drawHeight, mode);
+        return true;
     }
 
     internal static void DrawLayoutBackground(IDrawingContext ctx, LiveSplit.Options.LayoutSettings settings, float width, float height)
@@ -285,5 +293,11 @@ public sealed class SkiaRenderControl : Control
     {
         Style = SKPaintStyle.Fill,
         Color = SKColors.Black,
+    };
+
+    private static SKPaint NoSamplingPaint { get; } = new()
+    {
+        FilterQuality = SKFilterQuality.None,
+        IsAntialias = false,
     };
 }

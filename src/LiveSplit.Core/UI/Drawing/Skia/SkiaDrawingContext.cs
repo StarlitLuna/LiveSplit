@@ -29,11 +29,23 @@ namespace LiveSplit.UI.Drawing.Skia;
 public sealed class SkiaDrawingContext : IDrawingContext
 {
     private readonly SKCanvas _canvas;
+    private readonly SKSurface _surface;
     private readonly int _baseSaveCount;
 
     public SkiaDrawingContext(SKCanvas canvas, float dpiX = 96f, float dpiY = 96f)
+        : this(canvas, null, dpiX, dpiY)
+    {
+    }
+
+    public SkiaDrawingContext(SKSurface surface, float dpiX = 96f, float dpiY = 96f)
+        : this(surface?.Canvas ?? throw new ArgumentNullException(nameof(surface)), surface, dpiX, dpiY)
+    {
+    }
+
+    private SkiaDrawingContext(SKCanvas canvas, SKSurface surface, float dpiX, float dpiY)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
+        _surface = surface;
         _baseSaveCount = canvas.SaveCount;
         DpiX = dpiX;
         DpiY = dpiY;
@@ -57,13 +69,35 @@ public sealed class SkiaDrawingContext : IDrawingContext
 
     public void FillRectangle(IBrush brush, RectangleF rect)
     {
+        if (TryFillGammaCorrectedSolidRectangle(brush, rect))
+        {
+            return;
+        }
+
+        if (TryDrawSnappedFillRectangle(brush, rect))
+        {
+            return;
+        }
+
         using SKPaint paint = CreateFillPaint(brush);
+        paint.IsAntialias = false;
         _canvas.DrawRect(ToSk(rect), paint);
     }
 
     public void FillRectangle(IBrush brush, float x, float y, float width, float height)
     {
+        if (TryFillGammaCorrectedSolidRectangle(brush, new RectangleF(x, y, width, height)))
+        {
+            return;
+        }
+
+        if (TryDrawSnappedFillRectangle(brush, new RectangleF(x, y, width, height)))
+        {
+            return;
+        }
+
         using SKPaint paint = CreateFillPaint(brush);
+        paint.IsAntialias = false;
         _canvas.DrawRect(x, y, width, height, paint);
     }
 
@@ -195,7 +229,7 @@ public sealed class SkiaDrawingContext : IDrawingContext
         var skFont = (SkiaFont)font;
         using SKFont renderFont = CreateRenderFont(skFont, TextRenderingHint);
         float width = MeasureText(renderFont, text);
-        float height = skFont.Ascent + skFont.Descent;
+        float height = skFont.Ascent + skFont.Descent + skFont.GdiMeasureHeightPadding;
         return new SizeF(width, height);
     }
 
@@ -420,6 +454,186 @@ public sealed class SkiaDrawingContext : IDrawingContext
 
     private static SKRect ToSk(RectangleF r) => SKRect.Create(r.X, r.Y, r.Width, r.Height);
     private static SKRectI ToSk(Rectangle r) => SKRectI.Create(r.X, r.Y, r.Width, r.Height);
+
+    private bool TryDrawSnappedFillRectangle(IBrush brush, RectangleF rect)
+    {
+        if (rect.Width <= 0f || rect.Height <= 0f)
+        {
+            return true;
+        }
+
+        SKMatrix matrix = _canvas.TotalMatrix;
+        if (matrix.SkewX != 0f
+            || matrix.SkewY != 0f
+            || matrix.Persp0 != 0f
+            || matrix.Persp1 != 0f
+            || matrix.Persp2 != 1f
+            || !matrix.TryInvert(out SKMatrix inverse))
+        {
+            return false;
+        }
+
+        SKRect mapped = matrix.MapRect(ToSk(rect));
+        float left = Math.Min(mapped.Left, mapped.Right);
+        float right = Math.Max(mapped.Left, mapped.Right);
+        float top = Math.Min(mapped.Top, mapped.Bottom);
+        float bottom = Math.Max(mapped.Top, mapped.Bottom);
+
+        float snappedLeft = MathF.Ceiling(left);
+        float snappedRight = MathF.Ceiling(right);
+        float snappedTop = MathF.Ceiling(top);
+        float snappedBottom = MathF.Ceiling(bottom);
+        if (snappedLeft >= snappedRight || snappedTop >= snappedBottom)
+        {
+            return true;
+        }
+
+        SKRect snappedLocal = inverse.MapRect(SKRect.Create(
+            snappedLeft,
+            snappedTop,
+            snappedRight - snappedLeft,
+            snappedBottom - snappedTop));
+
+        using SKPaint paint = CreateFillPaint(brush);
+        paint.IsAntialias = false;
+        _canvas.DrawRect(snappedLocal, paint);
+        return true;
+    }
+
+    private bool TryFillGammaCorrectedSolidRectangle(IBrush brush, RectangleF rect)
+    {
+        if (_surface is null
+            || CompositingQuality != CompositingQuality.GammaCorrected
+            || brush is not SkiaSolidBrush solid
+            || rect.Width <= 0f
+            || rect.Height <= 0f)
+        {
+            return false;
+        }
+
+        Color color = solid.Color;
+        if (color.A == 0)
+        {
+            return true;
+        }
+
+        if (color.A == 255)
+        {
+            return false;
+        }
+
+        using SKPixmap pixmap = _surface.PeekPixels();
+        if (pixmap is null
+            || pixmap.ColorType != SKColorType.Bgra8888
+            || pixmap.AlphaType != SKAlphaType.Premul
+            || pixmap.BytesPerPixel != 4)
+        {
+            return false;
+        }
+
+        SKMatrix matrix = _canvas.TotalMatrix;
+        if (matrix.SkewX != 0f
+            || matrix.SkewY != 0f
+            || matrix.Persp0 != 0f
+            || matrix.Persp1 != 0f
+            || matrix.Persp2 != 1f)
+        {
+            return false;
+        }
+
+        SKRect mapped = matrix.MapRect(ToSk(rect));
+        float left = Math.Min(mapped.Left, mapped.Right);
+        float right = Math.Max(mapped.Left, mapped.Right);
+        float top = Math.Min(mapped.Top, mapped.Bottom);
+        float bottom = Math.Max(mapped.Top, mapped.Bottom);
+        SKRectI clip = _canvas.DeviceClipBounds;
+
+        int startX = Math.Max(clip.Left, (int)Math.Ceiling(left));
+        int endX = Math.Min(clip.Right, (int)Math.Ceiling(right));
+        int startY = Math.Max(clip.Top, (int)Math.Ceiling(top));
+        int endY = Math.Min(clip.Bottom, (int)Math.Ceiling(bottom));
+        if (startX >= endX || startY >= endY)
+        {
+            return true;
+        }
+
+        Span<byte> pixels = pixmap.GetPixelSpan<byte>();
+        double sourceAlpha = color.A / 255d;
+        double sourceRed = SrgbToLinear(color.R / 255d);
+        double sourceGreen = SrgbToLinear(color.G / 255d);
+        double sourceBlue = SrgbToLinear(color.B / 255d);
+
+        for (int y = startY; y < endY; y++)
+        {
+            int rowOffset = y * pixmap.RowBytes;
+            for (int x = startX; x < endX; x++)
+            {
+                BlendGammaCorrectedPixel(
+                    pixels,
+                    rowOffset + (x * 4),
+                    sourceRed,
+                    sourceGreen,
+                    sourceBlue,
+                    sourceAlpha);
+            }
+        }
+
+        return true;
+    }
+
+    private static void BlendGammaCorrectedPixel(
+        Span<byte> pixels,
+        int offset,
+        double sourceRed,
+        double sourceGreen,
+        double sourceBlue,
+        double sourceAlpha)
+    {
+        double destinationAlpha = pixels[offset + 3] / 255d;
+        double outputAlpha = sourceAlpha + (destinationAlpha * (1d - sourceAlpha));
+        if (outputAlpha <= 0d)
+        {
+            pixels[offset] = 0;
+            pixels[offset + 1] = 0;
+            pixels[offset + 2] = 0;
+            pixels[offset + 3] = 0;
+            return;
+        }
+
+        double destinationBlue = Unpremultiply(pixels[offset], destinationAlpha);
+        double destinationGreen = Unpremultiply(pixels[offset + 1], destinationAlpha);
+        double destinationRed = Unpremultiply(pixels[offset + 2], destinationAlpha);
+
+        pixels[offset] = PremultiplyToByte(BlendLinear(sourceBlue, destinationBlue, sourceAlpha, destinationAlpha, outputAlpha), outputAlpha);
+        pixels[offset + 1] = PremultiplyToByte(BlendLinear(sourceGreen, destinationGreen, sourceAlpha, destinationAlpha, outputAlpha), outputAlpha);
+        pixels[offset + 2] = PremultiplyToByte(BlendLinear(sourceRed, destinationRed, sourceAlpha, destinationAlpha, outputAlpha), outputAlpha);
+        pixels[offset + 3] = ToByte(outputAlpha);
+    }
+
+    private static double BlendLinear(double source, double destination, double sourceAlpha, double destinationAlpha, double outputAlpha)
+    {
+        double destinationLinear = SrgbToLinear(destination);
+        return ((source * sourceAlpha) + (destinationLinear * destinationAlpha * (1d - sourceAlpha))) / outputAlpha;
+    }
+
+    private static double Unpremultiply(byte channel, double alpha)
+        => alpha <= 0d ? 0d : Math.Clamp((channel / 255d) / alpha, 0d, 1d);
+
+    private static byte PremultiplyToByte(double linearChannel, double alpha)
+        => ToByte(LinearToSrgb(linearChannel) * alpha);
+
+    private static byte ToByte(double value)
+        => (byte)Math.Clamp((int)Math.Round(value * 255d), 0, 255);
+
+    private static double SrgbToLinear(double value)
+        => value <= 0.04045d
+            ? value / 12.92d
+            : Math.Pow((value + 0.055d) / 1.055d, 2.4d);
+
+    private static double LinearToSrgb(double value)
+        => value <= 0.0031308d
+            ? value * 12.92d
+            : (1.055d * Math.Pow(Math.Clamp(value, 0d, 1d), 1d / 2.4d)) - 0.055d;
 }
 
 internal sealed class SkiaDrawingState : IDrawingState

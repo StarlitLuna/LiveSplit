@@ -1,4 +1,5 @@
 using System;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -13,6 +14,10 @@ using LiveSplit.UI.Drawing.Skia;
 using SkiaSharp;
 
 using Xunit;
+
+using DrawingBitmap = System.Drawing.Bitmap;
+using DrawingGraphics = System.Drawing.Graphics;
+using DrawingSolidBrush = System.Drawing.SolidBrush;
 
 namespace LiveSplit.Tests.Avalonia;
 
@@ -131,6 +136,183 @@ public class AvaloniaRenderControlMust
         }
     }
 
+    [Fact]
+    public void DefaultLayoutSnapshotRendersUpperSplitSeparators()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            host.LoadDefaultLayout();
+            var canvas = new SkiaRenderControl { Host = host };
+            (int windowWidth, int windowHeight) = TimerWindow.GetWindowSizeForLayout(
+                host.State.Layout.VerticalWidth,
+                host.State.Layout.VerticalHeight);
+            canvas.Measure(new Size(windowWidth, windowHeight));
+            canvas.Arrange(new Rect(0, 0, windowWidth, windowHeight));
+
+            byte[] png = canvas.SnapshotPng();
+
+            Assert.NotNull(png);
+            using SKBitmap bitmap = SKBitmap.Decode(png);
+            int[] rows = FindDimHorizontalRows(bitmap, 45, host.State.Layout.VerticalHeight / 2);
+
+            Assert.True(
+                rows.Length >= 6,
+                $"Expected the upper default-layout split separators to be visible; found rows: {string.Join(", ", rows)}.");
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
+    [Fact]
+    public void GammaCorrectedSolidFillMatchesGdiSeparatorCompositingOnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        System.Drawing.Color background = System.Drawing.Color.FromArgb(255, 15, 15, 15);
+        System.Drawing.Color separator = System.Drawing.Color.FromArgb(3, 255, 255, 255);
+        byte expected = RenderGdiComposite(background, separator);
+
+        DrawingApi.Register(new SkiaDrawingFactory());
+        using SKSurface surface = SkiaRenderControl.CreateFrameSurface(4, 4);
+        var ctx = new SkiaDrawingContext(surface);
+        SkiaRenderControl.ApplyMasterRenderSettings(ctx, new LayoutSettings { AntiAliasing = true });
+        using (ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(background))
+        {
+            ctx.FillRectangle(brush, 0f, 0f, 4f, 4f);
+        }
+
+        using (ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(separator))
+        {
+            ctx.FillRectangle(brush, 0f, 0f, 4f, 1f);
+        }
+
+        using SKImage image = surface.Snapshot();
+        using SKBitmap bitmap = SKBitmap.FromImage(image);
+        SKColor actual = bitmap.GetPixel(0, 0);
+
+        Assert.InRange(actual.Red, expected - 1, expected + 1);
+        Assert.Equal(actual.Red, actual.Green);
+        Assert.Equal(actual.Red, actual.Blue);
+    }
+
+    [Fact]
+    public void OpaqueTitleGradientStaysCloseToGdiRowsOnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        byte[] expected = RenderGdiGradientRows(
+            System.Drawing.Color.FromArgb(255, 42, 42, 42),
+            System.Drawing.Color.FromArgb(255, 19, 19, 19),
+            39);
+
+        DrawingApi.Register(new SkiaDrawingFactory());
+        using SKSurface surface = SkiaRenderControl.CreateFrameSurface(4, expected.Length);
+        var ctx = new SkiaDrawingContext(surface);
+        SkiaRenderControl.ApplyMasterRenderSettings(ctx, new LayoutSettings { AntiAliasing = true });
+        using (ILinearGradientBrush brush = DrawingApi.Factory.CreateLinearGradientBrush(
+            new System.Drawing.PointF(0f, 0f),
+            new System.Drawing.PointF(0f, expected.Length),
+            System.Drawing.Color.FromArgb(255, 42, 42, 42),
+            System.Drawing.Color.FromArgb(255, 19, 19, 19)))
+        {
+            ctx.FillRectangle(brush, 0f, 0f, 4f, expected.Length);
+        }
+
+        using SKImage image = surface.Snapshot();
+        using SKBitmap bitmap = SKBitmap.FromImage(image);
+
+        int maxDifference = 0;
+        int maxPlateau = 0;
+        int currentPlateau = 0;
+        byte previous = bitmap.GetPixel(0, 0).Red;
+        for (int y = 0; y < expected.Length; y++)
+        {
+            byte actual = bitmap.GetPixel(0, y).Red;
+            maxDifference = Math.Max(maxDifference, Math.Abs(actual - expected[y]));
+            if (y > 0 && actual == previous)
+            {
+                currentPlateau++;
+                maxPlateau = Math.Max(maxPlateau, currentPlateau);
+            }
+            else
+            {
+                currentPlateau = 0;
+            }
+
+            previous = actual;
+        }
+
+        Assert.InRange(maxDifference, 0, 2);
+        Assert.InRange(maxPlateau, 0, 2);
+    }
+
+    [Fact]
+    public void FractionalGradientRectangleTopEdgeMatchesGdiOnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        const int bitmapHeight = 519;
+        const float scale = 0.84641f;
+        const float top = 582.1781f;
+        const float height = 31f;
+        System.Drawing.Color background = System.Drawing.Color.FromArgb(255, 15, 15, 15);
+        System.Drawing.Color start = System.Drawing.Color.FromArgb(255, 28, 28, 28);
+        System.Drawing.Color end = System.Drawing.Color.FromArgb(255, 13, 13, 13);
+        byte[] expected = RenderGdiFractionalGradientRows(background, start, end, top, height, scale, bitmapHeight);
+
+        DrawingApi.Register(new SkiaDrawingFactory());
+        using SKSurface surface = SkiaRenderControl.CreateFrameSurface(4, expected.Length);
+        var ctx = new SkiaDrawingContext(surface);
+        SkiaRenderControl.ApplyMasterRenderSettings(ctx, new LayoutSettings { AntiAliasing = true });
+        using (ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(background))
+        {
+            ctx.FillRectangle(brush, 0f, 0f, 4f, expected.Length);
+        }
+
+        ctx.ScaleTransform(scale, scale);
+        ctx.TranslateTransform(-0.5f, -0.5f);
+        using (ILinearGradientBrush brush = DrawingApi.Factory.CreateLinearGradientBrush(
+            new System.Drawing.PointF(0f, top),
+            new System.Drawing.PointF(0f, top + height),
+            start,
+            end))
+        {
+            ctx.FillRectangle(brush, 0f, top, 4f / scale, height);
+        }
+
+        using SKImage image = surface.Snapshot();
+        using SKBitmap bitmap = SKBitmap.FromImage(image);
+
+        Assert.Equal(background.R, bitmap.GetPixel(1, 492).Red);
+
+        for (int y = 490; y < expected.Length; y++)
+        {
+            byte actual = bitmap.GetPixel(1, y).Red;
+            Assert.True(
+                actual >= expected[y] - 2 && actual <= expected[y] + 2,
+                $"Expected row {y} to match GDI red {expected[y]}, actual {actual}.");
+        }
+    }
+
     private static void AssertSnapshotSize(byte[] png, int width, int height)
     {
         using SKBitmap bitmap = SKBitmap.Decode(png);
@@ -219,6 +401,34 @@ public class AvaloniaRenderControlMust
         return false;
     }
 
+    private static int[] FindDimHorizontalRows(SKBitmap bitmap, int startY, int endY)
+    {
+        var rows = new System.Collections.Generic.List<int>();
+        startY = Math.Max(0, startY);
+        endY = Math.Min(bitmap.Height, endY);
+
+        for (int y = startY; y < endY; y++)
+        {
+            int count = 0;
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                SKColor pixel = bitmap.GetPixel(x, y);
+                int luminance = Math.Max(pixel.Red, Math.Max(pixel.Green, pixel.Blue));
+                if (pixel.Alpha > 240 && luminance >= 25 && luminance <= 55)
+                {
+                    count++;
+                }
+            }
+
+            if (count >= bitmap.Width * 0.8)
+            {
+                rows.Add(y);
+            }
+        }
+
+        return rows.ToArray();
+    }
+
     private static bool HasColoredSubpixelFringe(byte[] png)
     {
         using SKBitmap bitmap = SKBitmap.Decode(png);
@@ -244,6 +454,72 @@ public class AvaloniaRenderControlMust
         }
 
         return false;
+    }
+
+    private static byte RenderGdiComposite(System.Drawing.Color background, System.Drawing.Color foreground)
+    {
+        using var bitmap = new DrawingBitmap(4, 4, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using DrawingGraphics graphics = DrawingGraphics.FromImage(bitmap);
+        graphics.CompositingQuality = CompositingQuality.GammaCorrected;
+        using var backgroundBrush = new DrawingSolidBrush(background);
+        using var foregroundBrush = new DrawingSolidBrush(foreground);
+        graphics.FillRectangle(backgroundBrush, 0, 0, 4, 4);
+        graphics.FillRectangle(foregroundBrush, 0, 0, 4, 1);
+        return bitmap.GetPixel(0, 0).R;
+    }
+
+    private static byte[] RenderGdiGradientRows(System.Drawing.Color start, System.Drawing.Color end, int height)
+    {
+        using var bitmap = new DrawingBitmap(4, height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using DrawingGraphics graphics = DrawingGraphics.FromImage(bitmap);
+        graphics.CompositingQuality = CompositingQuality.GammaCorrected;
+        using var brush = new LinearGradientBrush(
+            new System.Drawing.PointF(0f, 0f),
+            new System.Drawing.PointF(0f, height),
+            start,
+            end);
+        graphics.FillRectangle(brush, 0, 0, 4, height);
+
+        byte[] rows = new byte[height];
+        for (int y = 0; y < rows.Length; y++)
+        {
+            rows[y] = bitmap.GetPixel(0, y).R;
+        }
+
+        return rows;
+    }
+
+    private static byte[] RenderGdiFractionalGradientRows(
+        System.Drawing.Color background,
+        System.Drawing.Color start,
+        System.Drawing.Color end,
+        float top,
+        float height,
+        float scale,
+        int bitmapHeight)
+    {
+        using var bitmap = new DrawingBitmap(4, bitmapHeight, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using DrawingGraphics graphics = DrawingGraphics.FromImage(bitmap);
+        graphics.CompositingQuality = CompositingQuality.GammaCorrected;
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var backgroundBrush = new DrawingSolidBrush(background);
+        graphics.FillRectangle(backgroundBrush, 0, 0, bitmap.Width, bitmap.Height);
+        graphics.ScaleTransform(scale, scale);
+        graphics.TranslateTransform(-0.5f, -0.5f);
+        using var brush = new LinearGradientBrush(
+            new System.Drawing.PointF(0f, top),
+            new System.Drawing.PointF(0f, top + height),
+            start,
+            end);
+        graphics.FillRectangle(brush, 0f, top, bitmap.Width / scale, height);
+
+        byte[] rows = new byte[bitmap.Height];
+        for (int y = 0; y < rows.Length; y++)
+        {
+            rows[y] = bitmap.GetPixel(1, y).R;
+        }
+
+        return rows;
     }
 
     private static void EnsureComponentFolder()

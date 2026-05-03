@@ -36,8 +36,8 @@ public class ThinSeparatorComponent : IComponent
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
-        // No explicit clip-widen here: Skia can't express GDI+'s `g.Clip = new Region();`
-        // idiom, and a 1-pixel separator fits inside the clip ComponentRenderer already sets.
+        // Master clears the per-component clip before drawing separators. ComponentRenderer
+        // mirrors that for Skia by not applying the tight separator clip in the first place.
         // Save() captures SmoothingMode along with transform + clip on both backends.
         using IDrawingState state_ = ctx.Save();
         ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;

@@ -34,9 +34,13 @@ public class ComponentRenderer
         IComponent component = VisibleComponents.ElementAt(index);
         float topPadding = Math.Min(GetPaddingAbove(index), component.PaddingTop) / 2f;
         float bottomPadding = Math.Min(GetPaddingBelow(index), component.PaddingBottom) / 2f;
-        ctx.IntersectClip(new RectangleF(0, topPadding, width, component.VerticalHeight - topPadding - bottomPadding));
+        bool clipsToComponentBounds = ClipsToComponentBounds(component);
+        if (clipsToComponentBounds)
+        {
+            ctx.IntersectClip(new RectangleF(0, topPadding, width, component.VerticalHeight - topPadding - bottomPadding));
+        }
 
-        if (ctx.IsVisible(new RectangleF(
+        if (!clipsToComponentBounds || ctx.IsVisible(new RectangleF(
             0f,
             topPadding,
             width,
@@ -51,9 +55,13 @@ public class ComponentRenderer
         IComponent component = VisibleComponents.ElementAt(index);
         float leftPadding = Math.Min(GetPaddingToLeft(index), component.PaddingLeft) / 2f;
         float rightPadding = Math.Min(GetPaddingToRight(index), component.PaddingRight) / 2f;
-        ctx.IntersectClip(new RectangleF(leftPadding, 0, component.HorizontalWidth - leftPadding - rightPadding, height));
+        bool clipsToComponentBounds = ClipsToComponentBounds(component);
+        if (clipsToComponentBounds)
+        {
+            ctx.IntersectClip(new RectangleF(leftPadding, 0, component.HorizontalWidth - leftPadding - rightPadding, height));
+        }
 
-        if (ctx.IsVisible(new RectangleF(
+        if (!clipsToComponentBounds || ctx.IsVisible(new RectangleF(
             leftPadding,
             0f,
             component.HorizontalWidth - leftPadding - rightPadding,
@@ -122,6 +130,9 @@ public class ComponentRenderer
 
         return 0f;
     }
+
+    private static bool ClipsToComponentBounds(IComponent component)
+        => component is not SeparatorComponent and not ThinSeparatorComponent;
 
     protected float GetHeightVertical(int index)
     {

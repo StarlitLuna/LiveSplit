@@ -50,15 +50,18 @@ public sealed class HotkeyService : IDisposable
     private readonly LiveSplitState _state;
     private readonly ITimerModel _model;
     private readonly Action _resetAction;
-    private TaskPoolGlobalHook _hook;
+    private readonly Action _startOrSplitAction;
+    private IGlobalHook _hook;
     private Task _hookTask;
     private bool _disposed;
+    private bool _normalHotkeysSuppressed;
 
-    public HotkeyService(LiveSplitState state, ITimerModel model, Action resetAction = null)
+    public HotkeyService(LiveSplitState state, ITimerModel model, Action resetAction = null, Action startOrSplitAction = null)
     {
         _state = state ?? throw new ArgumentNullException(nameof(state));
         _model = model ?? throw new ArgumentNullException(nameof(model));
         _resetAction = resetAction ?? (() => _model.Reset());
+        _startOrSplitAction = startOrSplitAction ?? (() => _model.Split());
     }
 
     public void Start()
@@ -70,7 +73,7 @@ public sealed class HotkeyService : IDisposable
 
         try
         {
-            _hook = new TaskPoolGlobalHook();
+            _hook = new SimpleGlobalHook(runAsyncOnBackgroundThread: true);
             _hook.KeyPressed += OnKeyPressed;
             // RunAsync's task either runs forever (hook is up) or completes/throws (hook
             // couldn't start). Observe it so libuiohook init failures don't get swallowed.
@@ -128,12 +131,23 @@ public sealed class HotkeyService : IDisposable
             return;
         }
 
-        // The profile binds a KeyOrButton, but we only care about the keyboard half here —
-        // gamepad inputs would need a different code path.
-        HotkeyAction target = SelectAction(profile, mapped.Value);
+        // The profile binds a KeyOrButton, but we only care about the keyboard half here.
+        // Gamepad inputs use a different backend path.
+        Key pressed = mapped.Value.WithModifiers(ToLiveSplitModifiers(e.RawEvent.Mask));
+        HotkeyAction target = SelectAction(profile, pressed);
         if (target.Action is null || (!profile.GlobalHotkeysEnabled && !target.IsToggleGlobalHotkeys))
         {
             return;
+        }
+
+        if (_normalHotkeysSuppressed && !target.IsToggleGlobalHotkeys)
+        {
+            return;
+        }
+
+        if (profile.GlobalHotkeysEnabled && profile.DeactivateHotkeysForOtherPrograms)
+        {
+            e.SuppressEvent = true;
         }
 
         ExecuteOnUiThread(profile, target);
@@ -143,6 +157,12 @@ public sealed class HotkeyService : IDisposable
     {
         Key? mapped = ToLiveSplitKey(pressed);
         return mapped.HasValue && DispatchFocusedKey(mapped.Value);
+    }
+
+    public bool DispatchFocusedKey(global::Avalonia.Input.Key pressed, global::Avalonia.Input.KeyModifiers modifiers)
+    {
+        Key? mapped = ToLiveSplitKey(pressed);
+        return mapped.HasValue && DispatchFocusedKey(mapped.Value.WithModifiers(ToLiveSplitModifiers(modifiers)));
     }
 
     internal bool DispatchFocusedKey(Key pressed)
@@ -164,13 +184,18 @@ public sealed class HotkeyService : IDisposable
             return false;
         }
 
+        if (_normalHotkeysSuppressed && !target.IsToggleGlobalHotkeys)
+        {
+            return false;
+        }
+
         Execute(profile, target);
         return true;
     }
 
     private HotkeyAction SelectAction(HotkeyProfile profile, Key pressed)
     {
-        if (Matches(profile.SplitKey, pressed)) { return new HotkeyAction(_model.Split, delayable: true); }
+        if (Matches(profile.SplitKey, pressed)) { return new HotkeyAction(_startOrSplitAction, delayable: true); }
         if (Matches(profile.ResetKey, pressed)) { return new HotkeyAction(_resetAction); }
         if (Matches(profile.SkipKey, pressed)) { return new HotkeyAction(_model.SkipSplit); }
         if (Matches(profile.UndoKey, pressed)) { return new HotkeyAction(_model.UndoSplit); }
@@ -224,8 +249,11 @@ public sealed class HotkeyService : IDisposable
 
     private static bool Matches(KeyOrButton binding, Key pressed)
     {
-        return binding is { IsKey: true } && binding.Key == pressed;
+        return binding is { IsKey: true } && binding.Key.MatchesKey(pressed);
     }
+
+    public void SetNormalHotkeysSuppressed(bool suppressed)
+        => _normalHotkeysSuppressed = suppressed;
 
     private void ExecuteOnUiThread(HotkeyProfile profile, HotkeyAction action)
     {
@@ -263,7 +291,7 @@ public sealed class HotkeyService : IDisposable
         }
     }
 
-    private static Key? ToLiveSplitKey(global::Avalonia.Input.Key key)
+    internal static Key? ToLiveSplitKey(global::Avalonia.Input.Key key)
     {
         if (Enum.TryParse(key.ToString(), out Key parsed))
         {
@@ -294,6 +322,15 @@ public sealed class HotkeyService : IDisposable
             _ => null,
         };
     }
+
+    internal static Key ToLiveSplitModifiers(global::Avalonia.Input.KeyModifiers modifiers)
+        => KeyExtensions.FromModifierBooleans(
+            (modifiers & global::Avalonia.Input.KeyModifiers.Shift) == global::Avalonia.Input.KeyModifiers.Shift,
+            (modifiers & global::Avalonia.Input.KeyModifiers.Control) == global::Avalonia.Input.KeyModifiers.Control,
+            (modifiers & global::Avalonia.Input.KeyModifiers.Alt) == global::Avalonia.Input.KeyModifiers.Alt);
+
+    private static Key ToLiveSplitModifiers(ModifierMask modifiers)
+        => KeyExtensions.FromModifierBooleans(modifiers.HasShift(), modifiers.HasCtrl(), modifiers.HasAlt());
 
     /// <summary>
     /// Map SharpHook's <see cref="KeyCode"/> to LiveSplit's <see cref="Key"/>. Most names line

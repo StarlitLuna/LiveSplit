@@ -11,7 +11,7 @@ public enum MessageResult { Ok, Yes, No, Cancel }
 
 public sealed class MessageDialog : Window
 {
-    public enum Buttons { Ok, OkCancel, YesNo, YesNoCancel }
+    public enum Buttons { Ok, OkCancel, YesNo, YesNoCancel, RetryCancel }
 
     private readonly TaskCompletionSource<MessageResult> _result = new();
 
@@ -52,6 +52,10 @@ public sealed class MessageDialog : Window
                 AddButton(buttonBar, "Cancel", MessageResult.Cancel, isCancel: true);
                 AddButton(buttonBar, "No", MessageResult.No);
                 AddButton(buttonBar, "Yes", MessageResult.Yes, isDefault: true);
+                break;
+            case Buttons.RetryCancel:
+                AddButton(buttonBar, "Cancel", MessageResult.Cancel, isCancel: true);
+                AddButton(buttonBar, "Retry", MessageResult.Ok, isDefault: true);
                 break;
             case Buttons.Ok:
             default:

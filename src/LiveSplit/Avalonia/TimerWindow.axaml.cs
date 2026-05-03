@@ -289,7 +289,7 @@ public sealed partial class TimerWindow : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (Host?.DispatchFocusedHotkey(e.Key) == true)
+        if (Host?.DispatchFocusedHotkey(e.Key, e.KeyModifiers) == true)
         {
             e.Handled = true;
         }
@@ -607,11 +607,19 @@ public sealed partial class TimerWindow : Window
         ISettings previous = (ISettings)Host.State.Settings.Clone();
         ISettings edited = (ISettings)Host.State.Settings.Clone();
         var dlg = new SettingsDialog(edited, Host.State.CurrentHotkeyProfile);
-        if (await dlg.ShowDialogAsync(this))
+        Host.SetNormalHotkeysSuppressed(true);
+        try
         {
-            Host.ApplySettings(edited, dlg.SelectedHotkeyProfile);
-            ApplyServerSettings(previous, edited);
-            InvalidateVisual();
+            if (await dlg.ShowDialogAsync(this))
+            {
+                Host.ApplySettings(edited, dlg.SelectedHotkeyProfile);
+                ApplyServerSettings(previous, edited);
+                InvalidateVisual();
+            }
+        }
+        finally
+        {
+            Host.SetNormalHotkeysSuppressed(false);
         }
     }
 

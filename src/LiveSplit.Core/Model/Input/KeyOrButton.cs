@@ -71,7 +71,12 @@ public class KeyOrButton
         }
         else
         {
-            Key = (Key)Enum.Parse(typeof(Key), stringRepresentation, true);
+            if (!KeyExtensions.TryParseMasterString(stringRepresentation, out Key parsed))
+            {
+                parsed = (Key)Enum.Parse(typeof(Key), stringRepresentation, true);
+            }
+
+            Key = parsed;
             IsKey = true;
         }
     }
@@ -80,7 +85,7 @@ public class KeyOrButton
     {
         if (IsKey)
         {
-            return Key.ToString();
+            return Key.ToMasterString();
         }
         else
         {

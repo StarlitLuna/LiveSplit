@@ -56,7 +56,6 @@ public sealed class RunEditorDialog : Window
     private readonly StackPanel _gameTimeRows;
     private readonly DataGrid _historyGrid;
     private readonly StackPanel _variablesPanel;
-    private readonly StackPanel _customComparisonsPanel;
 
     private TextBlock _autoSplitterDescription;
     private Button _autoSplitterActivateBtn;
@@ -153,12 +152,6 @@ public sealed class RunEditorDialog : Window
         _gameTimeRows = new StackPanel { Spacing = 2 };
         _historyGrid = BuildHistoryGrid();
         _variablesPanel = new StackPanel { Spacing = 8, Margin = new Thickness(20) };
-        _customComparisonsPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-        };
 
         var tabs = new TabControl
         {
@@ -649,8 +642,13 @@ public sealed class RunEditorDialog : Window
         var addCmpBtn = new Button { Content = "Add Comparison…" };
         addCmpBtn.Click += async (_, _) => await AddCustomComparison();
 
-        _customComparisonsPanel.Children.Clear();
-        _customComparisonsPanel.Children.Add(addCmpBtn);
+        var customComparisonsPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 0),
+            Children = { addCmpBtn },
+        };
 
         var rowsScroll = new ScrollViewer
         {
@@ -660,8 +658,8 @@ public sealed class RunEditorDialog : Window
         };
 
         var stack = new DockPanel { LastChildFill = true, Margin = new Thickness(8) };
-        DockPanel.SetDock(_customComparisonsPanel, Dock.Top);
-        stack.Children.Add(_customComparisonsPanel);
+        DockPanel.SetDock(customComparisonsPanel, Dock.Top);
+        stack.Children.Add(customComparisonsPanel);
         stack.Children.Add(rowsScroll);
         return stack;
     }

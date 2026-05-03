@@ -9,6 +9,7 @@ namespace LiveSplit.Model.Input;
 /// Numeric values are the same as the WinForms enum (which in turn matches Win32 VK codes), so
 /// callers that bridge to native input layers see the same numbers either side.
 /// </summary>
+[System.Flags]
 public enum Key
 {
     None = 0,
@@ -221,4 +222,10 @@ public enum Key
     NoName = 252,
     Pa1 = 253,
     OemClear = 254,
+
+    KeyCode = 65535,
+    Shift = 65536,
+    Control = 131072,
+    Alt = 262144,
+    Modifiers = -65536,
 }

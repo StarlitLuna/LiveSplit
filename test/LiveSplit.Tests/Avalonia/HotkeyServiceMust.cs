@@ -14,6 +14,125 @@ namespace LiveSplit.Tests.Avalonia;
 public class HotkeyServiceMust
 {
     [Fact]
+    public void DefaultStartSplitHotkeyMatchesMaster()
+    {
+        ISettings settings = new StandardSettingsFactory().Create();
+
+        Assert.Equal(new KeyOrButton(Key.NumPad1), settings.HotkeyProfiles[HotkeyProfile.DefaultHotkeyProfileName].SplitKey);
+    }
+
+    [Fact]
+    public void KeyOrButtonRoundTripsMasterModifierSyntax()
+    {
+        var binding = new KeyOrButton("Control, NumPad1");
+
+        Assert.True(binding.IsKey);
+        Assert.Equal(Key.Control | Key.NumPad1, binding.Key);
+        Assert.Equal("Control, NumPad1", binding.ToString());
+    }
+
+    [Fact]
+    public void FocusedStartSplitInvokesMasterStartOrSplitFlow()
+    {
+        ISettings settings = new StandardSettingsFactory().Create();
+        settings.HotkeyProfiles.Clear();
+        settings.HotkeyProfiles["Alt"] = new HotkeyProfile
+        {
+            SplitKey = new KeyOrButton(Key.NumPad4),
+            GlobalHotkeysEnabled = false,
+            DoubleTapPrevention = false,
+        };
+
+        var state = new LiveSplitState(
+            new Run(new LiveSplit.Model.Comparisons.StandardComparisonGeneratorsFactory()),
+            form: null,
+            layout: new Layout(),
+            layoutSettings: new LiveSplit.Options.SettingsFactories.StandardLayoutSettingsFactory().Create(),
+            settings)
+        {
+            CurrentHotkeyProfile = "Alt",
+            CurrentComparison = Run.PersonalBestComparisonName,
+        };
+
+        int startOrSplitCount = 0;
+        int rawSplitCount = 0;
+        using var service = new HotkeyService(
+            state,
+            new StubTimerModel(state, () => rawSplitCount++),
+            startOrSplitAction: () => startOrSplitCount++);
+
+        Assert.True(service.DispatchFocusedKey(Key.NumPad4));
+        Assert.Equal(1, startOrSplitCount);
+        Assert.Equal(0, rawSplitCount);
+    }
+
+    [Fact]
+    public void FocusedHotkeysMatchModifiersExactly()
+    {
+        ISettings settings = new StandardSettingsFactory().Create();
+        settings.HotkeyProfiles.Clear();
+        settings.HotkeyProfiles["Alt"] = new HotkeyProfile
+        {
+            SplitKey = new KeyOrButton(Key.Control | Key.NumPad4),
+            GlobalHotkeysEnabled = false,
+            DoubleTapPrevention = false,
+        };
+
+        var state = new LiveSplitState(
+            new Run(new LiveSplit.Model.Comparisons.StandardComparisonGeneratorsFactory()),
+            form: null,
+            layout: new Layout(),
+            layoutSettings: new LiveSplit.Options.SettingsFactories.StandardLayoutSettingsFactory().Create(),
+            settings)
+        {
+            CurrentHotkeyProfile = "Alt",
+            CurrentComparison = Run.PersonalBestComparisonName,
+        };
+
+        int count = 0;
+        using var service = new HotkeyService(state, new StubTimerModel(state, () => { }), startOrSplitAction: () => count++);
+
+        Assert.False(service.DispatchFocusedKey(Key.NumPad4));
+        Assert.True(service.DispatchFocusedKey(global::Avalonia.Input.Key.NumPad4, global::Avalonia.Input.KeyModifiers.Control));
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public void SuppressingNormalHotkeysStillAllowsToggleGlobalHotkeys()
+    {
+        ISettings settings = new StandardSettingsFactory().Create();
+        settings.HotkeyProfiles.Clear();
+        settings.HotkeyProfiles["Alt"] = new HotkeyProfile
+        {
+            SplitKey = new KeyOrButton(Key.NumPad4),
+            ToggleGlobalHotkeys = new KeyOrButton(Key.T),
+            GlobalHotkeysEnabled = false,
+            DoubleTapPrevention = false,
+        };
+
+        var state = new LiveSplitState(
+            new Run(new LiveSplit.Model.Comparisons.StandardComparisonGeneratorsFactory()),
+            form: null,
+            layout: new Layout(),
+            layoutSettings: new LiveSplit.Options.SettingsFactories.StandardLayoutSettingsFactory().Create(),
+            settings)
+        {
+            CurrentHotkeyProfile = "Alt",
+            CurrentComparison = Run.PersonalBestComparisonName,
+        };
+
+        int splitCount = 0;
+        using var service = new HotkeyService(state, new StubTimerModel(state, () => splitCount++));
+
+        service.SetNormalHotkeysSuppressed(true);
+
+        Assert.False(service.DispatchFocusedKey(Key.NumPad4));
+        Assert.True(service.DispatchFocusedKey(Key.T));
+        Assert.True(settings.HotkeyProfiles["Alt"].GlobalHotkeysEnabled);
+        Assert.Equal(0, splitCount);
+    }
+
+    [Fact]
     public void FocusedFallbackUsesActiveHotkeyProfileAndToggleGlobalHotkeys()
     {
         ISettings settings = new StandardSettingsFactory().Create();

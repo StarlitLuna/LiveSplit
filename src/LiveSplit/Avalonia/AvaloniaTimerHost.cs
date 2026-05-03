@@ -46,6 +46,7 @@ public sealed class AvaloniaTimerHost : IDisposable
     private readonly bool _activateAutoSplitters;
     private readonly bool _persistOnDispose;
     private readonly Func<string, AutoSplitter> _autoSplitterResolver;
+    private int _refreshDelayMs;
     private bool _disposed;
 
     public AvaloniaTimerHost(
@@ -111,16 +112,16 @@ public sealed class AvaloniaTimerHost : IDisposable
             // System-wide split/reset/skip/undo/pause hotkey listener. Falls back silently if
             // libuiohook can't grab globals (Wayland without portal, headless CI); the per-window
             // KeyBindings in TimerWindow.axaml still fire when the LiveSplit window is focused.
-            _hotkeys = new HotkeyService(State, Model, RequestResetFromHotkey);
+            _hotkeys = new HotkeyService(State, Model, RequestResetFromHotkey, StartOrSplitFromHotkey);
             _hotkeys.Start();
 
-            int delayMs = Math.Max(1, (int)Math.Round(1000.0 / Math.Max(1, settings.RefreshRate)));
+            _refreshDelayMs = GetRefreshDelay(settings.RefreshRate);
             _refreshTask = Task.Run(async () =>
             {
                 while (!_disposed)
                 {
                     Dispatcher.UIThread.Post(invalidateVisual, DispatcherPriority.Background);
-                    await Task.Delay(delayMs).ConfigureAwait(false);
+                    await Task.Delay(_refreshDelayMs).ConfigureAwait(false);
                 }
             });
         }
@@ -369,6 +370,25 @@ public sealed class AvaloniaTimerHost : IDisposable
         Model.Reset();
     }
 
+    private void StartOrSplitFromHotkey()
+    {
+        switch (State.CurrentPhase)
+        {
+            case TimerPhase.Running:
+                Model.Split();
+                break;
+            case TimerPhase.Paused:
+                Model.Pause();
+                break;
+            case TimerPhase.NotRunning:
+                Model.Start();
+                break;
+            case TimerPhase.Ended:
+                Model.Reset();
+                break;
+        }
+    }
+
     // --- Bootstrap helpers (factored out of the constructor for readability) ---
 
     private static ISettings LoadOrCreateSettings()
@@ -524,6 +544,14 @@ public sealed class AvaloniaTimerHost : IDisposable
         return _hotkeys?.DispatchFocusedKey(key) == true;
     }
 
+    public bool DispatchFocusedHotkey(global::Avalonia.Input.Key key, global::Avalonia.Input.KeyModifiers modifiers)
+    {
+        return _hotkeys?.DispatchFocusedKey(key, modifiers) == true;
+    }
+
+    public void SetNormalHotkeysSuppressed(bool suppressed)
+        => _hotkeys?.SetNormalHotkeysSuppressed(suppressed);
+
     public void UpdateComponentsForRender(float width, float height)
     {
         if (State?.Layout is null || Renderer?.VisibleComponents is null)
@@ -565,8 +593,13 @@ public sealed class AvaloniaTimerHost : IDisposable
         SwitchComparisonGenerators(State);
         SwitchComparison(State, State.Settings.LastComparison);
         RegenerateComparisons(State);
+        _refreshDelayMs = GetRefreshDelay(State.Settings.RefreshRate);
+        SaveSettings();
         Invalidate();
     }
+
+    private static int GetRefreshDelay(int refreshRate)
+        => Math.Max(1, (int)Math.Round(1000.0 / Math.Max(1, refreshRate)));
 
     private static void ApplyRecentSplitsFileState(string path, ISettings settings, LiveSplitState state)
     {

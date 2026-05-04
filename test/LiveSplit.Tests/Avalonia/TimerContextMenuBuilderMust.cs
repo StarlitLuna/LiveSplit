@@ -189,8 +189,27 @@ public class TimerContextMenuBuilderMust
         Assert.Equal(
             ["Custom", "<separator>", "Average Segments", "<separator>", "[Race] runner", "<separator>", "Real Time", "Game Time"],
             LabelsWithSeparators(comparisons.Items.Cast<object>()));
-        Assert.NotNull(MenuItems(comparisons.Items.Cast<object>()).Single(x => (string)x.Header == "Custom").Icon);
-        Assert.NotNull(MenuItems(comparisons.Items.Cast<object>()).Single(x => (string)x.Header == "Game Time").Icon);
+        MenuItem custom = MenuItems(comparisons.Items.Cast<object>()).Single(x => (string)x.Header == "Custom");
+        MenuItem gameTime = MenuItems(comparisons.Items.Cast<object>()).Single(x => (string)x.Header == "Game Time");
+        Assert.Equal(MenuItemToggleType.Radio, custom.ToggleType);
+        Assert.True(custom.IsChecked);
+        Assert.Equal(MenuItemToggleType.Radio, gameTime.ToggleType);
+        Assert.True(gameTime.IsChecked);
+    }
+
+    [Fact]
+    public void BuildCheckedGlobalHotkeysMenuItemWithAvaloniaToggleState()
+    {
+        var context = CreateContext();
+        context.State.Settings.HotkeyProfiles[context.State.CurrentHotkeyProfile].GlobalHotkeysEnabled = true;
+
+        MenuItem control = MenuItems(TimerContextMenuBuilder.BuildRootItems(context))
+            .Single(x => (string)x.Header == "Control");
+        MenuItem hotkeys = MenuItems(control.Items.Cast<object>())
+            .Single(x => (string)x.Header == "Global Hotkeys");
+
+        Assert.Equal(MenuItemToggleType.CheckBox, hotkeys.ToggleType);
+        Assert.True(hotkeys.IsChecked);
     }
 
     private static TimerContextMenuContext CreateContext()

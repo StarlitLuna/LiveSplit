@@ -31,6 +31,9 @@ public static class RaceMenuFormatter
         return capability == RaceJoinCapability.OpenViewer ? "New Race in Browser..." : "New Race...";
     }
 
+    public static bool CanCreateRace(RaceProviderAPI provider)
+        => provider?.CreateRace is not null;
+
     public static RaceMenuAction ResolveRaceAction(RaceProviderAPI provider, IRaceInfo race, bool isInProgress)
     {
         if (provider?.JoinCapability != RaceJoinCapability.JoinRace || provider.JoinRace is null)

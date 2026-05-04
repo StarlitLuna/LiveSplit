@@ -93,6 +93,28 @@ public class VideoComponentMust
     }
 
     [Fact]
+    public void DoesNotContinuouslySeekWhenVideoTimeIsWithinTolerance()
+    {
+        LiveSplitState state = CreateState();
+        var player = new FakeVideoPlayer();
+        var component = new VideoComponent(state, player);
+        var document = new XmlDocument();
+        XmlElement settings = document.CreateElement("Settings");
+        SettingsHelper.CreateSetting(document, settings, "VideoPath", @"C:\runs\pb.mp4");
+        SettingsHelper.CreateSetting(document, settings, "Offset", "0:00:00.000");
+        component.SetSettings(settings);
+
+        var model = new TimerModel { CurrentState = state };
+        model.Start();
+        state.AdjustedStartTime = TimeStamp.Now - TimeSpan.FromSeconds(3);
+        player.CurrentTime = TimeSpan.FromSeconds(3.1);
+
+        component.Update(null, state, 320, 240, LayoutMode.Vertical);
+
+        Assert.Equal(1, player.SetTimeCount);
+    }
+
+    [Fact]
     public void DrawCurrentVideoFrameWhenPlayerHasDecodedFrame()
     {
         LiveSplitState state = CreateState();
@@ -291,6 +313,8 @@ public class VideoComponentMust
     {
         public string LoadedPath { get; private set; }
         public TimeSpan? LastTime { get; private set; }
+        public TimeSpan CurrentTime { get; set; }
+        public int SetTimeCount { get; private set; }
         public bool Played { get; private set; }
         public bool Paused { get; private set; }
         public bool Stopped { get; private set; }
@@ -320,6 +344,8 @@ public class VideoComponentMust
         public void SetTime(TimeSpan time)
         {
             LastTime = time;
+            CurrentTime = time;
+            SetTimeCount++;
         }
 
         public void Dispose()

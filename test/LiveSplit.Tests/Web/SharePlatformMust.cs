@@ -162,6 +162,53 @@ public class SharePlatformMust
         }
     }
 
+    [Fact]
+    public void MigrateLegacyMasterShareTemplatesWithSettingsNamespace()
+    {
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"{System.Guid.NewGuid():N}.xml");
+        string legacyPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"{System.Guid.NewGuid():N}.config");
+        try
+        {
+            System.IO.File.WriteAllText(
+                legacyPath,
+                """
+                <?xml version="1.0" encoding="utf-8"?>
+                <configuration>
+                  <userSettings>
+                    <LiveSplit.Web.Share.Properties.Settings>
+                      <setting name="TwitterFormat" serializeAs="String">
+                        <value>master completed $title</value>
+                      </setting>
+                      <setting name="TwitterFormatRunning" serializeAs="String">
+                        <value>master running $delta</value>
+                      </setting>
+                    </LiveSplit.Web.Share.Properties.Settings>
+                  </userSettings>
+                </configuration>
+                """);
+
+            var store = new ShareTemplateSettingsStore(path, legacyPath);
+
+            ShareTemplateSettings loaded = store.Load();
+
+            Assert.Equal("master completed $title", loaded.TwitterCompletedFormat);
+            Assert.Equal("master running $delta", loaded.TwitterRunningFormat);
+            Assert.Equal(ShareTemplateSettings.DefaultTwitchFormatText, loaded.TwitchFormat);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(path))
+            {
+                System.IO.File.Delete(path);
+            }
+
+            if (System.IO.File.Exists(legacyPath))
+            {
+                System.IO.File.Delete(legacyPath);
+            }
+        }
+    }
+
     [Theory]
     [InlineData("https://livesplit.org/twitch/#access_token=abc123&scope=channel%3Amanage%3Abroadcast", "abc123")]
     [InlineData("http://livesplit.org/twitch/?ignored=true#access_token=token_value_42&token_type=bearer", "token_value_42")]

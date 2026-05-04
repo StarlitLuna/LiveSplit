@@ -1014,8 +1014,12 @@ public sealed class RunEditorDialog : Window
 
     private async Task AddCustomComparison()
     {
-        var prompt = new TextInputDialog("New Comparison", "Comparison name:");
-        string name = await prompt.ShowDialogAsync(this);
+        string name = await PromptForComparisonNameUntilValid("New Comparison", "Comparison name:");
+        if (name is null)
+        {
+            return;
+        }
+
         if (!RunEditorDialogModel.TryAddComparison(Run, name))
         {
             return;
@@ -1093,9 +1097,8 @@ public sealed class RunEditorDialog : Window
             return;
         }
 
-        var namePrompt = new TextInputDialog("Enter Comparison Name", "Name:", defaultName ?? string.Empty);
-        string name = await namePrompt.ShowDialogAsync(this);
-        if (string.IsNullOrWhiteSpace(name))
+        string name = await PromptForComparisonNameUntilValid("Enter Comparison Name", "Name:", defaultName ?? string.Empty);
+        if (name is null)
         {
             return;
         }
@@ -1128,8 +1131,12 @@ public sealed class RunEditorDialog : Window
             return;
         }
 
-        var prompt = new TextInputDialog("Rename Comparison", "Comparison Name:", oldName);
-        string newName = await prompt.ShowDialogAsync(this);
+        string newName = await PromptForComparisonNameUntilValid("Rename Comparison", "Comparison Name:", oldName, oldName);
+        if (newName is null)
+        {
+            return;
+        }
+
         if (!RunEditorDialogModel.TryRenameComparison(Run, oldName, newName))
         {
             return;
@@ -1173,6 +1180,49 @@ public sealed class RunEditorDialog : Window
             selector.ItemsSource = comparisons;
             selector.SelectedItem = comparisons.Contains(selected) ? selected : comparisons.FirstOrDefault();
         }
+    }
+
+    private async Task<string> PromptForComparisonNameUntilValid(string title, string label, string initialName = "", string existingName = null)
+    {
+        string current = initialName ?? string.Empty;
+        while (true)
+        {
+            var prompt = new TextInputDialog(title, label, current);
+            string name = await prompt.ShowDialogAsync(this);
+            if (name is null)
+            {
+                return null;
+            }
+
+            RunEditorComparisonNameError error = RunEditorDialogModel.ValidateComparisonName(Run, name, existingName);
+            if (error == RunEditorComparisonNameError.None)
+            {
+                return name;
+            }
+
+            if (error == RunEditorComparisonNameError.Unchanged)
+            {
+                return null;
+            }
+
+            current = name;
+            if (await ShowComparisonNameError(error) != MessageResult.Ok)
+            {
+                return null;
+            }
+        }
+    }
+
+    private async Task<MessageResult> ShowComparisonNameError(RunEditorComparisonNameError error)
+    {
+        (string title, string message) = error switch
+        {
+            RunEditorComparisonNameError.Duplicate => ("Comparison Already Exists", "A Comparison with this name already exists."),
+            RunEditorComparisonNameError.Race => ("Invalid Comparison Name", "A Comparison name cannot start with [Race]."),
+            _ => ("Invalid Comparison Name", "Please enter a comparison name."),
+        };
+
+        return await new MessageDialog(title, message, MessageDialog.Buttons.RetryCancel).ShowDialogResultAsync(this);
     }
 
     // ------------------------------------------------------------------------
@@ -1272,16 +1322,20 @@ public sealed class RunEditorDialog : Window
 
     private async Task CleanSumOfBest()
     {
-        var dialog = new MessageDialog(
-            "Clean Sum of Best",
-            "Remove potentially invalid segment history elements from the Sum of Best?",
-            MessageDialog.Buttons.YesNo);
-        if (await dialog.ShowDialogResultAsync(this) != MessageResult.Yes)
+        bool userWasPrompted = await RunEditorDialogModel.CleanSumOfBestAsync(
+            Run,
+            prompt => new MessageDialog(
+                "Remove Time From Segment History?",
+                prompt.DialogText,
+                MessageDialog.Buttons.YesNoCancel).ShowDialogResultAsync(this));
+        if (!userWasPrompted)
         {
-            return;
+            await new MessageDialog(
+                "No times to clean",
+                "No times to clean. There are no potentially invalid segment history elements in the Sum of Best.")
+                .ShowDialogAsync(this);
         }
 
-        RunEditorDialogModel.CleanSumOfBest(Run, _ => true);
         RebuildHistoryRows();
         RebuildTimingRows();
     }
@@ -1848,6 +1902,62 @@ public sealed class RunEditorDialog : Window
 
 public readonly record struct SpeedrunComAssociationState(bool CanSubmit, string AssociateButtonText);
 
+public enum RunEditorComparisonNameError
+{
+    None,
+    Invalid,
+    Duplicate,
+    Race,
+    Unchanged,
+}
+
+public sealed record RunEditorCleanSumOfBestPrompt(string MessageText, string DialogText);
+
+public sealed class RunEditorCleanSumOfBestInteraction
+{
+    private readonly Func<RunEditorCleanSumOfBestPrompt, MessageResult> _prompt;
+    private readonly Dictionary<string, bool> _pastResponses = [];
+    private bool _alwaysCancel;
+
+    public bool UserWasPrompted { get; private set; }
+
+    public RunEditorCleanSumOfBestInteraction(Func<RunEditorCleanSumOfBestPrompt, MessageResult> prompt)
+    {
+        _prompt = prompt ?? throw new ArgumentNullException(nameof(prompt));
+    }
+
+    public bool Callback(SumOfBest.CleanUpCallbackParameters parameters)
+    {
+        UserWasPrompted = true;
+        if (_alwaysCancel)
+        {
+            return false;
+        }
+
+        RunEditorCleanSumOfBestPrompt prompt = RunEditorDialogModel.BuildCleanSumOfBestPrompt(parameters);
+        if (_pastResponses.TryGetValue(prompt.MessageText, out bool cached))
+        {
+            return cached;
+        }
+
+        MessageResult result = _prompt(prompt);
+        if (result == MessageResult.Yes)
+        {
+            _pastResponses.Add(prompt.MessageText, true);
+            return true;
+        }
+
+        if (result == MessageResult.No)
+        {
+            _pastResponses.Add(prompt.MessageText, false);
+            return false;
+        }
+
+        _alwaysCancel = true;
+        return false;
+    }
+}
+
 internal sealed class RunEditorDialogLayoutSpec
 {
     public static RunEditorDialogLayoutSpec Master { get; } = new();
@@ -1922,10 +2032,22 @@ public static class RunEditorDialogModel
 
     public static void InsertSegment(IRun run, int index, string name)
     {
+        index = Math.Clamp(index, 0, run.Count);
+        if (index < run.Count)
+        {
+            run.ImportBestSegment(index);
+        }
+
         var segment = new Segment(name);
         foreach (string comparison in run.CustomComparisons)
         {
             segment.Comparisons[comparison] = new Time();
+        }
+
+        int maxIndex = run.AttemptHistory.Select(x => x.Index).DefaultIfEmpty(0).Max();
+        for (int runIndex = run.GetMinSegmentHistoryIndex(); runIndex <= maxIndex; runIndex++)
+        {
+            segment.SegmentHistory.Add(runIndex, default);
         }
 
         run.Insert(index, segment);
@@ -1940,6 +2062,7 @@ public static class RunEditorDialogModel
             return;
         }
 
+        FixAfterSegmentDeletion(run, index);
         run.RemoveAt(index);
         run.FixSplits();
         run.HasChanged = true;
@@ -1952,15 +2075,37 @@ public static class RunEditorDialogModel
             return;
         }
 
-        ISegment moved = run[oldIndex];
-        run.RemoveAt(oldIndex);
-        run.Insert(newIndex, moved);
+        if (Math.Abs(oldIndex - newIndex) != 1)
+        {
+            ISegment moved = run[oldIndex];
+            run.RemoveAt(oldIndex);
+            run.Insert(newIndex, moved);
+            run.HasChanged = true;
+            return;
+        }
+
+        if (oldIndex < newIndex)
+        {
+            for (int index = oldIndex; index < newIndex; index++)
+            {
+                SwitchAdjacentSegments(run, index);
+            }
+        }
+        else
+        {
+            for (int index = oldIndex - 1; index >= newIndex; index--)
+            {
+                SwitchAdjacentSegments(run, index);
+            }
+        }
+
+        run.FixSplits();
         run.HasChanged = true;
     }
 
     public static bool TryAddComparison(IRun run, string name)
     {
-        if (!IsValidNewComparisonName(run, name))
+        if (ValidateComparisonName(run, name) != RunEditorComparisonNameError.None)
         {
             return false;
         }
@@ -1979,7 +2124,7 @@ public static class RunEditorDialogModel
     {
         if (string.Equals(oldName, Run.PersonalBestComparisonName, StringComparison.Ordinal)
             || !run.CustomComparisons.Contains(oldName)
-            || !IsValidNewComparisonName(run, newName))
+            || ValidateComparisonName(run, newName, oldName) != RunEditorComparisonNameError.None)
         {
             return false;
         }
@@ -2016,7 +2161,8 @@ public static class RunEditorDialogModel
 
     public static bool TryImportComparisonFromRun(IRun target, IRun comparisonRun, string name)
     {
-        if (target is null || comparisonRun is null || comparisonRun.Count == 0 || !IsValidNewComparisonName(target, name))
+        if (target is null || comparisonRun is null || comparisonRun.Count == 0
+            || ValidateComparisonName(target, name) != RunEditorComparisonNameError.None)
         {
             return false;
         }
@@ -2042,6 +2188,58 @@ public static class RunEditorDialogModel
         target.HasChanged = true;
         target.FixSplits();
         return true;
+    }
+
+    public static RunEditorComparisonNameError ValidateComparisonName(IRun run, string name, string existingName = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return RunEditorComparisonNameError.Invalid;
+        }
+
+        if (string.Equals(name, existingName, StringComparison.Ordinal))
+        {
+            return RunEditorComparisonNameError.Unchanged;
+        }
+
+        if (name.StartsWith("[Race]", StringComparison.Ordinal))
+        {
+            return RunEditorComparisonNameError.Race;
+        }
+
+        return run.Comparisons.Contains(name)
+            ? RunEditorComparisonNameError.Duplicate
+            : RunEditorComparisonNameError.None;
+    }
+
+    public static string ResolveComparisonNameWithRetry(
+        IRun run,
+        string initialName,
+        string existingName,
+        Func<string> retryNameProvider,
+        Func<RunEditorComparisonNameError, string, MessageResult> invalidNamePrompt)
+    {
+        string name = initialName;
+        while (true)
+        {
+            RunEditorComparisonNameError error = ValidateComparisonName(run, name, existingName);
+            if (error == RunEditorComparisonNameError.None)
+            {
+                return name;
+            }
+
+            if (error == RunEditorComparisonNameError.Unchanged
+                || invalidNamePrompt(error, name) != MessageResult.Ok)
+            {
+                return null;
+            }
+
+            name = retryNameProvider();
+            if (name is null)
+            {
+                return null;
+            }
+        }
     }
 
     public static void SetLinkedLayout(IRun run, bool linked, string selectedPath)
@@ -2280,16 +2478,229 @@ public static class RunEditorDialogModel
         run.HasChanged = true;
     }
 
+    public static async Task<bool> CleanSumOfBestAsync(
+        IRun run,
+        Func<RunEditorCleanSumOfBestPrompt, Task<MessageResult>> prompt)
+    {
+        var pastResponses = new Dictionary<string, bool>();
+        bool alwaysCancel = false;
+        bool userWasPrompted = false;
+
+        async Task<bool> callback(SumOfBest.CleanUpCallbackParameters parameters)
+        {
+            userWasPrompted = true;
+            if (alwaysCancel)
+            {
+                return false;
+            }
+
+            RunEditorCleanSumOfBestPrompt cleanPrompt = BuildCleanSumOfBestPrompt(parameters);
+            if (pastResponses.TryGetValue(cleanPrompt.MessageText, out bool cached))
+            {
+                return cached;
+            }
+
+            MessageResult result = await prompt(cleanPrompt);
+            if (result == MessageResult.Yes)
+            {
+                pastResponses.Add(cleanPrompt.MessageText, true);
+                return true;
+            }
+
+            if (result == MessageResult.No)
+            {
+                pastResponses.Add(cleanPrompt.MessageText, false);
+                return false;
+            }
+
+            alwaysCancel = true;
+            return false;
+        }
+
+        await CleanSumOfBestAsync(run, TimingMethod.RealTime, callback);
+        await CleanSumOfBestAsync(run, TimingMethod.GameTime, callback);
+        run.HasChanged = true;
+        return userWasPrompted;
+    }
+
+    public static RunEditorCleanSumOfBestPrompt BuildCleanSumOfBestPrompt(SumOfBest.CleanUpCallbackParameters parameters)
+    {
+        var formatter = new ShortTimeFormatter();
+        string messageText = formatter.Format(parameters.timeBetween) + " between "
+            + (parameters.startingSegment != null ? parameters.startingSegment.Name : "the start of the run") + " and "
+            + parameters.endingSegment.Name
+            + (parameters.combinedSumOfBest != null
+                ? ", which is faster than the Combined Best Segments of " + formatter.Format(parameters.combinedSumOfBest)
+                : string.Empty);
+        if (parameters.attempt.Ended.HasValue)
+        {
+            messageText += " in a run on " + parameters.attempt.Ended.Value.Time.ToLocalTime().ToString("M/d/yyyy");
+        }
+
+        string dialogText = string.Format(
+            "You had a {0} segment time of {1}. Do you think that this segment time is inaccurate and should be removed?",
+            parameters.method == TimingMethod.RealTime ? "Real Time" : "Game Time",
+            messageText);
+        return new RunEditorCleanSumOfBestPrompt(messageText, dialogText);
+    }
+
     public static string DisplayLayoutPath(string layoutPath)
     {
         return string.Equals(layoutPath, DefaultLayoutPath, StringComparison.Ordinal) ? string.Empty : layoutPath ?? string.Empty;
     }
 
-    private static bool IsValidNewComparisonName(IRun run, string name)
+    private static async Task CleanSumOfBestAsync(
+        IRun run,
+        TimingMethod method,
+        Func<SumOfBest.CleanUpCallbackParameters, Task<bool>> callback)
     {
-        return !string.IsNullOrWhiteSpace(name)
-            && !name.StartsWith("[Race]", StringComparison.Ordinal)
-            && !run.Comparisons.Contains(name);
+        var predictions = new TimeSpan?[run.Count + 1];
+        SumOfBest.CalculateSumOfBest(run, 0, run.Count - 1, predictions, simpleCalculation: true, useCurrentRun: false, method);
+        int segmentIndex = 0;
+        TimeSpan? currentTime = TimeSpan.Zero;
+        foreach (ISegment segment in run)
+        {
+            currentTime = predictions[segmentIndex];
+            foreach (KeyValuePair<int, Time> nullSegment in run[segmentIndex].SegmentHistory
+                .Where(x => !x.Value[method].HasValue)
+                .ToList())
+            {
+                IndexedTime prediction = SumOfSegmentsHelper.TrackBranch(run, currentTime, segmentIndex + 1, nullSegment.Key, method);
+                await CheckCleanPredictionAsync(
+                    run,
+                    predictions,
+                    prediction.Time[method],
+                    segmentIndex - 1,
+                    prediction.Index - 1,
+                    nullSegment.Key,
+                    method,
+                    callback);
+            }
+
+            segmentIndex++;
+        }
+    }
+
+    private static async Task CheckCleanPredictionAsync(
+        IRun run,
+        TimeSpan?[] predictions,
+        TimeSpan? predictedTime,
+        int startingIndex,
+        int endingIndex,
+        int runIndex,
+        TimingMethod method,
+        Func<SumOfBest.CleanUpCallbackParameters, Task<bool>> callback)
+    {
+        if (!predictedTime.HasValue || (predictions[endingIndex + 1].HasValue && predictedTime >= predictions[endingIndex + 1].Value))
+        {
+            return;
+        }
+
+        if (!run[endingIndex].SegmentHistory.TryGetValue(runIndex, out Time segmentHistoryElement))
+        {
+            return;
+        }
+
+        var parameters = new SumOfBest.CleanUpCallbackParameters
+        {
+            startingSegment = startingIndex >= 0 ? run[startingIndex] : null,
+            endingSegment = endingIndex >= 0 ? run[endingIndex] : null,
+            timeBetween = segmentHistoryElement[method].Value,
+            combinedSumOfBest = predictions[endingIndex + 1].HasValue
+                ? predictions[endingIndex + 1].Value - predictions[startingIndex + 1].Value
+                : null,
+            attempt = run.AttemptHistory.FirstOrDefault(x => x.Index == runIndex),
+            method = method,
+        };
+        if (await callback(parameters))
+        {
+            run[endingIndex].SegmentHistory.Remove(runIndex);
+        }
+    }
+
+    private static void SwitchAdjacentSegments(IRun run, int index)
+    {
+        ISegment firstSegment = run[index];
+        ISegment secondSegment = run[index + 1];
+
+        int maxIndex = run.AttemptHistory.Select(x => x.Index).DefaultIfEmpty(0).Max();
+        for (int runIndex = run.GetMinSegmentHistoryIndex(); runIndex <= maxIndex; runIndex++)
+        {
+            bool firstExists = firstSegment.SegmentHistory.TryGetValue(runIndex, out Time firstHistory);
+            bool secondExists = secondSegment.SegmentHistory.TryGetValue(runIndex, out Time secondHistory);
+            if (firstExists && secondExists
+                && (firstHistory[TimingMethod.RealTime].HasValue != secondHistory[TimingMethod.RealTime].HasValue
+                    || firstHistory[TimingMethod.GameTime].HasValue != secondHistory[TimingMethod.GameTime].HasValue))
+            {
+                firstSegment.SegmentHistory.Remove(runIndex);
+                secondSegment.SegmentHistory.Remove(runIndex);
+            }
+        }
+
+        var comparisonKeys = new List<string>(firstSegment.Comparisons.Keys);
+        foreach (string comparison in comparisonKeys)
+        {
+            Time previousTime = index > 0 ? run[index - 1].Comparisons[comparison] : Time.Zero;
+            Time firstSegmentTime = firstSegment.Comparisons[comparison] - previousTime;
+            Time secondSegmentTime = secondSegment.Comparisons[comparison] - firstSegment.Comparisons[comparison];
+            secondSegment.Comparisons[comparison] = new Time(previousTime + secondSegmentTime);
+            firstSegment.Comparisons[comparison] = new Time(secondSegment.Comparisons[comparison] + firstSegmentTime);
+        }
+
+        run.RemoveAt(index + 1);
+        run.Insert(index, secondSegment);
+    }
+
+    private static void FixAfterSegmentDeletion(IRun run, int index)
+    {
+        FixAfterSegmentDeletion(run, index, TimingMethod.RealTime);
+        FixAfterSegmentDeletion(run, index, TimingMethod.GameTime);
+    }
+
+    private static void FixAfterSegmentDeletion(IRun run, int index, TimingMethod method)
+    {
+        int nextIndex = index + 1;
+        if (nextIndex >= run.Count)
+        {
+            return;
+        }
+
+        int maxIndex = run.AttemptHistory.Select(x => x.Index).DefaultIfEmpty(0).Max();
+        for (int runIndex = run.GetMinSegmentHistoryIndex(); runIndex <= maxIndex; runIndex++)
+        {
+            int currentIndex = nextIndex;
+            if (!run[index].SegmentHistory.TryGetValue(runIndex, out Time deletedHistoryElement))
+            {
+                run[currentIndex].SegmentHistory.Remove(runIndex);
+                continue;
+            }
+
+            TimeSpan? deletedSegmentTime = deletedHistoryElement[method];
+            while (deletedSegmentTime != null && currentIndex < run.Count)
+            {
+                if (run[currentIndex].SegmentHistory.TryGetValue(runIndex, out Time segment) && segment[method] != null)
+                {
+                    segment[method] = deletedSegmentTime + segment[method];
+                    run[currentIndex].SegmentHistory[runIndex] = segment;
+                    break;
+                }
+
+                currentIndex++;
+            }
+        }
+
+        TimeSpan? minBestSegment = run[index].BestSegmentTime[method] + run[nextIndex].BestSegmentTime[method];
+        foreach (KeyValuePair<int, Time> history in run[nextIndex].SegmentHistory)
+        {
+            if (history.Value[method] < minBestSegment)
+            {
+                minBestSegment = history.Value[method];
+            }
+        }
+
+        Time newTime = run[nextIndex].BestSegmentTime;
+        newTime[method] = minBestSegment;
+        run[nextIndex].BestSegmentTime = newTime;
     }
 
     private static int FindMatchingSegmentIndex(IRun target, ISegment segment, int startIndex)

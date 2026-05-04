@@ -209,6 +209,51 @@ public class LayoutEditorDialogMust
     }
 
     [Fact]
+    public void ReorderLayoutComponentsForDragDropMoves()
+    {
+        var first = new TrackingComponent("First");
+        var second = new TrackingComponent("Second");
+        var third = new TrackingComponent("Third");
+        var layout = CreateLayout();
+        layout.LayoutComponents.Add(new LayoutComponent("first.dll", first));
+        layout.LayoutComponents.Add(new LayoutComponent("second.dll", second));
+        layout.LayoutComponents.Add(new LayoutComponent("third.dll", third));
+        layout.HasChanged = false;
+
+        Assert.True(LayoutEditorDialog.MoveComponent(layout, 0, 2));
+
+        Assert.Collection(
+            layout.LayoutComponents,
+            component => Assert.Same(second, component.Component),
+            component => Assert.Same(third, component.Component),
+            component => Assert.Same(first, component.Component));
+        Assert.True(layout.HasChanged);
+    }
+
+    [Fact]
+    public void IgnoreInvalidDragDropReorderIndexes()
+    {
+        var only = new TrackingComponent("Only");
+        var layout = CreateLayout();
+        layout.LayoutComponents.Add(new LayoutComponent("only.dll", only));
+        layout.HasChanged = false;
+
+        Assert.False(LayoutEditorDialog.MoveComponent(layout, -1, 0));
+        Assert.False(LayoutEditorDialog.MoveComponent(layout, 0, 2));
+        Assert.False(LayoutEditorDialog.MoveComponent(layout, 0, 0));
+
+        Assert.Same(only, Assert.Single(layout.LayoutComponents).Component);
+        Assert.False(layout.HasChanged);
+    }
+
+    [Fact]
+    public void ExposeComponentLoadFailureDialogText()
+    {
+        Assert.Equal("Error", LayoutEditorDialog.ComponentLoadFailureTitle);
+        Assert.Equal("The Component could not be loaded.", LayoutEditorDialog.ComponentLoadFailureMessage);
+    }
+
+    [Fact]
     public void CancelRestoresRemovedComponentsAndDisposesNewTransientComponents()
     {
         var original = new TrackingComponent("Original") { Activated = true };

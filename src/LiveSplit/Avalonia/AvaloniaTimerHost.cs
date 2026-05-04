@@ -297,7 +297,7 @@ public sealed class AvaloniaTimerHost : IDisposable
             UpdateRecentSplitsTimingForCurrentRun();
             ResetBeforeDestructiveSwap();
             IRun fresh = new StandardRunFactory().Create(new StandardComparisonGeneratorsFactory());
-            fresh.Offset = State.Run.Offset;
+            string currentComparison = State.CurrentComparison;
             State.Run = fresh;
 
             bool needToChangeLayout = !IsTimerOnlyLayout(State.Layout);
@@ -316,8 +316,8 @@ public sealed class AvaloniaTimerHost : IDisposable
             }
 
             SwitchComparisonGenerators(State);
-            SwitchComparison(State, State.Settings.LastComparison);
             RegenerateComparisons(State);
+            SwitchComparison(State, currentComparison);
 
             Invalidate();
         }
@@ -518,8 +518,8 @@ public sealed class AvaloniaTimerHost : IDisposable
 
     /// <summary>
     /// Fires after a layout swap (LoadLayout, CloseSplits, or any caller of ApplyLayout). The
-    /// TimerWindow uses this to re-apply window-level layout-derived state — Topmost, the
-    /// window's natural Width/Height, the saved Position — without each call site having to
+    /// TimerWindow uses this to re-apply window-level layout-derived state â€” Topmost, the
+    /// window's natural Width/Height, the saved Position â€” without each call site having to
     /// remember.
     /// </summary>
     public event Action LayoutApplied;

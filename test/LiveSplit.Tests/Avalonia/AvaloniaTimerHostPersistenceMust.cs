@@ -261,6 +261,59 @@ public class AvaloniaTimerHostPersistenceMust
     }
 
     [Fact]
+    public void CloseSplitsCreatesFreshTimerOnlyRunWithoutOldOffset()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            host.State.Run.Offset = TimeSpan.FromSeconds(12);
+
+            host.CloseSplits();
+
+            Assert.Equal(TimeSpan.Zero, host.State.Run.Offset);
+            Assert.True(host.InTimerOnlyMode);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
+    [Fact]
+    public void CloseSplitsPreservesActiveComparisonWhenFreshRunSupportsIt()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            host.State.CurrentComparison = "Best Segments";
+            host.State.Settings.LastComparison = Run.PersonalBestComparisonName;
+
+            host.CloseSplits();
+
+            Assert.Equal("Best Segments", host.State.CurrentComparison);
+            Assert.True(host.InTimerOnlyMode);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
+    [Fact]
     public void TimerOnlyLayoutDoesNotMakeLoadedSplitsTimerOnlyMode()
     {
         DrawingApi.Register(new SkiaDrawingFactory());

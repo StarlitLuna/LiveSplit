@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 using global::Avalonia.Controls;
@@ -55,6 +56,15 @@ public class AutoSplittingRuntimeSettingsMust
 
         Assert.Equal(("auto_start", false), sink.Bools.Single());
         Assert.Equal(("route", "any"), sink.Strings.Single());
+    }
+
+    [Fact]
+    public void RefreshesRuntimeSettingsControlsThroughAvaloniaDispatcher()
+    {
+        string source = File.ReadAllText(FindRepoFile("components/LiveSplit.AutoSplittingRuntime/src/LiveSplit.AutoSplittingRuntime/ComponentSettings.cs"));
+
+        Assert.Contains("Dispatcher.UIThread", source);
+        Assert.Contains("RefreshRuntimeSettingsControlOnUiThread", source);
     }
 
     private static LiveSplitState CreateState()
@@ -126,6 +136,23 @@ public class AutoSplittingRuntimeSettingsMust
         }
 
         return null;
+    }
+
+    private static string FindRepoFile(string relativePath)
+    {
+        string dir = Directory.GetCurrentDirectory();
+        while (dir != null)
+        {
+            string candidate = Path.Combine(dir, relativePath);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException(relativePath);
     }
 
     private sealed class RecordingRuntimeSettingsSink : IAsrRuntimeSettingsSink

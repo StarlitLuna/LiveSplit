@@ -24,6 +24,7 @@ namespace LiveSplit.UI.Components;
 
 public interface IVideoPlayer : IDisposable
 {
+    TimeSpan CurrentTime { get; }
     void Load(string path);
     void Play();
     void Pause();
@@ -158,7 +159,8 @@ public class VideoComponent : IComponent, IDeactivatableComponent
     private void Synchronize(bool force = false)
     {
         TimeSpan target = (_state.CurrentTime[TimingMethod.RealTime] ?? TimeSpan.Zero) + Settings.Offset;
-        if (force || Math.Abs(target.TotalMilliseconds) > SyncToleranceMilliseconds)
+        TimeSpan drift = target - _player.CurrentTime;
+        if (force || Math.Abs(drift.TotalMilliseconds) > SyncToleranceMilliseconds)
         {
             _player.SetTime(target);
         }
@@ -348,6 +350,17 @@ internal sealed class LibVlcVideoPlayer : IVideoPlayer, IVideoFrameSource
     private LibVLC _libVlc;
     private MediaPlayer _player;
     private Media _media;
+
+    public TimeSpan CurrentTime
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return TimeSpan.FromMilliseconds(Math.Max(0, _player?.Time ?? 0));
+            }
+        }
+    }
 
     public IImage CurrentFrame => _frames.CurrentFrame;
 

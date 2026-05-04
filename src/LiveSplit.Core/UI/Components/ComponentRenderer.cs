@@ -9,6 +9,10 @@ using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
+public interface IUnclippedComponent
+{
+}
+
 public class ComponentRenderer
 {
     public IEnumerable<IComponent> VisibleComponents { get; set; }
@@ -132,7 +136,7 @@ public class ComponentRenderer
     }
 
     private static bool ClipsToComponentBounds(IComponent component)
-        => component is not SeparatorComponent and not ThinSeparatorComponent;
+        => component is not SeparatorComponent and not ThinSeparatorComponent and not IUnclippedComponent;
 
     protected float GetHeightVertical(int index)
     {
@@ -191,7 +195,7 @@ public class ComponentRenderer
                         try
                         {
                             // Per-component Save so each component's IntersectClip is isolated
-                            // from its neighbors — clip resets between components.
+                            // from its neighbors â€” clip resets between components.
                             using (IDrawingState componentState = ctx.Save())
                             {
                                 if (mode == LayoutMode.Vertical)
@@ -205,7 +209,7 @@ public class ComponentRenderer
                             }
 
                             // Stacking translate applied OUTSIDE the per-component Save so
-                            // cursor advances persist across components — transform accumulates,
+                            // cursor advances persist across components â€” transform accumulates,
                             // clip resets.
                             IComponent drawn = VisibleComponents.ElementAt(index);
                             if (mode == LayoutMode.Vertical)

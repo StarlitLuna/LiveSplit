@@ -272,7 +272,8 @@ internal static class TimerContextMenuBuilder
         HotkeyProfile profile = null;
         state.Settings.HotkeyProfiles?.TryGetValue(state.CurrentHotkeyProfile, out profile);
         var hotkeys = MenuItem(T("Global Hotkeys"), context.ToggleGlobalHotkeys, profile != null);
-        hotkeys.Icon = profile?.GlobalHotkeysEnabled == true ? new TextBlock { Text = "*" } : null;
+        hotkeys.ToggleType = MenuItemToggleType.CheckBox;
+        hotkeys.IsChecked = profile?.GlobalHotkeysEnabled == true;
         parent.Items.Add(hotkeys);
 
         parent.Items.Add(new Separator());
@@ -344,16 +345,16 @@ internal static class TimerContextMenuBuilder
     private static MenuItem ComparisonItem(string name, string current, Action<string> switchComparison)
     {
         var item = MenuItem(T(name), () => switchComparison(name));
-        item.Icon = string.Equals(name, current, StringComparison.Ordinal)
-            ? new TextBlock { Text = "\u2022" }
-            : null;
+        item.ToggleType = MenuItemToggleType.Radio;
+        item.IsChecked = string.Equals(name, current, StringComparison.Ordinal);
         return item;
     }
 
     private static MenuItem TimingMethodItem(string header, TimingMethod method, TimingMethod current, Action<TimingMethod> switchTimingMethod)
     {
         var item = MenuItem(T(header), () => switchTimingMethod(method));
-        item.Icon = method == current ? new TextBlock { Text = "\u2022" } : null;
+        item.ToggleType = MenuItemToggleType.Radio;
+        item.IsChecked = method == current;
         return item;
     }
 
@@ -365,7 +366,8 @@ internal static class TimerContextMenuBuilder
         AppLanguage configuredLanguage = isAuto ? null : LanguageResolver.Resolve(current);
 
         var followSystem = MenuItem(TK(LocalizationKeys.LanguageFollowSystem, "Follow System"), () => context.ApplyLanguage(string.Empty));
-        followSystem.Icon = isAuto ? new TextBlock { Text = "\u2022" } : null;
+        followSystem.ToggleType = MenuItemToggleType.Radio;
+        followSystem.IsChecked = isAuto;
         parent.Items.Add(followSystem);
         parent.Items.Add(new Separator());
 
@@ -373,9 +375,8 @@ internal static class TimerContextMenuBuilder
         {
             string code = language.Code;
             var item = MenuItem(language.DisplayName, () => context.ApplyLanguage(code));
-            item.Icon = !isAuto && language.Equals(configuredLanguage)
-                ? new TextBlock { Text = "\u2022" }
-                : null;
+            item.ToggleType = MenuItemToggleType.Radio;
+            item.IsChecked = !isAuto && language.Equals(configuredLanguage);
             parent.Items.Add(item);
         }
 

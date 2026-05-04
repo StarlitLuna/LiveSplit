@@ -63,6 +63,48 @@ public class ComponentRendererMust
         AssertPixel(bitmap, 10, 275, new SKColor(255, 255, 255));
     }
 
+    [Fact]
+    public void RenderGraphSeparatorFullDevicePixelWhenScaled()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        var separator = new GraphSeparatorComponent(new GraphSettings())
+        {
+            LockToBottom = true,
+        };
+        var components = new IComponent[]
+        {
+            new SolidComponent(Color.Black, 1f),
+            separator,
+        };
+        var renderer = new ComponentRenderer { VisibleComponents = components };
+        var settings = new StandardLayoutSettingsFactory().Create();
+        var layout = new Layout
+        {
+            Settings = settings,
+            LayoutComponents =
+            [
+                new LayoutComponent("black", components[0]),
+                new LayoutComponent("separator", components[1]),
+            ],
+            Mode = LayoutMode.Vertical,
+        };
+        var run = new StandardRunFactory().Create(new StandardComparisonGeneratorsFactory());
+        var state = new LiveSplitState(run, null, layout, settings, new StandardSettingsFactory().Create());
+
+        renderer.CalculateOverallSize(LayoutMode.Vertical);
+        using SKSurface surface = SKSurface.Create(new SKImageInfo(15, 3, SKColorType.Bgra8888, SKAlphaType.Premul));
+        surface.Canvas.Clear(SKColors.Transparent);
+        var ctx = new SkiaDrawingContext(surface.Canvas);
+        ctx.ScaleTransform(1.5f, 1.5f);
+
+        renderer.Render(ctx, state, 10f, 2f, LayoutMode.Vertical);
+
+        using SKImage image = surface.Snapshot();
+        using SKBitmap bitmap = SKBitmap.FromImage(image);
+        AssertPixel(bitmap, 7, 1, SKColors.White);
+        AssertPixel(bitmap, 7, 2, SKColors.White);
+    }
+
     private static void AssertPixel(SKBitmap bitmap, int x, int y, SKColor expected)
         => Assert.Equal(expected, bitmap.GetPixel(x, y));
 

@@ -4,4 +4,5 @@ Name=LiveSplit
 Exec=LiveSplit
 Icon=org.livesplit.LiveSplit
 Categories=Utility;Game;
+MimeType=application/x-livesplit-splits;application/x-livesplit-layout;
 Terminal=false

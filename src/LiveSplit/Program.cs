@@ -1,7 +1,9 @@
 using System;
+using System.Runtime.InteropServices;
 
 using LiveSplit.Avalonia;
 using LiveSplit.Localization;
+using LiveSplit.Register;
 
 namespace LiveSplit;
 
@@ -21,7 +23,25 @@ internal static class Program
             });
         }
 
+        RegisterWindowsFileFormatsIfNeeded();
         return AvaloniaProgram.Run(args);
+    }
+
+    private static void RegisterWindowsFileFormatsIfNeeded()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return;
+        }
+
+        try
+        {
+            FiletypeRegistryHelper.RegisterFileFormatsIfNotAlreadyRegistered();
+        }
+        catch (Exception e)
+        {
+            Options.Log.Error(e);
+        }
     }
 
     private static void InitializeLocalization()

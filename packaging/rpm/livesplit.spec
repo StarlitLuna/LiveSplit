@@ -14,11 +14,14 @@ Source0:        %{livesplit_tarball}
 Source1:        org.livesplit.LiveSplit.desktop
 Source2:        Icon.svg
 Source3:        LICENSE
+Source4:        org.livesplit.LiveSplit.xml
 
 ExclusiveArch:  x86_64
 BuildRequires:  desktop-file-utils
+BuildRequires:  shared-mime-info
 BuildRequires:  vlc-devel
 Requires:       hicolor-icon-theme
+Requires:       shared-mime-info
 Requires:       vlc-libs
 Requires:       vlc-plugin-ffmpeg
 
@@ -51,10 +54,18 @@ sed -e 's/^Exec=.*/Exec=livesplit/' \
 
 install -Dm0644 %{SOURCE2} \
     %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/org.livesplit.LiveSplit.svg
+install -Dm0644 %{SOURCE4} \
+    %{buildroot}%{_datadir}/mime/packages/org.livesplit.LiveSplit.xml
 install -Dm0644 %{SOURCE3} %{buildroot}%{_licensedir}/%{name}/LICENSE
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.livesplit.LiveSplit.desktop
+
+%post
+update-mime-database %{_datadir}/mime &> /dev/null || :
+
+%postun
+update-mime-database %{_datadir}/mime &> /dev/null || :
 
 %files
 %license %{_licensedir}/%{name}/LICENSE
@@ -63,6 +74,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/org.livesplit.LiveSpl
 %{_libdir}/livesplit/*
 %{_datadir}/applications/org.livesplit.LiveSplit.desktop
 %{_datadir}/icons/hicolor/scalable/apps/org.livesplit.LiveSplit.svg
+%{_datadir}/mime/packages/org.livesplit.LiveSplit.xml
 
 %changelog
 * Sat May 02 2026 LiveSplit Linux Port <noreply@livesplit.org> - 0.0.0-1

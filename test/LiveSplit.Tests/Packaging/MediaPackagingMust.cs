@@ -64,6 +64,36 @@ public class MediaPackagingMust
         Assert.Contains("vlc-devel vlc-libs vlc-plugin-ffmpeg", packageScript);
     }
 
+    [Fact]
+    public void LinuxDesktopMetadataRegistersSplitsAndLayoutMimeTypes()
+    {
+        string desktop = ReadRepoFile("org.livesplit.LiveSplit.desktop");
+        string mimeInfo = ReadRepoFile("org.livesplit.LiveSplit.xml");
+        string manifest = ReadRepoFile("org.livesplit.LiveSplit.yml");
+        string spec = ReadRepoFile("packaging", "rpm", "livesplit.spec");
+
+        Assert.Contains("MimeType=application/x-livesplit-splits;application/x-livesplit-layout;", desktop);
+        Assert.Contains("<mime-type type=\"application/x-livesplit-splits\">", mimeInfo);
+        Assert.Contains("<glob pattern=\"*.lss\"/>", mimeInfo);
+        Assert.Contains("<mime-type type=\"application/x-livesplit-layout\">", mimeInfo);
+        Assert.Contains("<glob pattern=\"*.lsl\"/>", mimeInfo);
+        Assert.Contains("/app/share/mime/packages/org.livesplit.LiveSplit.xml", manifest);
+        Assert.Contains("%{_datadir}/mime/packages/org.livesplit.LiveSplit.xml", spec);
+    }
+
+    [Fact]
+    public void WindowsAppRestoresFileAssociationRegistrationHook()
+    {
+        string program = ReadRepoFile("src", "LiveSplit", "Program.cs");
+        string appProject = ReadRepoFile("src", "LiveSplit", "LiveSplit.csproj");
+        string linuxNoOp = ReadRepoFile("src", "LiveSplit.Register", "LinuxNoOp.cs");
+
+        Assert.Contains("RegisterWindowsFileFormatsIfNeeded();", program);
+        Assert.Contains("FiletypeRegistryHelper.RegisterFileFormatsIfNotAlreadyRegistered();", program);
+        Assert.Contains("ProjectReference Include=\"$(SrcPath)\\LiveSplit.Register\\LiveSplit.Register.csproj\"", appProject);
+        Assert.Contains("RegisterFileFormatsIfNotAlreadyRegistered", linuxNoOp);
+    }
+
     private static string ReadRepoFile(params string[] relativePath)
         => File.ReadAllText(Path.Combine(FindRepoRoot(), Path.Combine(relativePath)));
 

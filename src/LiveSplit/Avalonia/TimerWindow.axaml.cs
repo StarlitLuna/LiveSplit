@@ -131,7 +131,7 @@ public sealed partial class TimerWindow : Window
         Host.State.OnPause += (_, _) => Dispatcher.UIThread.Post(ApplyLayoutWindowSettings);
         Host.State.OnResume += (_, _) => Dispatcher.UIThread.Post(ApplyLayoutWindowSettings);
 
-        // Re-apply on Opened too — some window managers (Wayland XWayland in particular)
+        // Re-apply on Opened too â€” some window managers (Wayland XWayland in particular)
         // don't honor Width/Height set before the window is realized. Setting them again on
         // Opened forces the geometry the user expects from the layout's saved dimensions.
         Opened += (_, _) =>
@@ -448,7 +448,7 @@ public sealed partial class TimerWindow : Window
         }
     }
 
-    // --- Layout ↔ window dimension propagation ----------------------------------------------
+    // --- Layout â†” window dimension propagation ----------------------------------------------
 
     internal static bool DispatchMouseWheel(ITimerModel model, double deltaY)
     {
@@ -675,7 +675,7 @@ public sealed partial class TimerWindow : Window
 
     /// <summary>
     /// Resize and reposition the window to match the active layout's stored dimensions. Mirrors
-    /// master's TimerForm.SetLayout — the .lsl persists VerticalWidth/Height (or Horizontal
+    /// master's TimerForm.SetLayout â€” the .lsl persists VerticalWidth/Height (or Horizontal
     /// variants) and X/Y; this method applies them after a load/swap.
     /// </summary>
     private void ApplyLayoutSize()
@@ -707,7 +707,7 @@ public sealed partial class TimerWindow : Window
     }
 
     /// <summary>
-    /// User-resize → layout. Skips no-op updates (so the initial ApplyLayoutSize-driven
+    /// User-resize â†’ layout. Skips no-op updates (so the initial ApplyLayoutSize-driven
     /// SizeChanged echo doesn't dirty the layout) and flips HasChanged so Save Layout will
     /// persist the new dimensions.
     /// </summary>
@@ -846,7 +846,7 @@ public sealed partial class TimerWindow : Window
         }
 
         byte[] downloaded = await DownloadBytes(url);
-        if (downloaded is { Length: > 0 } && await ConfirmUnsavedLayout())
+        if (downloaded is { Length: > 0 })
         {
             using var stream = new MemoryStream(downloaded);
             if (!Host.LoadLayoutFromStream(stream))
@@ -1551,9 +1551,12 @@ public sealed partial class TimerWindow : Window
             providerItem.Items.Add(new Separator());
         }
 
-        var newRace = new MenuItem { Header = RaceMenuFormatter.FormatCreateRaceAction(provider.JoinCapability) };
-        newRace.Click += async (_, _) => await CreateRace(provider);
-        providerItem.Items.Add(newRace);
+        if (RaceMenuFormatter.CanCreateRace(provider))
+        {
+            var newRace = new MenuItem { Header = RaceMenuFormatter.FormatCreateRaceAction(provider.JoinCapability) };
+            newRace.Click += async (_, _) => await CreateRace(provider);
+            providerItem.Items.Add(newRace);
+        }
     }
 
     private async Task ExecuteRaceAction(RaceProviderAPI provider, IRaceInfo race, RaceMenuAction action)

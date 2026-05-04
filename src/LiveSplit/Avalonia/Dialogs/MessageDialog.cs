@@ -1,8 +1,10 @@
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Linq;
 
 using global::Avalonia;
 using global::Avalonia.Controls;
+using global::Avalonia.Input;
 using global::Avalonia.Layout;
 using global::Avalonia.Media;
 
@@ -57,11 +59,25 @@ public sealed class MessageDialog : Window
         root.Children.Add(msg);
         Content = root;
 
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Complete(GetDefaultResult(buttons));
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                Complete(GetCancelResult(buttons));
+                e.Handled = true;
+            }
+        };
+
         Closed += (_, _) =>
         {
             if (!_result.Task.IsCompleted)
             {
-                _result.TrySetResult(MessageResult.Cancel);
+                _result.TrySetResult(GetCancelResult(buttons));
             }
         };
     }
@@ -96,11 +112,23 @@ public sealed class MessageDialog : Window
             ],
         };
 
+    internal static MessageResult GetDefaultResult(Buttons buttons)
+        => GetButtonSpecs(buttons).First(x => x.IsDefault).Result;
+
+    internal static MessageResult GetCancelResult(Buttons buttons)
+        => GetButtonSpecs(buttons).Last(x => x.IsCancel).Result;
+
     private void AddButton(StackPanel bar, string text, MessageResult result, bool isDefault = false, bool isCancel = false)
     {
         var btn = new Button { Content = text, Width = 80, IsDefault = isDefault, IsCancel = isCancel };
-        btn.Click += (_, _) => { _result.TrySetResult(result); Close(); };
+        btn.Click += (_, _) => Complete(result);
         bar.Children.Add(btn);
+    }
+
+    private void Complete(MessageResult result)
+    {
+        _result.TrySetResult(result);
+        Close();
     }
 
     public async Task<bool> ShowDialogAsync(Window owner)

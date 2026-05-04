@@ -282,6 +282,47 @@ public class RunEditorDialogMust
     }
 
     [Fact]
+    public void InsertSegmentImportsBestSegmentAndSeedsAttemptHistoryLikeMaster()
+    {
+        Run run = NewRun(2);
+        run.AttemptHistory.Add(new Attempt(1, new Time(realTime: TimeSpan.FromSeconds(12)), null, null, null));
+        run.AttemptHistory.Add(new Attempt(2, new Time(realTime: TimeSpan.FromSeconds(18)), null, null, null));
+        run[0].SegmentHistory[1] = new Time(realTime: TimeSpan.FromSeconds(5));
+        run[1].SegmentHistory[1] = new Time(realTime: TimeSpan.FromSeconds(7));
+        run[1].SegmentHistory[2] = new Time(realTime: TimeSpan.FromSeconds(8));
+        run[1].BestSegmentTime = new Time(realTime: TimeSpan.FromSeconds(6), gameTime: TimeSpan.FromSeconds(4));
+
+        RunEditorDialogModel.InsertSegment(run, 1, "Inserted");
+
+        Assert.Equal("Inserted", run[1].Name);
+        Assert.Equal(default, run[1].SegmentHistory[1]);
+        Assert.Equal(default, run[1].SegmentHistory[2]);
+        Assert.Equal(TimeSpan.FromSeconds(6), run[2].SegmentHistory[0].RealTime);
+        Assert.Equal(TimeSpan.FromSeconds(4), run[2].SegmentHistory[0].GameTime);
+        Assert.True(run.HasChanged);
+    }
+
+    [Fact]
+    public void RemoveSegmentRepairsFollowingHistoryAndBestSegmentLikeMaster()
+    {
+        Run run = NewRun(2);
+        run.AttemptHistory.Add(new Attempt(1, new Time(realTime: TimeSpan.FromSeconds(12)), null, null, null));
+        run[0].PersonalBestSplitTime = new Time(realTime: TimeSpan.FromSeconds(5));
+        run[1].PersonalBestSplitTime = new Time(realTime: TimeSpan.FromSeconds(12));
+        run[0].BestSegmentTime = new Time(realTime: TimeSpan.FromSeconds(5));
+        run[1].BestSegmentTime = new Time(realTime: TimeSpan.FromSeconds(7));
+        run[0].SegmentHistory[1] = new Time(realTime: TimeSpan.FromSeconds(5));
+        run[1].SegmentHistory[1] = new Time(realTime: TimeSpan.FromSeconds(7));
+
+        RunEditorDialogModel.RemoveSegment(run, 0);
+
+        Assert.Single(run);
+        Assert.Equal(TimeSpan.FromSeconds(12), run[0].SegmentHistory[1].RealTime);
+        Assert.Equal(TimeSpan.FromSeconds(12), run[0].BestSegmentTime.RealTime);
+        Assert.True(run.HasChanged);
+    }
+
+    [Fact]
     public void MoveSegmentPreservesSegmentHistoryAndComparisons()
     {
         Run run = NewRun();
@@ -293,6 +334,43 @@ public class RunEditorDialogMust
         Assert.Equal("Segment 1", run[2].Name);
         Assert.Equal(TimeSpan.FromSeconds(3), run[2].SegmentHistory[4].RealTime);
         Assert.Equal(TimeSpan.FromSeconds(7), run[2].PersonalBestSplitTime.RealTime);
+    }
+
+    [Fact]
+    public void MoveSegmentRecalculatesCumulativeComparisonsLikeMaster()
+    {
+        Run run = NewRun();
+        RunEditorDialogModel.TryAddComparison(run, "Route A");
+        run[0].PersonalBestSplitTime = new Time(realTime: TimeSpan.FromSeconds(10));
+        run[1].PersonalBestSplitTime = new Time(realTime: TimeSpan.FromSeconds(30));
+        run[2].PersonalBestSplitTime = new Time(realTime: TimeSpan.FromSeconds(60));
+        run[0].Comparisons["Route A"] = new Time(realTime: TimeSpan.FromSeconds(12));
+        run[1].Comparisons["Route A"] = new Time(realTime: TimeSpan.FromSeconds(40));
+        run[2].Comparisons["Route A"] = new Time(realTime: TimeSpan.FromSeconds(90));
+
+        RunEditorDialogModel.MoveSegment(run, 0, 1);
+
+        Assert.Equal("Segment 2", run[0].Name);
+        Assert.Equal("Segment 1", run[1].Name);
+        Assert.Equal(TimeSpan.FromSeconds(20), run[0].PersonalBestSplitTime.RealTime);
+        Assert.Equal(TimeSpan.FromSeconds(30), run[1].PersonalBestSplitTime.RealTime);
+        Assert.Equal(TimeSpan.FromSeconds(28), run[0].Comparisons["Route A"].RealTime);
+        Assert.Equal(TimeSpan.FromSeconds(40), run[1].Comparisons["Route A"].RealTime);
+        Assert.True(run.HasChanged);
+    }
+
+    [Fact]
+    public void MoveSegmentDropsMismatchedAdjacentHistoryLikeMaster()
+    {
+        Run run = NewRun(2);
+        run.AttemptHistory.Add(new Attempt(1, new Time(realTime: TimeSpan.FromSeconds(10)), null, null, null));
+        run[0].SegmentHistory[1] = new Time(realTime: TimeSpan.FromSeconds(3));
+        run[1].SegmentHistory[1] = default;
+
+        RunEditorDialogModel.MoveSegment(run, 0, 1);
+
+        Assert.False(run[0].SegmentHistory.ContainsKey(1));
+        Assert.False(run[1].SegmentHistory.ContainsKey(1));
     }
 
     [Theory]
@@ -324,6 +402,57 @@ public class RunEditorDialogMust
         Assert.Equal(TimeSpan.FromSeconds(12), run[0].Comparisons["New Route"].RealTime);
         Assert.False(run[0].Comparisons.ContainsKey("Old Route"));
         Assert.False(RunEditorDialogModel.TryRenameComparison(run, "New Route", "[Race] x"));
+    }
+
+    [Fact]
+    public void ResolveComparisonNameByRetryingDuplicateInvalidAndRaceNames()
+    {
+        Run run = NewRun();
+        RunEditorDialogModel.TryAddComparison(run, "Route A");
+        var retryNames = new Queue<string>(["[Race] runner", "", "Route B"]);
+        var errors = new List<RunEditorComparisonNameError>();
+
+        string resolved = RunEditorDialogModel.ResolveComparisonNameWithRetry(
+            run,
+            "Route A",
+            existingName: null,
+            retryNameProvider: () => retryNames.Dequeue(),
+            invalidNamePrompt: (error, _) =>
+            {
+                errors.Add(error);
+                return MessageResult.Ok;
+            });
+
+        Assert.Equal("Route B", resolved);
+        Assert.Equal(
+            new[]
+            {
+                RunEditorComparisonNameError.Duplicate,
+                RunEditorComparisonNameError.Race,
+                RunEditorComparisonNameError.Invalid,
+            },
+            errors);
+    }
+
+    [Fact]
+    public void ResolveComparisonNameStopsWhenInvalidNamePromptIsCancelled()
+    {
+        Run run = NewRun();
+        bool retried = false;
+
+        string resolved = RunEditorDialogModel.ResolveComparisonNameWithRetry(
+            run,
+            "[Race] runner",
+            existingName: null,
+            retryNameProvider: () =>
+            {
+                retried = true;
+                return "Route B";
+            },
+            invalidNamePrompt: (_, _) => MessageResult.Cancel);
+
+        Assert.Null(resolved);
+        Assert.False(retried);
     }
 
     [Fact]
@@ -587,6 +716,30 @@ public class RunEditorDialogMust
         Assert.True(run.HasChanged);
     }
 
+    [Fact]
+    public void CleanSumOfBestInteractionUsesPerCandidateYesNoCancelSemantics()
+    {
+        var responses = new Queue<MessageResult>([MessageResult.Yes, MessageResult.No, MessageResult.Cancel]);
+        int promptCount = 0;
+        var interaction = new RunEditorCleanSumOfBestInteraction(_ =>
+        {
+            promptCount++;
+            return responses.Dequeue();
+        });
+        SumOfBest.CleanUpCallbackParameters repeated = CleanParameters("Intro", "Finish", 5);
+        SumOfBest.CleanUpCallbackParameters noCandidate = CleanParameters("Intro", "Middle", 6);
+        SumOfBest.CleanUpCallbackParameters cancelCandidate = CleanParameters("Middle", "Finish", 7);
+        SumOfBest.CleanUpCallbackParameters afterCancelCandidate = CleanParameters("Start", "Finish", 8);
+
+        Assert.True(interaction.Callback(repeated));
+        Assert.True(interaction.Callback(repeated));
+        Assert.False(interaction.Callback(noCandidate));
+        Assert.False(interaction.Callback(cancelCandidate));
+        Assert.False(interaction.Callback(afterCancelCandidate));
+        Assert.Equal(3, promptCount);
+        Assert.True(interaction.UserWasPrompted);
+    }
+
     private static Run NewRun(int segmentCount = 3)
     {
         var run = new Run(new StandardComparisonGeneratorsFactory());
@@ -597,6 +750,17 @@ public class RunEditorDialogMust
 
         return run;
     }
+
+    private static SumOfBest.CleanUpCallbackParameters CleanParameters(string startName, string endName, int seconds)
+        => new()
+        {
+            startingSegment = new Segment(startName),
+            endingSegment = new Segment(endName),
+            timeBetween = TimeSpan.FromSeconds(seconds),
+            combinedSumOfBest = TimeSpan.FromSeconds(seconds + 1),
+            attempt = new Attempt(1, new Time(realTime: TimeSpan.FromSeconds(seconds)), null, null, null),
+            method = TimingMethod.RealTime,
+        };
 
     private static string FindRepoFile(string relativePath)
     {

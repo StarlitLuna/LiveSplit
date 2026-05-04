@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -123,24 +124,12 @@ internal sealed class LinuxProcessMemory : IProcessMemory
 
         foreach (string raw in File.ReadAllLines(mapsPath))
         {
-            (ulong start, ulong end, _) = ParseMapLine(raw);
-            string perms = ParsePermsField(raw);
-            if (perms == null)
+            if (!TryParseMemoryPage(raw, all, out MemoryBasicInformation page))
             {
                 continue;
             }
 
-            MemPageProtect protect = MapPerms(perms);
-            yield return new MemoryBasicInformation
-            {
-                BaseAddress = (IntPtr)(long)start,
-                AllocationBase = (IntPtr)(long)start,
-                AllocationProtect = protect,
-                RegionSize = (UIntPtr)(end - start),
-                State = MemPageState.MEM_COMMIT,
-                Protect = protect,
-                Type = perms.Length >= 4 && perms[3] == 'p' ? MemPageType.MEM_PRIVATE : MemPageType.MEM_MAPPED,
-            };
+            yield return page;
         }
     }
 
@@ -157,17 +146,18 @@ internal sealed class LinuxProcessMemory : IProcessMemory
         // returning the wrong answer corrupts every pointer-path traversal, and 32-bit reads
         // (4 bytes) are the safer default for unknown Wine targets — autosplitters can
         // override Is64Bit explicitly when needed.
-        bool? bitness = TryReadElfBitness($"/proc/{process.Id}/exe");
-        if (bitness.HasValue)
-        {
-            return bitness.Value;
-        }
-
+        bool? bitness;
         try
         {
             string mapsPath = $"/proc/{process.Id}/maps";
             if (File.Exists(mapsPath))
             {
+                bool? peBitness = TryFindMappedPeBitness(File.ReadLines(mapsPath));
+                if (peBitness.HasValue)
+                {
+                    return peBitness.Value;
+                }
+
                 foreach (string raw in File.ReadAllLines(mapsPath))
                 {
                     string perms = ParsePermsField(raw);
@@ -196,6 +186,12 @@ internal sealed class LinuxProcessMemory : IProcessMemory
             Options.Log.Error(ex);
         }
 
+        bitness = TryReadElfBitness($"/proc/{process.Id}/exe");
+        if (bitness.HasValue)
+        {
+            return bitness.Value;
+        }
+
         Options.Log.Warning(
             $"Is64Bit: could not determine ELF class for pid {process.Id}; defaulting to 32-bit.");
         return false;
@@ -214,6 +210,72 @@ internal sealed class LinuxProcessMemory : IProcessMemory
             }
 
             return header[4] == 2;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    internal static bool? TryFindMappedPeBitness(IEnumerable<string> mapLines)
+    {
+        foreach (string raw in mapLines)
+        {
+            string perms = ParsePermsField(raw);
+            if (perms == null || perms.Length < 3 || perms[2] != 'x')
+            {
+                continue;
+            }
+
+            (_, _, string path) = ParseMapLine(raw);
+            path = TrimDeletedSuffix(path);
+            if (string.IsNullOrEmpty(path) || path[0] == '[' || !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            bool? bitness = TryReadPeBitness(path);
+            if (bitness.HasValue)
+            {
+                return bitness.Value;
+            }
+        }
+
+        return null;
+    }
+
+    internal static bool? TryReadPeBitness(string path)
+    {
+        try
+        {
+            using FileStream fs = File.OpenRead(path);
+            Span<byte> mz = stackalloc byte[64];
+            if (fs.Read(mz) != mz.Length || mz[0] != (byte)'M' || mz[1] != (byte)'Z')
+            {
+                return null;
+            }
+
+            int peHeaderOffset = BinaryPrimitives.ReadInt32LittleEndian(mz[0x3c..]);
+            if (peHeaderOffset < 0)
+            {
+                return null;
+            }
+
+            fs.Seek(peHeaderOffset, SeekOrigin.Begin);
+            Span<byte> pe = stackalloc byte[6];
+            if (fs.Read(pe) != pe.Length || pe[0] != (byte)'P' || pe[1] != (byte)'E' || pe[2] != 0 || pe[3] != 0)
+            {
+                return null;
+            }
+
+            ushort machine = BinaryPrimitives.ReadUInt16LittleEndian(pe[4..]);
+            return machine switch
+            {
+                0x014c => false, // IMAGE_FILE_MACHINE_I386
+                0x8664 => true, // IMAGE_FILE_MACHINE_AMD64
+                0xaa64 => true, // IMAGE_FILE_MACHINE_ARM64
+                _ => null,
+            };
         }
         catch
         {
@@ -388,6 +450,39 @@ internal sealed class LinuxProcessMemory : IProcessMemory
         return (start, end, path);
     }
 
+    internal static bool TryParseMemoryPage(string line, bool all, out MemoryBasicInformation page)
+    {
+        page = default;
+        (ulong start, ulong end, string path) = ParseMapLine(line);
+        string perms = ParsePermsField(line);
+        if (perms == null || end <= start)
+        {
+            return false;
+        }
+
+        MemPageType type = string.IsNullOrEmpty(path) || path[0] == '['
+            ? MemPageType.MEM_PRIVATE
+            : MemPageType.MEM_MAPPED;
+        if (!all && type != MemPageType.MEM_PRIVATE)
+        {
+            return false;
+        }
+
+        MemPageProtect protect = MapPerms(perms);
+        page = new MemoryBasicInformation
+        {
+            BaseAddress = (IntPtr)(long)start,
+            AllocationBase = (IntPtr)(long)start,
+            AllocationProtect = protect,
+            RegionSize = (UIntPtr)(end - start),
+            State = MemPageState.MEM_COMMIT,
+            Protect = protect,
+            Type = type,
+        };
+
+        return true;
+    }
+
     private static string ParsePermsField(string line)
     {
         int dash = line.IndexOf('-');
@@ -444,6 +539,14 @@ internal sealed class LinuxProcessMemory : IProcessMemory
         }
 
         return MemPageProtect.PAGE_NOACCESS;
+    }
+
+    private static string TrimDeletedSuffix(string path)
+    {
+        const string deletedSuffix = " (deleted)";
+        return path.EndsWith(deletedSuffix, StringComparison.Ordinal)
+            ? path[..^deletedSuffix.Length]
+            : path;
     }
 
     [DllImport("libc", SetLastError = true)]

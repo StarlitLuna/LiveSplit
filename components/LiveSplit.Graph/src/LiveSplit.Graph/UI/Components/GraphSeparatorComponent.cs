@@ -8,7 +8,7 @@ using LiveSplit.UI.Drawing;
 
 namespace LiveSplit.UI.Components;
 
-public class GraphSeparatorComponent : IComponent
+public class GraphSeparatorComponent : IComponent, IUnclippedComponent
 {
     protected LineComponent Line { get; set; }
     protected GraphSettings Settings { get; set; }
@@ -37,9 +37,8 @@ public class GraphSeparatorComponent : IComponent
 
     public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width)
     {
-        // No explicit clip-widen: Skia can't express GDI+'s `g.Clip = new Region();` idiom,
-        // and the 1-pixel separator already fits inside the parent component's bounds. Save()
-        // captures SmoothingMode along with transform + clip on both backends.
+        // ComponentRenderer skips the tight per-component clip for separators so scaled
+        // device-pixel rounding can extend slightly outside the logical 1px bounds.
         using IDrawingState state_ = ctx.Save();
         ctx.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
         Line.LineColor = Settings.GraphLinesColor;

@@ -8,6 +8,7 @@ using System.Xml;
 using global::Avalonia;
 using global::Avalonia.Controls;
 using global::Avalonia.Platform.Storage;
+using global::Avalonia.Threading;
 
 using LiveSplit.Model;
 using LiveSplit.Options;
@@ -161,6 +162,17 @@ public class ComponentSettings
     }
 
     public bool RefreshRuntimeSettingsControl()
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            return RefreshRuntimeSettingsControlOnUiThread();
+        }
+
+        Dispatcher.UIThread.Post(() => RefreshRuntimeSettingsControlOnUiThread());
+        return runtimeSettingsPanel is not null && runtime is not null;
+    }
+
+    private bool RefreshRuntimeSettingsControlOnUiThread()
     {
         if (runtimeSettingsPanel is null)
         {

@@ -37,6 +37,20 @@ public class SmokeTestRunnerMust
     }
 
     [Fact]
+    public void ProgramParsesSmokeTestBeforeWindowsFileAssociationRegistration()
+    {
+        string source = File.ReadAllText(FindRepoFile("src", "LiveSplit", "Program.cs"));
+
+        int parse = source.IndexOf("StartupOptions.Parse(args);", StringComparison.Ordinal);
+        int smokeCheck = source.IndexOf("if (StartupOptions.SmokeTest)", StringComparison.Ordinal);
+        int register = source.IndexOf("RegisterWindowsFileFormatsIfNeeded();", StringComparison.Ordinal);
+
+        Assert.True(parse >= 0);
+        Assert.True(smokeCheck > parse);
+        Assert.True(register > smokeCheck);
+    }
+
+    [Fact]
     public void RunDefaultTimerSmokeTest()
     {
         EnsureComponentFolder();
@@ -266,6 +280,23 @@ public class SmokeTestRunnerMust
         catch
         {
         }
+    }
+
+    private static string FindRepoFile(params string[] relativePath)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            string candidate = Path.Combine(directory.FullName, Path.Combine(relativePath));
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(Path.Combine(relativePath));
     }
 
     private sealed class FakeComponentFactory : IComponentFactory

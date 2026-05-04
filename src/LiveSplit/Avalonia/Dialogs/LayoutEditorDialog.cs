@@ -7,6 +7,7 @@ using System.Xml;
 
 using global::Avalonia;
 using global::Avalonia.Controls;
+using global::Avalonia.Input;
 using global::Avalonia.Layout;
 
 using LiveSplit.Model;
@@ -28,6 +29,12 @@ public sealed class LayoutEditorDialog : Window
     private readonly TaskCompletionSource<bool> _result = new();
     private readonly ListBox _list;
     private readonly LayoutSnapshot _snapshot;
+    private int _dragStartIndex = -1;
+    private global::Avalonia.Point _dragStartPoint;
+
+    internal const string ComponentLoadFailureTitle = "Error";
+    internal const string ComponentLoadFailureMessage = "The Component could not be loaded.";
+    private const string LayoutComponentDragFormat = "application/x-livesplit-layout-component-index";
 
     public LayoutEditorDialog(ILayout layout, LiveSplitState state)
     {
@@ -51,6 +58,11 @@ public sealed class LayoutEditorDialog : Window
             Margin = new Thickness(3, 10, 10, 10),
         };
         _list.DoubleTapped += async (_, _) => await EditSelectedSettings();
+        _list.PointerPressed += OnComponentListPointerPressed;
+        _list.PointerMoved += OnComponentListPointerMoved;
+        DragDrop.SetAllowDrop(_list, true);
+        _list.AddHandler(DragDrop.DragOverEvent, OnComponentListDragOver);
+        _list.AddHandler(DragDrop.DropEvent, OnComponentListDrop);
 
         var addBtn = CreateIconButton("+", "Add Component");
         addBtn.Margin = new Thickness(10, 10, 3, 3);
@@ -245,18 +257,96 @@ public sealed class LayoutEditorDialog : Window
     private void MoveSelected(int direction)
     {
         int idx = _list.SelectedIndex;
-        int newIdx = idx + direction;
-        if (idx < 0 || newIdx < 0 || newIdx >= Layout.LayoutComponents.Count)
+        if (!MoveComponent(Layout, idx, idx + direction))
         {
             return;
         }
 
-        ILayoutComponent moved = Layout.LayoutComponents[idx];
-        Layout.LayoutComponents.RemoveAt(idx);
-        Layout.LayoutComponents.Insert(newIdx, moved);
-        Layout.HasChanged = true;
         Refresh();
-        _list.SelectedIndex = newIdx;
+        _list.SelectedIndex = idx + direction;
+    }
+
+    internal static bool MoveComponent(ILayout layout, int fromIndex, int toIndex)
+    {
+        if (layout?.LayoutComponents is null
+            || fromIndex < 0
+            || toIndex < 0
+            || fromIndex >= layout.LayoutComponents.Count
+            || toIndex >= layout.LayoutComponents.Count
+            || fromIndex == toIndex)
+        {
+            return false;
+        }
+
+        ILayoutComponent moved = layout.LayoutComponents[fromIndex];
+        layout.LayoutComponents.RemoveAt(fromIndex);
+        layout.LayoutComponents.Insert(toIndex, moved);
+        layout.HasChanged = true;
+        return true;
+    }
+
+    private void OnComponentListPointerPressed(object sender, PointerPressedEventArgs e)
+    {
+        PointerPoint point = e.GetCurrentPoint(_list);
+        if (!point.Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        _dragStartIndex = _list.SelectedIndex;
+        _dragStartPoint = point.Position;
+    }
+
+    private async void OnComponentListPointerMoved(object sender, PointerEventArgs e)
+    {
+        if (_dragStartIndex < 0)
+        {
+            return;
+        }
+
+        PointerPoint point = e.GetCurrentPoint(_list);
+        if (!point.Properties.IsLeftButtonPressed)
+        {
+            _dragStartIndex = -1;
+            return;
+        }
+
+        global::Avalonia.Vector delta = point.Position - _dragStartPoint;
+        if (Math.Abs(delta.X) < 4 && Math.Abs(delta.Y) < 4)
+        {
+            return;
+        }
+
+        var data = new DataObject();
+        data.Set(LayoutComponentDragFormat, _dragStartIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        await DragDrop.DoDragDrop(e, data, DragDropEffects.Move);
+        _dragStartIndex = -1;
+    }
+
+    private void OnComponentListDragOver(object sender, DragEventArgs e)
+    {
+        e.DragEffects = e.Data.Contains(LayoutComponentDragFormat)
+            ? DragDropEffects.Move
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnComponentListDrop(object sender, DragEventArgs e)
+    {
+        if (e.Data.Get(LayoutComponentDragFormat) is not string indexText
+            || !int.TryParse(indexText, out int fromIndex))
+        {
+            return;
+        }
+
+        int toIndex = _list.SelectedIndex >= 0 ? _list.SelectedIndex : Layout.LayoutComponents.Count - 1;
+        if (MoveComponent(Layout, fromIndex, toIndex))
+        {
+            Refresh();
+            _list.SelectedIndex = toIndex;
+        }
+
+        e.Handled = true;
     }
 
     private void SetOrientation(LayoutMode mode)
@@ -493,7 +583,7 @@ public sealed class LayoutEditorDialog : Window
         await dlg.ShowDialogAsync(this);
     }
 
-    private void AddFactory(string factoryKey, IComponentFactory factory)
+    private async void AddFactory(string factoryKey, IComponentFactory factory)
     {
         try
         {
@@ -509,6 +599,7 @@ public sealed class LayoutEditorDialog : Window
         catch (Exception ex)
         {
             LiveSplit.Options.Log.Error(ex);
+            await new MessageDialog(ComponentLoadFailureTitle, ComponentLoadFailureMessage).ShowDialogAsync(this);
         }
     }
 

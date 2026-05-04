@@ -1,7 +1,7 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Xml;
@@ -403,20 +403,14 @@ public class DetailedTimer : IComponent
         SegmentTimer.Update(null, state, width, height, mode);
         InternalComponent.Update(null, state, width, height, mode);
 
-        Image icon = state.CurrentSplitIndex >= 0 ? state.Run[state.CurrentSplitIndex + lastSplitOffset].Icon : null;
+        ISegment currentSegment = state.CurrentSplitIndex >= 0 ? state.Run[state.CurrentSplitIndex + lastSplitOffset] : null;
 
         Cache.Restart();
-        Cache["SplitIcon"] = icon;
+        Cache["SplitIcon"] = currentSegment?.IconImage;
+        Cache["SplitIconBytes"] = currentSegment?.IconPng;
         if (Cache.HasChanged)
         {
-            if (icon == null)
-            {
-                FrameCount = 0;
-            }
-            else
-            {
-                FrameCount = icon.GetFrameCount(new FrameDimension(icon.FrameDimensionsList[0]));
-            }
+            FrameCount = GetImageFrameCount(currentSegment?.IconPng);
         }
 
         Cache["SplitName"] = SplitName.Text;
@@ -452,4 +446,136 @@ public class DetailedTimer : IComponent
     {
         return Settings.GetSettingsHashCode();
     }
+
+    private static int GetImageFrameCount(byte[] imageBytes)
+    {
+        if (imageBytes is not { Length: > 0 })
+        {
+            return 0;
+        }
+
+        if (IsGif(imageBytes))
+        {
+            return GetGifFrameCount(imageBytes);
+        }
+
+        if (IsPng(imageBytes))
+        {
+            const int signatureLength = 8;
+            int offset = signatureLength;
+            while (offset + 12 <= imageBytes.Length)
+            {
+                uint length = BinaryPrimitives.ReadUInt32BigEndian(imageBytes.AsSpan(offset, 4));
+                ReadOnlySpan<byte> chunkType = imageBytes.AsSpan(offset + 4, 4);
+                if (chunkType.SequenceEqual("acTL"u8) && offset + 16 <= imageBytes.Length)
+                {
+                    return checked((int)BinaryPrimitives.ReadUInt32BigEndian(imageBytes.AsSpan(offset + 8, 4)));
+                }
+
+                if (length > int.MaxValue || offset > imageBytes.Length - 12 - (int)length)
+                {
+                    break;
+                }
+
+                offset += 12 + (int)length;
+            }
+        }
+
+        return 1;
+    }
+
+    private static int GetGifFrameCount(ReadOnlySpan<byte> imageBytes)
+    {
+        if (imageBytes.Length < 13)
+        {
+            return 1;
+        }
+
+        int offset = 13;
+        byte packed = imageBytes[10];
+        if ((packed & 0x80) != 0)
+        {
+            offset += 3 * (1 << ((packed & 0x07) + 1));
+        }
+
+        int frameCount = 0;
+        while (offset < imageBytes.Length)
+        {
+            byte blockType = imageBytes[offset++];
+            switch (blockType)
+            {
+                case 0x2C:
+                    frameCount++;
+                    if (offset + 9 > imageBytes.Length)
+                    {
+                        return Math.Max(frameCount, 1);
+                    }
+
+                    byte imagePacked = imageBytes[offset + 8];
+                    offset += 9;
+                    if ((imagePacked & 0x80) != 0)
+                    {
+                        offset += 3 * (1 << ((imagePacked & 0x07) + 1));
+                    }
+
+                    if (offset >= imageBytes.Length)
+                    {
+                        return Math.Max(frameCount, 1);
+                    }
+
+                    offset++;
+                    offset = SkipGifSubBlocks(imageBytes, offset);
+                    break;
+                case 0x21:
+                    if (offset >= imageBytes.Length)
+                    {
+                        return Math.Max(frameCount, 1);
+                    }
+
+                    offset++;
+                    offset = SkipGifSubBlocks(imageBytes, offset);
+                    break;
+                case 0x3B:
+                    return Math.Max(frameCount, 1);
+                default:
+                    return Math.Max(frameCount, 1);
+            }
+        }
+
+        return Math.Max(frameCount, 1);
+    }
+
+    private static int SkipGifSubBlocks(ReadOnlySpan<byte> imageBytes, int offset)
+    {
+        while (offset < imageBytes.Length)
+        {
+            int length = imageBytes[offset++];
+            if (length == 0)
+            {
+                break;
+            }
+
+            offset += length;
+        }
+
+        return Math.Min(offset, imageBytes.Length);
+    }
+
+    private static bool IsGif(byte[] imageBytes)
+        => imageBytes.Length >= 6
+            && imageBytes[0] == 'G'
+            && imageBytes[1] == 'I'
+            && imageBytes[2] == 'F'
+            && imageBytes[3] == '8';
+
+    private static bool IsPng(byte[] imageBytes)
+        => imageBytes.Length >= 8
+            && imageBytes[0] == 0x89
+            && imageBytes[1] == 0x50
+            && imageBytes[2] == 0x4E
+            && imageBytes[3] == 0x47
+            && imageBytes[4] == 0x0D
+            && imageBytes[5] == 0x0A
+            && imageBytes[6] == 0x1A
+            && imageBytes[7] == 0x0A;
 }

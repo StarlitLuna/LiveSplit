@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -22,7 +21,7 @@ public sealed class SpeedrunComSubmitDialog : Window
     private readonly bool _hasPersonalBestDateTime;
     private readonly TextBox _videoBox;
     private readonly TextBox _commentBox;
-    private readonly TextBox _dateBox;
+    private readonly DatePicker _datePicker;
     private readonly TextBox _withoutLoadsBox;
     private readonly TextBox _gameTimeBox;
     private readonly TextBlock _statusBlock;
@@ -63,9 +62,9 @@ public sealed class SpeedrunComSubmitDialog : Window
 
         if (!_hasPersonalBestDateTime)
         {
-            _dateBox = new TextBox { Text = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) };
+            _datePicker = new DatePicker { SelectedDate = DateTimeOffset.UtcNow };
             fields.Children.Add(new TextBlock { Text = "Date:" });
-            fields.Children.Add(_dateBox);
+            fields.Children.Add(_datePicker);
         }
 
         Time runTime = metadata.LiveSplitRun.Last().PersonalBestSplitTime;
@@ -155,21 +154,11 @@ public sealed class SpeedrunComSubmitDialog : Window
             return;
         }
 
-        DateTime? date = null;
-        if (!_hasPersonalBestDateTime)
+        DateTime? date = ResolveSubmissionDate(_hasPersonalBestDateTime, _datePicker?.SelectedDate);
+        if (!_hasPersonalBestDateTime && !date.HasValue)
         {
-            if (!DateTime.TryParseExact(
-                    _dateBox.Text,
-                    "yyyy-MM-dd",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                    out DateTime parsedDate))
-            {
-                await new MessageDialog("Submitting Failed", "You didn't enter a valid date.").ShowDialogAsync(this);
-                return;
-            }
-
-            date = parsedDate.Date;
+            await new MessageDialog("Submitting Failed", "You didn't enter a valid date.").ShowDialogAsync(this);
+            return;
         }
 
         var gameTime = await TryReadOptionalTime(_gameTimeBox, "You didn't enter a valid Game Time.");
@@ -232,5 +221,21 @@ public sealed class SpeedrunComSubmitDialog : Window
 
         await new MessageDialog("Submitting Failed", error).ShowDialogAsync(this);
         return (false, null);
+    }
+
+    internal static DateTime? ResolveSubmissionDate(bool hasPersonalBestDateTime, DateTimeOffset? selectedDate)
+    {
+        if (hasPersonalBestDateTime)
+        {
+            return null;
+        }
+
+        if (!selectedDate.HasValue)
+        {
+            return null;
+        }
+
+        DateTime date = selectedDate.Value.Date;
+        return new DateTime(date.Year, date.Month, date.Day, 0, 0, 0, DateTimeKind.Utc);
     }
 }

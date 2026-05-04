@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-livesplit-splits">
+    <comment>LiveSplit splits file</comment>
+    <glob pattern="*.lss"/>
+  </mime-type>
+  <mime-type type="application/x-livesplit-layout">
+    <comment>LiveSplit layout file</comment>
+    <glob pattern="*.lsl"/>
+  </mime-type>
+</mime-info>

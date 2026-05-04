@@ -10,4 +10,11 @@ namespace LiveSplit.Register
         {
         }
     }
+
+    public static class FiletypeRegistryHelper
+    {
+        public static void RegisterFileFormatsIfNotAlreadyRegistered()
+        {
+        }
+    }
 }

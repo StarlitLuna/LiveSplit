@@ -8,6 +8,7 @@
     <ProjectReference Include="$(ComponentsPath)\LiveSplit.CurrentComparison\src\LiveSplit.CurrentComparison\LiveSplit.CurrentComparison.csproj" />
     <ProjectReference Include="$(ComponentsPath)\LiveSplit.Delta\src\LiveSplit.Delta\LiveSplit.Delta.csproj" />
     <ProjectReference Include="$(ComponentsPath)\LiveSplit.DetailedTimer\src\LiveSplit.DetailedTimer\LiveSplit.DetailedTimer.csproj" />
+    <ProjectReference Include="$(ComponentsPath)\LiveSplit.Graph\src\LiveSplit.Graph\LiveSplit.Graph.csproj" />
     <ProjectReference Include="$(ComponentsPath)\LiveSplit.HotkeyIndicator\src\LiveSplit.HotkeyIndicator\LiveSplit.HotkeyIndicator.csproj" />
     <ProjectReference Include="$(ComponentsPath)\LiveSplit.ManualGameTime\src\LiveSplit.ManualGameTime\LiveSplit.ManualGameTime.csproj" />
     <ProjectReference Include="$(ComponentsPath)\LiveSplit.PossibleTimeSave\src\LiveSplit.PossibleTimeSave\LiveSplit.PossibleTimeSave.csproj" />

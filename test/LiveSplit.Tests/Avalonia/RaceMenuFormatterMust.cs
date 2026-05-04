@@ -55,6 +55,17 @@ public class RaceMenuFormatterMust
     }
 
     [Fact]
+    public void OnlyExposeNewRaceActionForProvidersThatCanCreateRaces()
+    {
+        var capable = new FakeRaceProvider(RaceJoinCapability.OpenViewer, "runner") { CreateRace = _ => { } };
+        var incapable = new FakeRaceProvider(RaceJoinCapability.OpenViewer, "runner") { CreateRace = null };
+
+        Assert.True(RaceMenuFormatter.CanCreateRace(capable));
+        Assert.False(RaceMenuFormatter.CanCreateRace(incapable));
+        Assert.False(RaceMenuFormatter.CanCreateRace(null));
+    }
+
+    [Fact]
     public void ResolveInProgressRaceParticipantAsJoinForJoinCapableProvider()
     {
         var provider = new FakeRaceProvider(RaceJoinCapability.JoinRace, "runner");

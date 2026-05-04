@@ -89,8 +89,10 @@ public sealed class ShareTemplateSettingsStore
         {
             XDocument document = XDocument.Load(LegacySettingsPath);
             XElement shareSettings = document
-                .Descendants("LiveSplit.Web.Share.ShareSettings")
-                .FirstOrDefault();
+                .Descendants()
+                .FirstOrDefault(x =>
+                    string.Equals(x.Name.LocalName, "LiveSplit.Web.Share.ShareSettings", StringComparison.Ordinal)
+                    || string.Equals(x.Name.LocalName, "LiveSplit.Web.Share.Properties.Settings", StringComparison.Ordinal));
             if (shareSettings is null)
             {
                 return null;

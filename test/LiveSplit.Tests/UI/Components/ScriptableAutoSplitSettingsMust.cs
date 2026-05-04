@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using System.Xml;
 
@@ -207,6 +208,15 @@ public class ScriptableAutoSplitSettingsMust
         Assert.Contains("Reset Setting to Default", leafHeaders);
     }
 
+    [Fact]
+    public void RefreshesSettingsControlsThroughAvaloniaDispatcher()
+    {
+        string source = File.ReadAllText(FindRepoFile("components/LiveSplit.ScriptableAutoSplit/src/LiveSplit.ScriptableAutoSplit/ComponentSettings.cs"));
+
+        Assert.Contains("Dispatcher.UIThread", source);
+        Assert.Contains("RefreshSettingsControlsOnUiThread", source);
+    }
+
     private static XmlNode CreateSettingsXml(string scriptPath, bool start, bool reset, bool split, params (string Id, bool Value)[] customSettings)
     {
         var document = new XmlDocument();
@@ -333,5 +343,22 @@ public class ScriptableAutoSplitSettingsMust
         }
 
         return null;
+    }
+
+    private static string FindRepoFile(string relativePath)
+    {
+        string dir = Directory.GetCurrentDirectory();
+        while (dir != null)
+        {
+            string candidate = Path.Combine(dir, relativePath);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException(relativePath);
     }
 }

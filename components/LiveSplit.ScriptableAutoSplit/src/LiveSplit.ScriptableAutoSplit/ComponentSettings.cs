@@ -8,6 +8,7 @@ using System.Xml;
 using global::Avalonia;
 using global::Avalonia.Controls;
 using global::Avalonia.Platform.Storage;
+using global::Avalonia.Threading;
 
 using LiveSplit.ASL;
 
@@ -19,8 +20,8 @@ namespace LiveSplit.UI.Components;
 /// toggles wired to <c>CheckBox</c> controls; that UI lived in
 /// <c>ComponentSettings.Designer.cs</c>, which has been removed for the linux-port.
 ///
-/// The state we round-trip via XML is the same — the basic setting flags and the dictionary of
-/// custom setting id → bool — so existing layouts load unchanged. The Avalonia settings panel
+/// The state we round-trip via XML is the same â€” the basic setting flags and the dictionary of
+/// custom setting id â†’ bool â€” so existing layouts load unchanged. The Avalonia settings panel
 /// renders the script-path field via reflection; the per-script custom toggles aren't exposed in
 /// the panel yet, but the values still load from / save to disk so re-opening a layout doesn't
 /// drop them.
@@ -33,10 +34,10 @@ public class ComponentSettings
     // receives an explicit script path so the layout's stored ScriptPath doesn't override it.
     private bool _ignore_next_path_setting;
 
-    // Start/Reset/Split toggles — keyed by the lowercased XML element name.
+    // Start/Reset/Split toggles â€” keyed by the lowercased XML element name.
     private readonly Dictionary<string, bool> _basic_settings_state = [];
 
-    // Custom (per-script) settings: id → enabled.
+    // Custom (per-script) settings: id â†’ enabled.
     private Dictionary<string, bool> _custom_settings_state = [];
     private ASLSettings _current_asl_settings;
     private StackPanel _basicSettingsPanel;
@@ -82,7 +83,7 @@ public class ComponentSettings
             ParseBasicSettingsFromXml(element);
             ParseCustomSettingsFromXml(element);
             ApplyCustomSettingsStateToCurrentSettings();
-            RefreshSettingsControls();
+            RefreshSettingsControlsOnUiThread();
         }
     }
 
@@ -122,7 +123,7 @@ public class ComponentSettings
 
         _custom_settings_state = values;
         _current_asl_settings = settings;
-        RefreshSettingsControls();
+        RefreshSettingsControlsOnUiThread();
     }
 
     public void ResetASLSettings()
@@ -133,7 +134,7 @@ public class ComponentSettings
         }
 
         _current_asl_settings = null;
-        RefreshSettingsControls();
+        RefreshSettingsControlsOnUiThread();
     }
 
     public void SetGameVersion(string version)
@@ -566,6 +567,17 @@ public class ComponentSettings
             _customSettingsPanel.Children.Clear();
             AddCustomSettingControls(_customSettingsPanel);
         }
+    }
+
+    private void RefreshSettingsControlsOnUiThread()
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            RefreshSettingsControls();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(RefreshSettingsControls);
     }
 
     private void RefreshCustomSettingCheckBoxes()

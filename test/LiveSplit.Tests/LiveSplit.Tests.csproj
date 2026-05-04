@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <NoWarn>$(NoWarn);CA1416</NoWarn>
@@ -25,6 +25,7 @@
     <ProjectReference Include="$(ComponentsPath)\LiveSplit.Video\src\LiveSplit.Video\LiveSplit.Video.csproj" />
     <ProjectReference Include="$(ComponentsPath)\LiveSplit.WorldRecord\src\LiveSplit.WorldRecord\LiveSplit.WorldRecord.csproj" />
     <ProjectReference Include="$(ComponentsPath)\LiveSplit.BlankSpace\src\LiveSplit.BlankSpace\LiveSplit.BlankSpace.csproj" />
+    <ProjectReference Include="$(ComponentsPath)\LiveSplit.AutoSplittingRuntime\src\LiveSplit.AutoSplittingRuntime\LiveSplit.AutoSplittingRuntime.csproj" />
     <ProjectReference Include="$(SrcPath)\LiveSplit\LiveSplit.csproj" />
     <ProjectReference Include="$(SrcPath)\LiveSplit.Core\LiveSplit.Core.csproj" />
   </ItemGroup>

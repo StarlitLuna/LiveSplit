@@ -38,6 +38,7 @@ public sealed class SpeedrunComSubmitDialog : Window
         Height = 360;
         MinWidth = 360;
         MinHeight = 300;
+        DialogTheme.ApplyWindow(this);
 
         var fields = new StackPanel
         {

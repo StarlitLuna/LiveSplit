@@ -40,6 +40,7 @@ public sealed class ChooseComparisonsDialog : Window
         Title = "Choose Comparisons";
         Width = 420;
         Height = 460;
+        DialogTheme.ApplyWindow(this);
 
         var stack = new StackPanel
         {
@@ -67,8 +68,8 @@ public sealed class ChooseComparisonsDialog : Window
             stack.Children.Add(cb);
         }
 
-        _historyBox = new NumericUpDown { Minimum = 1, Maximum = 999, Width = 80 };
-        _bestRunsBox = new NumericUpDown { Minimum = 1, Maximum = 999, Width = 80 };
+        _historyBox = new NumericUpDown { Minimum = 1, Maximum = 50, Width = 80 };
+        _bestRunsBox = new NumericUpDown { Minimum = 1, Maximum = 50, Width = 80 };
         _historyBox.ValueChanged += (_, e) =>
         {
             if (e.NewValue.HasValue && _bestRunsBox.Value.HasValue && e.NewValue.Value < _bestRunsBox.Value.Value)
@@ -95,7 +96,7 @@ public sealed class ChooseComparisonsDialog : Window
             IsVisible = false,
             Children =
             {
-                new TextBlock { Text = "HCP Settings", FontWeight = global::Avalonia.Media.FontWeight.Bold },
+                new TextBlock { Text = "Golf HCP Settings", FontWeight = global::Avalonia.Media.FontWeight.Bold },
                 Row("History size:", _historyBox),
                 Row("Best runs (n):", _bestRunsBox),
             },
@@ -113,7 +114,7 @@ public sealed class ChooseComparisonsDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8,
             Margin = new Thickness(0, 0, 12, 12),
-            Children = { cancel, ok },
+            Children = { ok, cancel },
         };
 
         var root = new DockPanel { LastChildFill = true };

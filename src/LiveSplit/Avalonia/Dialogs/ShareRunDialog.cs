@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 using global::Avalonia;
 using global::Avalonia.Controls;
+using global::Avalonia.Input;
 using global::Avalonia.Input.Platform;
 using global::Avalonia.Layout;
 using global::Avalonia.Media;
@@ -28,7 +29,7 @@ public sealed class ShareRunDialog : Window
     private readonly IReadOnlyList<SharePlatformChoice> _platforms;
     private readonly ShareTemplateSettingsStore _templateStore;
     private readonly ShareTemplateSettings _templates;
-    private readonly List<Button> _insertButtons = [];
+    private readonly Dictionary<string, Button> _insertButtons = [];
     private ComboBox _platformBox;
     private TextBlock _descriptionBlock;
     private TextBox _notesBox;
@@ -45,11 +46,12 @@ public sealed class ShareRunDialog : Window
         _templateStore = ShareTemplateSettingsStore.CreateDefault();
         _templates = _templateStore.Load();
 
-        Title = "Share Run";
+        Title = "Run Sharer";
         Width = 560;
         Height = 560;
         MinWidth = 460;
         MinHeight = 440;
+        DialogTheme.ApplyWindow(this);
 
         Content = BuildContent();
         RefreshPlatform();
@@ -96,6 +98,7 @@ public sealed class ShareRunDialog : Window
         _notesBox = new TextBox
         {
             AcceptsReturn = true,
+            MaxLength = 280,
             MinHeight = 120,
             TextWrapping = TextWrapping.Wrap
         };
@@ -169,7 +172,7 @@ public sealed class ShareRunDialog : Window
             MinWidth = 68
         };
         button.Click += (_, _) => Insert(token);
-        _insertButtons.Add(button);
+        _insertButtons[token] = button;
         panel.Children.Add(button);
     }
 
@@ -228,33 +231,29 @@ public sealed class ShareRunDialog : Window
         bool notesEnabled = platform.SupportsNotes;
         _notesBox.IsEnabled = notesEnabled;
         _previewButton.IsEnabled = notesEnabled;
-        foreach (Button button in _insertButtons)
+        foreach ((string token, Button button) in _insertButtons)
         {
-            button.IsEnabled = notesEnabled;
+            button.IsEnabled = IsInsertTokenEnabled(token, notesEnabled, _run, _state);
         }
 
-        if (platform == SharePlatformChoice.Twitter)
-        {
-            _notesBox.Text = _templates.GetTwitterFormat(_state.CurrentPhase);
-        }
-        else if (platform == SharePlatformChoice.Twitch)
-        {
-            _notesBox.Text = _templates.GetTwitchFormat();
-        }
-        else if (platform == SharePlatformChoice.Imgur)
-        {
-            _notesBox.Text = Imgur.BuildTitle(_run, _state.CurrentTimingMethod);
-        }
-        else if (platform == SharePlatformChoice.SpeedrunCom)
-        {
-            _notesBox.Text = string.Empty;
-        }
-        else
-        {
-            _notesBox.Text = string.Empty;
-        }
+        _notesBox.Text = GetInitialNotesForPlatform(platform.Name, _templates, _state, _run);
 
         _statusBlock.Text = string.Empty;
+    }
+
+    internal static string GetInitialNotesForPlatform(
+        string platformName,
+        ShareTemplateSettings templates,
+        LiveSplitState state,
+        IRun run)
+    {
+        return platformName switch
+        {
+            "X (Twitter)" => (templates ?? ShareTemplateSettings.Default).GetTwitterFormat(
+                state?.CurrentPhase ?? TimerPhase.NotRunning),
+            "Twitch" => (templates ?? ShareTemplateSettings.Default).GetTwitchFormat(),
+            _ => string.Empty,
+        };
     }
 
     private async Task Submit()
@@ -263,8 +262,16 @@ public sealed class ShareRunDialog : Window
         PersistCurrentTemplate(platform);
         if (platform == SharePlatformChoice.Twitter)
         {
-            Twitter.Instance.SubmitRun(_run, method: _state.CurrentTimingMethod, comment: FormatNotes());
-            SetStatus("Opened browser to Twitter compose.");
+            await CopyTwitterScreenshotAsync(
+                _screenshotPng,
+                png => CopyPngToClipboardAsync(Clipboard, png));
+
+            bool shared = Twitter.Instance.SubmitRun(
+                _run,
+                null,
+                _state.CurrentTimingMethod,
+                await FormatNotesAsync());
+            await ShowShareResultMessage(shared ? ShareResult.Success : ShareResult.Failure, platform.Name);
         }
         else if (platform == SharePlatformChoice.Twitch)
         {
@@ -286,6 +293,41 @@ public sealed class ShareRunDialog : Window
         {
             await SubmitToSpeedrunCom();
         }
+    }
+
+    internal static async Task<bool> CopyTwitterScreenshotAsync(
+        Func<byte[]> screenshotPng,
+        Func<byte[], Task> copyPngAsync)
+    {
+        byte[] png = screenshotPng?.Invoke();
+        if (png is null || png.Length == 0 || copyPngAsync is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            await copyPngAsync(png);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+            return false;
+        }
+    }
+
+    internal static async Task CopyPngToClipboardAsync(IClipboard clipboard, byte[] png)
+    {
+        if (clipboard is null || png is null || png.Length == 0)
+        {
+            return;
+        }
+
+        var data = new DataObject();
+        data.Set("PNG", png);
+        data.Set("image/png", png);
+        await clipboard.SetDataObjectAsync(data);
     }
 
     private void PersistCurrentTemplate(SharePlatformChoice platform)
@@ -315,7 +357,7 @@ public sealed class ShareRunDialog : Window
 
     private async Task Preview()
     {
-        await new MessageDialog("Preview", FormatNotes()).ShowDialogAsync(this);
+        await new MessageDialog("Preview", await FormatNotesAsync()).ShowDialogAsync(this);
     }
 
     private void Insert(string token)
@@ -326,7 +368,27 @@ public sealed class ShareRunDialog : Window
         _notesBox.Focus();
     }
 
-    private string FormatNotes()
+    internal static bool IsInsertTokenEnabled(string token, bool supportsNotes, IRun run, LiveSplitState state)
+    {
+        if (!supportsNotes)
+        {
+            return false;
+        }
+
+        return token switch
+        {
+            "$game" => !string.IsNullOrEmpty(run?.GameName),
+            "$category" => !string.IsNullOrEmpty(run?.CategoryName),
+            "$title" => !string.IsNullOrEmpty(run?.GameName) || !string.IsNullOrEmpty(run?.CategoryName),
+            "$pb" => run?.LastOrDefault()?.PersonalBestSplitTime[state.CurrentTimingMethod] != null,
+            "$delta" or "$splitname" or "$splittime" => state.CurrentPhase is TimerPhase.Running or TimerPhase.Paused
+                && state.CurrentSplitIndex > 0
+                && state.CurrentSplitIndex <= (run?.Count ?? 0),
+            _ => true,
+        };
+    }
+
+    private async Task<string> FormatNotesAsync()
     {
         string template = _notesBox.Text ?? string.Empty;
         return ShareNotesFormatter.Format(
@@ -335,10 +397,25 @@ public sealed class ShareRunDialog : Window
             _state.CurrentSplitIndex,
             _state.CurrentTimingMethod,
             template,
-            ResolveStreamLink(template));
+            await ResolveStreamLinkForNotes(template));
     }
 
-    private static string ResolveStreamLink(string template)
+    private Task<string> ResolveStreamLinkForNotes(string template)
+    {
+        return ResolveStreamLinkForNotes(
+            template,
+            () => Twitch.Instance.IsLoggedIn,
+            () => Twitch.Instance.VerifyLogin(false),
+            EnsureTwitchAuthentication,
+            () => Twitch.Instance.ChannelName);
+    }
+
+    internal static async Task<string> ResolveStreamLinkForNotes(
+        string template,
+        Func<bool> isLoggedIn,
+        Func<bool> verifyStoredLogin,
+        Func<Task<bool>> promptLogin,
+        Func<string> channelName)
     {
         if (template?.Contains("$stream", StringComparison.Ordinal) != true)
         {
@@ -347,9 +424,10 @@ public sealed class ShareRunDialog : Window
 
         try
         {
-            if (Twitch.Instance.IsLoggedIn || Twitch.Instance.VerifyLogin(false))
+            if (isLoggedIn() || verifyStoredLogin() || await promptLogin())
             {
-                return $"http://twitch.tv/{Twitch.Instance.ChannelName}";
+                string channel = channelName();
+                return string.IsNullOrEmpty(channel) ? string.Empty : $"http://twitch.tv/{channel}";
             }
         }
         catch (Exception ex)
@@ -402,7 +480,7 @@ public sealed class ShareRunDialog : Window
                 _run,
                 () => png,
                 _state.CurrentTimingMethod,
-                FormatNotes());
+                await FormatNotesAsync());
 
             if (result.Success)
             {
@@ -414,15 +492,18 @@ public sealed class ShareRunDialog : Window
 
                 Process.Start(new ProcessStartInfo(result.Url) { UseShellExecute = true });
                 SetStatus($"Uploaded: {result.Url} (URL copied to clipboard).");
+                await ShowShareResultMessage(ShareResult.Success, SharePlatformChoice.Imgur.Name);
                 return;
             }
 
             SetStatus(result.ErrorMessage);
+            await ShowShareResultMessage(ShareResult.Failure, SharePlatformChoice.Imgur.Name);
         }
         catch (Exception ex)
         {
             Log.Error(ex);
             SetStatus($"Imgur upload failed: {ex.Message}");
+            await ShowShareResultMessage(ShareResult.Failure, SharePlatformChoice.Imgur.Name);
         }
     }
 
@@ -448,49 +529,161 @@ public sealed class ShareRunDialog : Window
     {
         if (!await EnsureTwitchAuthentication())
         {
-            SetStatus("Your login information seems to be incorrect.");
+            await ShowShareResultMessage(ShareResult.LoginFailure, SharePlatformChoice.Twitch.Name);
             return;
         }
 
         try
         {
-            bool submitted = Twitch.Instance.SubmitRun(
+            bool submitted = await SubmitTwitchShareAsync(
                 _run,
-                _screenshotPng,
-                _state.CurrentTimingMethod,
-                FormatNotes());
+                await FormatNotesAsync(),
+                gameName => Twitch.Instance.FindGame(gameName),
+                ResolveTwitchGameWithDialog,
+                (title, game) => Twitch.Instance.SetStreamTitleAndGame(title, game));
 
-            SetStatus(submitted
-                ? "Your run was successfully shared to Twitch."
-                : "The run could not be shared.");
+            await ShowShareResultMessage(
+                submitted ? ShareResult.Success : ShareResult.Failure,
+                SharePlatformChoice.Twitch.Name);
         }
         catch (Exception ex)
         {
             Log.Error(ex);
-            SetStatus("The run could not be shared.");
+            await ShowShareResultMessage(ShareResult.Failure, SharePlatformChoice.Twitch.Name);
         }
+    }
+
+    internal readonly record struct TwitchGameResolveResult(bool Accepted, Twitch.TwitchGame Game)
+    {
+        public static TwitchGameResolveResult Selected(Twitch.TwitchGame game) => new(true, game);
+        public static TwitchGameResolveResult NoGame() => new(true, null);
+        public static TwitchGameResolveResult Canceled() => new(false, null);
+    }
+
+    internal static async Task<bool> SubmitTwitchShareAsync(
+        IRun run,
+        string title,
+        Func<string, IEnumerable<Twitch.TwitchGame>> findGame,
+        Func<string, Task<TwitchGameResolveResult>> resolveGame,
+        Action<string, Twitch.TwitchGame> setStreamTitleAndGame)
+    {
+        TwitchGameResolveResult resolvedGame = TryResolveExactTwitchGame(run?.GameName, findGame);
+        if (!resolvedGame.Accepted)
+        {
+            resolvedGame = resolveGame is null
+                ? TwitchGameResolveResult.Canceled()
+                : await resolveGame(run?.GameName ?? string.Empty);
+        }
+
+        if (!resolvedGame.Accepted)
+        {
+            return false;
+        }
+
+        setStreamTitleAndGame(title, resolvedGame.Game);
+        return true;
+    }
+
+    internal static TwitchGameResolveResult TryResolveExactTwitchGame(
+        string gameName,
+        Func<string, IEnumerable<Twitch.TwitchGame>> findGame)
+    {
+        try
+        {
+            Twitch.TwitchGame game = findGame(gameName)
+                .First(twitchGame => twitchGame.Name == gameName);
+            return TwitchGameResolveResult.Selected(game);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+            return TwitchGameResolveResult.Canceled();
+        }
+    }
+
+    private async Task<TwitchGameResolveResult> ResolveTwitchGameWithDialog(string gameName)
+    {
+        var dialog = new TwitchGameResolveDialog(gameName, name => Twitch.Instance.FindGame(name));
+        return await dialog.ShowDialogAsync(this);
     }
 
     private async Task SubmitToSpeedrunCom()
     {
-        if (!await EnsureSpeedrunComAuthentication())
+        SpeedrunComReadiness readiness = await CheckSpeedrunComReadiness(_run, EnsureSpeedrunComAuthentication);
+        if (!readiness.CanSubmit)
         {
-            SetStatus("Your login information seems to be incorrect.");
+            SetStatus(readiness.Message);
+            if (readiness.Message == "Your login information seems to be incorrect.")
+            {
+                await ShowShareResultMessage(ShareResult.LoginFailure, SharePlatformChoice.SpeedrunCom.Name);
+                return;
+            }
+
+            await new MessageDialog("Submitting Failed", readiness.Message).ShowDialogAsync(this);
             return;
         }
 
-        if (!SpeedrunCom.ValidateRun(_run, out string reason))
-        {
-            SetStatus(reason);
-            await new MessageDialog("Submitting Failed", reason).ShowDialogAsync(this);
-            return;
-        }
-
-        var dialog = new SpeedrunComSubmitDialog(_run.Metadata, FormatNotes());
+        var dialog = new SpeedrunComSubmitDialog(_run.Metadata, await FormatNotesAsync());
         bool submitted = await dialog.ShowDialogAsync(this);
-        SetStatus(submitted
-            ? "Your run was successfully shared to Speedrun.com."
-            : "The run could not be shared.");
+        await ShowShareResultMessage(
+            submitted ? ShareResult.Success : ShareResult.Failure,
+            SharePlatformChoice.SpeedrunCom.Name);
+    }
+
+    internal enum ShareResult
+    {
+        Success,
+        LoginFailure,
+        Failure,
+    }
+
+    internal readonly record struct ShareResultMessage(string Title, string Message);
+
+    internal static ShareResultMessage GetShareResultMessage(ShareResult result, string platformName)
+    {
+        return result switch
+        {
+            ShareResult.Success => new ShareResultMessage(
+                "Run Shared",
+                $"Your run was successfully shared to {platformName}."),
+            ShareResult.LoginFailure => new ShareResultMessage(
+                "Error",
+                "Your login information seems to be incorrect."),
+            _ => new ShareResultMessage(
+                "Error",
+                "The run could not be shared."),
+        };
+    }
+
+    private async Task ShowShareResultMessage(ShareResult result, string platformName)
+    {
+        ShareResultMessage message = GetShareResultMessage(result, platformName);
+        SetStatus(message.Message);
+        await new MessageDialog(message.Title, message.Message).ShowDialogAsync(this);
+    }
+
+    internal readonly record struct SpeedrunComReadiness(bool CanSubmit, string Message);
+
+    internal static async Task<SpeedrunComReadiness> CheckSpeedrunComReadiness(
+        IRun run,
+        Func<Task<bool>> ensureAuthentication)
+    {
+        if (!string.IsNullOrEmpty(run?.Metadata?.RunID))
+        {
+            return new SpeedrunComReadiness(false, "This run already exists on speedrun.com.");
+        }
+
+        if (!await ensureAuthentication())
+        {
+            return new SpeedrunComReadiness(false, "Your login information seems to be incorrect.");
+        }
+
+        if (!SpeedrunCom.ValidateRun(run, out string reason))
+        {
+            return new SpeedrunComReadiness(false, reason);
+        }
+
+        return new SpeedrunComReadiness(true, string.Empty);
     }
 
     private async Task<bool> EnsureTwitchAuthentication()
@@ -588,7 +781,7 @@ public sealed class ShareRunDialog : Window
             "Speedrun.com",
             "Speedrun.com provides centralized leaderboards for speedrunning.",
             "Submit",
-            supportsNotes: true);
+            supportsNotes: false);
 
         public static readonly SharePlatformChoice Twitch = new(
             "Twitch",

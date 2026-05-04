@@ -33,6 +33,17 @@ public class SkiaTextRenderingHintTests
     }
 
     [Theory]
+    [InlineData("Calibri", "LiveSplit.Fonts.Timer.ttf")]
+    [InlineData("Century Gothic", "LiveSplit.Fonts.Timer.ttf")]
+    [InlineData("Segoe UI", "LiveSplit.Fonts.FiraSans-Regular.ttf")]
+    [InlineData("Arial", "LiveSplit.Fonts.FiraSans-Regular.ttf")]
+    [InlineData("Consolas", null)]
+    public void MapsLiveSplitDefaultFontFallbacks(string familyName, string expectedResource)
+    {
+        Assert.Equal(expectedResource, SkiaFont.ResolveLiveSplitFallbackResourceName(familyName));
+    }
+
+    [Theory]
     [InlineData(TextRenderingHint.AntiAlias, SKFontEdging.Antialias, SKFontHinting.None, false)]
     [InlineData(TextRenderingHint.ClearTypeGridFit, SKFontEdging.SubpixelAntialias, SKFontHinting.Full, true)]
     public void MapsGdiTextRenderingHintsToSkiaFontSettings(
@@ -110,6 +121,57 @@ public class SkiaTextRenderingHintTests
         });
 
         AssertSamePixels(direct, label);
+    }
+
+    [Fact]
+    public void DrawImageHonorsNearestNeighborInterpolationMode()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        using IImage image = CreateTwoColorImage();
+        using SKSurface surface = SKSurface.Create(new SKImageInfo(4, 1, SKColorType.Bgra8888, SKAlphaType.Premul));
+        surface.Canvas.Clear(SKColors.Transparent);
+        var context = new SkiaDrawingContext(surface)
+        {
+            InterpolationMode = InterpolationMode.NearestNeighbor,
+        };
+
+        context.DrawImage(image, new RectangleF(0, 0, 4, 1));
+
+        using SKBitmap bitmap = SKBitmap.FromImage(surface.Snapshot());
+        Assert.Equal(SKColors.Red, bitmap.GetPixel(0, 0));
+        Assert.Equal(SKColors.Red, bitmap.GetPixel(1, 0));
+        Assert.Equal(SKColors.Blue, bitmap.GetPixel(2, 0));
+        Assert.Equal(SKColors.Blue, bitmap.GetPixel(3, 0));
+    }
+
+    [Fact]
+    public void DrawImageHonorsBilinearInterpolationMode()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        using IImage image = CreateTwoColorImage();
+        using SKSurface surface = SKSurface.Create(new SKImageInfo(4, 1, SKColorType.Bgra8888, SKAlphaType.Premul));
+        surface.Canvas.Clear(SKColors.Transparent);
+        var context = new SkiaDrawingContext(surface)
+        {
+            InterpolationMode = InterpolationMode.Bilinear,
+        };
+
+        context.DrawImage(image, new RectangleF(0, 0, 4, 1));
+
+        using SKBitmap bitmap = SKBitmap.FromImage(surface.Snapshot());
+        Assert.NotEqual(SKColors.Red, bitmap.GetPixel(1, 0));
+        Assert.NotEqual(SKColors.Blue, bitmap.GetPixel(2, 0));
+    }
+
+    private static IImage CreateTwoColorImage()
+    {
+        using var bitmap = new SKBitmap(2, 1, SKColorType.Bgra8888, SKAlphaType.Premul);
+        bitmap.SetPixel(0, 0, SKColors.Red);
+        bitmap.SetPixel(1, 0, SKColors.Blue);
+        using SKImage image = SKImage.FromBitmap(bitmap);
+        using SKData data = image.Encode(SKEncodedImageFormat.Png, 100);
+        using var stream = new System.IO.MemoryStream(data.ToArray());
+        return DrawingApi.Factory.LoadImage(stream);
     }
 
     [Fact]

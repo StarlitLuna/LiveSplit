@@ -1,5 +1,8 @@
 using System;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Xml;
 
 using LiveSplit.Options;
@@ -7,6 +10,8 @@ using LiveSplit.Options.SettingsFactories;
 using LiveSplit.UI;
 using LiveSplit.UI.LayoutFactories;
 using LiveSplit.UI.LayoutSavers;
+
+using SkiaSharp;
 
 using Xunit;
 
@@ -125,6 +130,67 @@ public class LayoutSerializationImageMust
         Assert.Equal(legacyBlob, loaded.Settings.LegacyBackgroundImage);
     }
 
+    [Fact]
+    public void DecodeMasterLegacyBackgroundImageBlobForRendering()
+    {
+        byte[] legacyBlob = CreateLegacySerializedImageBlob();
+
+        string xml = $"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <Layout version="1.6.1">
+              <Mode>Vertical</Mode>
+              <X>0</X>
+              <Y>0</Y>
+              <VerticalWidth>200</VerticalWidth>
+              <VerticalHeight>100</VerticalHeight>
+              <HorizontalWidth>300</HorizontalWidth>
+              <HorizontalHeight>80</HorizontalHeight>
+              <Settings>
+                <TextColor>FFFFFFFF</TextColor>
+                <BackgroundColor>00000000</BackgroundColor>
+                <BackgroundColor2>00000000</BackgroundColor2>
+                <ThinSeparatorsColor>FFFFFFFF</ThinSeparatorsColor>
+                <SeparatorsColor>FFFFFFFF</SeparatorsColor>
+                <PersonalBestColor>FFFFFFFF</PersonalBestColor>
+                <AheadGainingTimeColor>FFFFFFFF</AheadGainingTimeColor>
+                <AheadLosingTimeColor>FFFFFFFF</AheadLosingTimeColor>
+                <BehindGainingTimeColor>FFFFFFFF</BehindGainingTimeColor>
+                <BehindLosingTimeColor>FFFFFFFF</BehindLosingTimeColor>
+                <BestSegmentColor>FFFFFFFF</BestSegmentColor>
+                <UseRainbowColor>False</UseRainbowColor>
+                <NotRunningColor>FFFFFFFF</NotRunningColor>
+                <PausedColor>FF7A7A7A</PausedColor>
+                <TextOutlineColor>00000000</TextOutlineColor>
+                <ShadowsColor>80000000</ShadowsColor>
+                <AlwaysOnTop>False</AlwaysOnTop>
+                <ShowBestSegments>False</ShowBestSegments>
+                <AntiAliasing>True</AntiAliasing>
+                <DropShadows>True</DropShadows>
+                <BackgroundType>Image</BackgroundType>
+                <BackgroundImage>{Convert.ToBase64String(legacyBlob)}</BackgroundImage>
+                <ImageOpacity>1</ImageOpacity>
+                <ImageBlur>0</ImageBlur>
+                <Opacity>1</Opacity>
+                <MousePassThroughWhileRunning>False</MousePassThroughWhileRunning>
+                <AllowResizing>True</AllowResizing>
+                <AllowMoving>True</AllowMoving>
+              </Settings>
+              <Components />
+            </Layout>
+            """;
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+
+        ILayout loaded = new XMLLayoutFactory(stream).Create(null);
+
+        Assert.Equal(legacyBlob, loaded.Settings.LegacyBackgroundImage);
+        Assert.NotNull(loaded.Settings.BackgroundImage);
+        using SKBitmap bitmap = SKBitmap.Decode(loaded.Settings.BackgroundImage);
+        Assert.NotNull(bitmap);
+        Assert.Equal(2, bitmap.Width);
+        Assert.Equal(1, bitmap.Height);
+    }
+
     private static XmlElement CreateElement(string innerText)
     {
         var document = new XmlDocument();
@@ -132,4 +198,17 @@ public class LayoutSerializationImageMust
         element.InnerText = innerText;
         return element;
     }
+
+#pragma warning disable SYSLIB0011
+    private static byte[] CreateLegacySerializedImageBlob()
+    {
+        using var bitmap = new Bitmap(2, 1, PixelFormat.Format32bppArgb);
+        bitmap.SetPixel(0, 0, Color.Red);
+        bitmap.SetPixel(1, 0, Color.Blue);
+
+        using var stream = new MemoryStream();
+        new BinaryFormatter().Serialize(stream, bitmap);
+        return stream.ToArray();
+    }
+#pragma warning restore SYSLIB0011
 }

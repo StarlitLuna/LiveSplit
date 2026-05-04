@@ -37,6 +37,7 @@ public sealed class AvaloniaTimerHost : IDisposable
     public ITimerModel Model { get; }
     public ComponentRenderer Renderer { get; }
     public bool InTimerOnlyMode { get; private set; }
+    public Exception LastOperationException { get; private set; }
 
     private readonly Action _invalidateVisual;
     private readonly Task _refreshTask;
@@ -183,6 +184,7 @@ public sealed class AvaloniaTimerHost : IDisposable
 
     public bool LoadRun(string path)
     {
+        LastOperationException = null;
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
         {
             return false;
@@ -197,39 +199,39 @@ public sealed class AvaloniaTimerHost : IDisposable
             run.FilePath = path;
             run.FixSplits();
 
-            State.Run.AutoSplitter?.Deactivate();
-            ResetBeforeDestructiveSwap();
-            UpdateRecentSplitsTimingForCurrentRun();
-
-            TimingMethod lastTimingMethod = State.CurrentTimingMethod;
-            string lastHotkeyProfile = State.CurrentHotkeyProfile;
-            RecentSplitsFile existingRecent = State.Settings.RecentSplits.LastOrDefault(x => x.Path == path);
-            if (!string.IsNullOrEmpty(existingRecent.Path))
-            {
-                lastTimingMethod = existingRecent.LastTimingMethod;
-                if (State.Settings.HotkeyProfiles.ContainsKey(existingRecent.LastHotkeyProfile))
-                {
-                    lastHotkeyProfile = existingRecent.LastHotkeyProfile;
-                }
-            }
-
-            State.Run = run;
-            State.Settings.AddToRecentSplits(path, run, lastTimingMethod, lastHotkeyProfile);
-            ApplyRecentSplitsFileState(path, State.Settings, State);
-
-            SwitchComparisonGenerators(State);
-            SwitchComparison(State, State.Settings.LastComparison);
-            RegenerateComparisons(State);
-
-            CreateAutoSplitter(State, _activateAutoSplitters, _autoSplitterResolver);
-            RestoreLayoutForRun(run);
-            InTimerOnlyMode = false;
-
-            Invalidate();
+            ApplyLoadedRun(run, path, addToRecents: true);
             return true;
         }
         catch (Exception e)
         {
+            LastOperationException = e;
+            Options.Log.Error(e);
+            return false;
+        }
+    }
+
+    public bool LoadRunFromStream(Stream stream)
+    {
+        LastOperationException = null;
+        if (stream is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var factory = new StandardFormatsRunFactory { Stream = stream };
+            IRun run = factory.Create(new StandardComparisonGeneratorsFactory());
+            run.FilePath = null;
+            run.HasChanged = true;
+            run.FixSplits();
+
+            ApplyLoadedRun(run, path: null, addToRecents: false);
+            return true;
+        }
+        catch (Exception e)
+        {
+            LastOperationException = e;
             Options.Log.Error(e);
             return false;
         }
@@ -237,6 +239,7 @@ public sealed class AvaloniaTimerHost : IDisposable
 
     public bool LoadLayout(string path)
     {
+        LastOperationException = null;
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
         {
             return false;
@@ -249,14 +252,38 @@ public sealed class AvaloniaTimerHost : IDisposable
             layout.FilePath = path;
             StandardLayoutFactory.CenturyGothicFix(layout);
 
-            ApplyLayout(layout);
-            State.Settings.AddToRecentLayouts(path);
-
-            Invalidate();
+            ApplyLoadedLayout(layout, path, addToRecents: true);
             return true;
         }
         catch (Exception e)
         {
+            LastOperationException = e;
+            Options.Log.Error(e);
+            return false;
+        }
+    }
+
+    public bool LoadLayoutFromStream(Stream stream)
+    {
+        LastOperationException = null;
+        if (stream is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            ILayout layout = new XMLLayoutFactory(stream).Create(State);
+            layout.FilePath = null;
+            layout.HasChanged = true;
+            StandardLayoutFactory.CenturyGothicFix(layout);
+
+            ApplyLoadedLayout(layout, path: null, addToRecents: false);
+            return true;
+        }
+        catch (Exception e)
+        {
+            LastOperationException = e;
             Options.Log.Error(e);
             return false;
         }
@@ -358,14 +385,61 @@ public sealed class AvaloniaTimerHost : IDisposable
         LayoutApplied?.Invoke();
     }
 
+    private void ApplyLoadedRun(IRun run, string path, bool addToRecents)
+    {
+        State.Run.AutoSplitter?.Deactivate();
+        ResetBeforeDestructiveSwap();
+        UpdateRecentSplitsTimingForCurrentRun();
+
+        TimingMethod lastTimingMethod = State.CurrentTimingMethod;
+        string lastHotkeyProfile = State.CurrentHotkeyProfile;
+        if (addToRecents && !string.IsNullOrEmpty(path))
+        {
+            RecentSplitsFile existingRecent = State.Settings.RecentSplits.LastOrDefault(x => x.Path == path);
+            if (!string.IsNullOrEmpty(existingRecent.Path))
+            {
+                lastTimingMethod = existingRecent.LastTimingMethod;
+                if (State.Settings.HotkeyProfiles.ContainsKey(existingRecent.LastHotkeyProfile))
+                {
+                    lastHotkeyProfile = existingRecent.LastHotkeyProfile;
+                }
+            }
+        }
+
+        string comparisonToPreserve = State.CurrentComparison;
+        State.Run = run;
+        if (addToRecents && !string.IsNullOrEmpty(path))
+        {
+            State.Settings.AddToRecentSplits(path, run, lastTimingMethod, lastHotkeyProfile);
+            ApplyRecentSplitsFileState(path, State.Settings, State);
+        }
+
+        SwitchComparisonGenerators(State);
+        SwitchComparison(State, comparisonToPreserve);
+        RegenerateComparisons(State);
+
+        State.CallRunManuallyModified();
+        CreateAutoSplitter(State, _activateAutoSplitters, _autoSplitterResolver);
+        RestoreLayoutForRun(run);
+        InTimerOnlyMode = false;
+
+        Invalidate();
+    }
+
+    private void ApplyLoadedLayout(ILayout layout, string path, bool addToRecents)
+    {
+        ApplyLayout(layout);
+        if (addToRecents && !string.IsNullOrEmpty(path))
+        {
+            State.Settings.AddToRecentLayouts(path);
+        }
+
+        Invalidate();
+    }
+
     private static string SelectInitialHotkeyProfile(ISettings settings)
     {
         if (settings?.HotkeyProfiles is null || settings.HotkeyProfiles.Count == 0)
-        {
-            return HotkeyProfile.DefaultHotkeyProfileName;
-        }
-
-        if (settings.HotkeyProfiles.ContainsKey(HotkeyProfile.DefaultHotkeyProfileName))
         {
             return HotkeyProfile.DefaultHotkeyProfileName;
         }
@@ -525,7 +599,7 @@ public sealed class AvaloniaTimerHost : IDisposable
         string path = explicitPath;
         if (string.IsNullOrEmpty(path) && settings.RecentSplits.Count > 0)
         {
-            path = settings.RecentSplits.LastOrDefault(x => !string.IsNullOrEmpty(x.Path)).Path;
+            path = settings.RecentSplits.Last().Path;
         }
 
         if (!string.IsNullOrEmpty(path) && File.Exists(path))
@@ -556,7 +630,7 @@ public sealed class AvaloniaTimerHost : IDisposable
         string path = explicitPath;
         if (string.IsNullOrEmpty(path) && settings.RecentLayouts.Count > 0)
         {
-            path = settings.RecentLayouts.LastOrDefault(x => !string.IsNullOrEmpty(x));
+            path = settings.RecentLayouts.LastOrDefault();
         }
 
         if (!string.IsNullOrEmpty(path) && File.Exists(path))
@@ -693,10 +767,23 @@ public sealed class AvaloniaTimerHost : IDisposable
         }
 
         SwitchComparisonGenerators(State);
-        SwitchComparison(State, State.Settings.LastComparison);
+        SwitchComparison(State, State.CurrentComparison);
         RegenerateComparisons(State);
         _refreshDelayMs = GetRefreshDelay(State.Settings.RefreshRate);
         SaveSettings();
+        Invalidate();
+    }
+
+    public void ApplyRunEditorAcceptedChanges()
+    {
+        string currentComparison = State.CurrentComparison;
+        SwitchComparisonGenerators(State);
+        SwitchComparison(State, currentComparison);
+        RegenerateComparisons(State);
+        State.CallRunManuallyModified();
+        State.Run.AutoSplitter?.Deactivate();
+        CreateAutoSplitter(State, _activateAutoSplitters, _autoSplitterResolver);
+        RestoreLayoutForRun(State.Run);
         Invalidate();
     }
 
@@ -856,6 +943,7 @@ public sealed class AvaloniaTimerHost : IDisposable
 
     public bool SaveRun()
     {
+        LastOperationException = null;
         if (State.Run == null || string.IsNullOrEmpty(State.Run.FilePath))
         {
             return false;
@@ -877,6 +965,7 @@ public sealed class AvaloniaTimerHost : IDisposable
         }
         catch (Exception e)
         {
+            LastOperationException = e;
             Options.Log.Error(e);
             return false;
         }
@@ -914,6 +1003,7 @@ public sealed class AvaloniaTimerHost : IDisposable
 
     public bool SaveLayout()
     {
+        LastOperationException = null;
         if (State.Layout == null || string.IsNullOrEmpty(State.Layout.FilePath))
         {
             return false;
@@ -928,6 +1018,7 @@ public sealed class AvaloniaTimerHost : IDisposable
         }
         catch (Exception e)
         {
+            LastOperationException = e;
             Options.Log.Error(e);
             return false;
         }

@@ -1,5 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Input;
 using System.Xml;
+
+using global::Avalonia;
+using global::Avalonia.Controls;
+using global::Avalonia.Platform.Storage;
 
 using LiveSplit.ASL;
 
@@ -30,6 +38,12 @@ public class ComponentSettings
 
     // Custom (per-script) settings: id → enabled.
     private Dictionary<string, bool> _custom_settings_state = [];
+    private ASLSettings _current_asl_settings;
+    private StackPanel _basicSettingsPanel;
+    private StackPanel _customSettingsPanel;
+    private readonly Dictionary<string, CheckBox> _customCheckBoxes = [];
+    private readonly Dictionary<string, TreeViewItem> _customTreeItems = [];
+    private bool _refreshing_custom_controls;
 
     public ComponentSettings()
     {
@@ -67,6 +81,8 @@ public class ComponentSettings
             _ignore_next_path_setting = false;
             ParseBasicSettingsFromXml(element);
             ParseCustomSettingsFromXml(element);
+            ApplyCustomSettingsStateToCurrentSettings();
+            RefreshSettingsControls();
         }
     }
 
@@ -82,6 +98,18 @@ public class ComponentSettings
             _custom_settings_state.Clear();
         }
 
+        foreach (KeyValuePair<string, ASLSetting> item in settings.BasicSettings)
+        {
+            if (_basic_settings_state.TryGetValue(item.Key, out bool stored))
+            {
+                item.Value.Value = stored;
+            }
+            else
+            {
+                _basic_settings_state[item.Key] = item.Value.Value;
+            }
+        }
+
         var values = new Dictionary<string, bool>();
         foreach (ASLSetting setting in settings.OrderedSettings)
         {
@@ -93,17 +121,88 @@ public class ComponentSettings
         }
 
         _custom_settings_state = values;
+        _current_asl_settings = settings;
+        RefreshSettingsControls();
     }
 
     public void ResetASLSettings()
     {
-        _custom_settings_state.Clear();
+        if (string.IsNullOrWhiteSpace(ScriptPath))
+        {
+            _custom_settings_state.Clear();
+        }
+
+        _current_asl_settings = null;
+        RefreshSettingsControls();
     }
 
     public void SetGameVersion(string version)
     {
         // No-op on the linux-port; the original showed the version next to the script-path
         // textbox in the WinForms designer. The Avalonia panel doesn't surface it.
+    }
+
+    public Control BuildSettingsControl()
+    {
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(7),
+            Spacing = 7,
+        };
+
+        var pathGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,81"),
+        };
+
+        var scriptPathBox = new TextBox
+        {
+            Name = "ScriptPathTextBox",
+            Text = ScriptPath ?? string.Empty,
+            Margin = new Thickness(0, 2, 6, 2),
+        };
+        scriptPathBox.PropertyChanged += (_, args) =>
+        {
+            if (args.Property == TextBox.TextProperty)
+            {
+                ScriptPath = scriptPathBox.Text ?? string.Empty;
+            }
+        };
+
+        var browseButton = new Button
+        {
+            Name = "BrowseScriptButton",
+            Content = "Browse...",
+            Width = 75,
+            Margin = new Thickness(0, 2),
+        };
+        browseButton.Click += async (_, _) => await BrowseScript(scriptPathBox, browseButton);
+
+        Grid.SetColumn(scriptPathBox, 0);
+        Grid.SetColumn(browseButton, 1);
+        pathGrid.Children.Add(scriptPathBox);
+        pathGrid.Children.Add(browseButton);
+        panel.Children.Add(pathGrid);
+
+        var basicPanel = new StackPanel
+        {
+            Name = "BasicSettingsPanel",
+            Spacing = 3,
+        };
+        _basicSettingsPanel = basicPanel;
+        AddBasicSettingControls(basicPanel);
+        panel.Children.Add(basicPanel);
+
+        var customPanel = new StackPanel
+        {
+            Name = "CustomSettingsPanel",
+            Spacing = 3,
+        };
+        _customSettingsPanel = customPanel;
+        AddCustomSettingControls(customPanel);
+        panel.Children.Add(customPanel);
+
+        return new ScrollViewer { Content = panel };
     }
 
     private void AppendBasicSettingsToXml(XmlDocument document, XmlNode settings_node)
@@ -169,6 +268,486 @@ public class ComponentSettings
             {
                 _custom_settings_state[id] = SettingsHelper.ParseBool(element);
             }
+        }
+    }
+
+    private void AddBasicSettingControls(Panel panel)
+    {
+        string[] keys = _current_asl_settings?.BasicSettings.Keys.ToArray() ?? ["start", "reset", "split"];
+        foreach (string key in keys)
+        {
+            bool value = _current_asl_settings?.BasicSettings.TryGetValue(key, out ASLSetting basicSetting) == true
+                ? basicSetting.Value
+                : !_basic_settings_state.TryGetValue(key, out bool stored) || stored;
+            _basic_settings_state[key] = value;
+
+            var checkBox = new CheckBox
+            {
+                Name = "Basic" + char.ToUpperInvariant(key[0]) + key.Substring(1) + "CheckBox",
+                Content = char.ToUpperInvariant(key[0]) + key.Substring(1),
+                IsChecked = value,
+            };
+            checkBox.PropertyChanged += (_, args) =>
+            {
+                if (args.Property == CheckBox.IsCheckedProperty)
+                {
+                    bool checkedValue = checkBox.IsChecked == true;
+                    _basic_settings_state[key] = checkedValue;
+                    if (_current_asl_settings?.BasicSettings.TryGetValue(key, out ASLSetting setting) == true)
+                    {
+                        setting.Value = checkedValue;
+                    }
+                }
+            };
+            panel.Children.Add(checkBox);
+        }
+    }
+
+    private void AddCustomSettingControls(Panel panel)
+    {
+        _customCheckBoxes.Clear();
+        _customTreeItems.Clear();
+
+        if (_current_asl_settings is null)
+        {
+            return;
+        }
+
+        var commandGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,*,*"),
+            Margin = new Thickness(0, 4, 0, 2),
+        };
+        commandGrid.Children.Add(CreateCommandButton("CheckAllCustomSettingsButton", "Check All", () => SetAllCustomSettings(true), 0));
+        commandGrid.Children.Add(CreateCommandButton("UncheckAllCustomSettingsButton", "Uncheck All", () => SetAllCustomSettings(false), 1));
+        commandGrid.Children.Add(CreateCommandButton("ResetAllCustomSettingsButton", "Reset to Default", ResetAllCustomSettings, 2));
+        panel.Children.Add(commandGrid);
+
+        var tree = new TreeView
+        {
+            Name = "CustomSettingsTree",
+        };
+
+        Dictionary<string, List<ASLSetting>> childrenByParent = _current_asl_settings.OrderedSettings
+            .Where(setting => setting.Parent != null)
+            .GroupBy(setting => setting.Parent)
+            .ToDictionary(group => group.Key, group => group.ToList());
+
+        foreach (ASLSetting setting in _current_asl_settings.OrderedSettings)
+        {
+            bool hasChildren = childrenByParent.ContainsKey(setting.Id);
+            TreeViewItem item = CreateCustomSettingTreeItem(setting, hasChildren);
+            _customTreeItems[setting.Id] = item;
+
+            if (setting.Parent != null && _customTreeItems.TryGetValue(setting.Parent, out TreeViewItem parent))
+            {
+                parent.Items.Add(item);
+            }
+            else
+            {
+                tree.Items.Add(item);
+            }
+        }
+
+        panel.Children.Add(tree);
+        RefreshCustomSettingEnabledStates();
+    }
+
+    private Button CreateCommandButton(string name, string content, Action action, int column)
+    {
+        var button = new Button
+        {
+            Name = name,
+            Content = content,
+            Command = new ActionCommand(action),
+            Margin = new Thickness(column == 0 ? 0 : 4, 0, 0, 0),
+        };
+        Grid.SetColumn(button, column);
+        return button;
+    }
+
+    private TreeViewItem CreateCustomSettingTreeItem(ASLSetting setting, bool hasChildren)
+    {
+        var checkBox = new CheckBox
+        {
+            Name = "CustomSetting" + setting.Id + "CheckBox",
+            Content = setting.Label,
+            IsChecked = setting.Value,
+        };
+        if (!string.IsNullOrEmpty(setting.ToolTip))
+        {
+            ToolTip.SetTip(checkBox, setting.ToolTip);
+        }
+
+        checkBox.PropertyChanged += (_, args) =>
+        {
+            if (args.Property == CheckBox.IsCheckedProperty)
+            {
+                UpdateCustomSettingFromCheckBox(setting, checkBox);
+            }
+        };
+
+        _customCheckBoxes[setting.Id] = checkBox;
+
+        return new TreeViewItem
+        {
+            Name = "CustomSetting" + setting.Id + "TreeItem",
+            Header = checkBox,
+            IsExpanded = true,
+            ContextMenu = CreateCustomSettingContextMenu(setting, hasChildren),
+        };
+    }
+
+    private ContextMenu CreateCustomSettingContextMenu(ASLSetting setting, bool hasChildren)
+    {
+        var menu = new ContextMenu();
+        menu.Items.Add(CreateMenuItem("CustomSetting" + setting.Id + "ExpandTreeMenuItem", "Expand Tree", ExpandTree));
+        menu.Items.Add(CreateMenuItem("CustomSetting" + setting.Id + "CollapseTreeMenuItem", "Collapse Tree", CollapseTree));
+        menu.Items.Add(CreateMenuItem("CustomSetting" + setting.Id + "CollapseTreeToSelectionMenuItem", "Collapse Tree to Selection", () => CollapseTreeToSelection(setting)));
+
+        if (hasChildren)
+        {
+            menu.Items.Add(new Separator());
+            menu.Items.Add(CreateMenuItem("CustomSetting" + setting.Id + "ExpandBranchMenuItem", "Expand Branch", () => ExpandBranch(setting)));
+            menu.Items.Add(CreateMenuItem("CustomSetting" + setting.Id + "CollapseBranchMenuItem", "Collapse Branch", () => CollapseBranch(setting)));
+            menu.Items.Add(new Separator());
+            menu.Items.Add(CreateMenuItem("CustomSetting" + setting.Id + "CheckBranchMenuItem", "Check Branch", () => SetBranch(setting, true)));
+            menu.Items.Add(CreateMenuItem("CustomSetting" + setting.Id + "UncheckBranchMenuItem", "Uncheck Branch", () => SetBranch(setting, false)));
+            menu.Items.Add(CreateMenuItem("CustomSetting" + setting.Id + "ResetBranchToDefaultMenuItem", "Reset Branch to Default", () => ResetBranch(setting)));
+        }
+        else
+        {
+            menu.Items.Add(new Separator());
+            menu.Items.Add(CreateMenuItem("CustomSetting" + setting.Id + "ResetSettingToDefaultMenuItem", "Reset Setting to Default", () => SetCustomSettingValue(setting, setting.DefaultValue)));
+        }
+
+        return menu;
+    }
+
+    private static MenuItem CreateMenuItem(string name, string header, Action action)
+        => new()
+        {
+            Name = name,
+            Header = header,
+            Command = new ActionCommand(action),
+        };
+
+    private void UpdateCustomSettingFromCheckBox(ASLSetting setting, CheckBox checkBox)
+    {
+        if (_refreshing_custom_controls)
+        {
+            return;
+        }
+
+        if (!IsCustomSettingInteractive(setting))
+        {
+            SetCheckBoxState(checkBox, setting.Value);
+            return;
+        }
+
+        SetCustomSettingValue(setting, checkBox.IsChecked == true);
+    }
+
+    private void SetAllCustomSettings(bool value)
+    {
+        if (_current_asl_settings is null)
+        {
+            return;
+        }
+
+        foreach (ASLSetting setting in _current_asl_settings.OrderedSettings)
+        {
+            setting.Value = value;
+            _custom_settings_state[setting.Id] = value;
+        }
+
+        RefreshCustomSettingCheckBoxes();
+    }
+
+    private void ResetAllCustomSettings()
+    {
+        if (_current_asl_settings is null)
+        {
+            return;
+        }
+
+        foreach (ASLSetting setting in _current_asl_settings.OrderedSettings)
+        {
+            setting.Value = setting.DefaultValue;
+            _custom_settings_state[setting.Id] = setting.Value;
+        }
+
+        RefreshCustomSettingCheckBoxes();
+    }
+
+    private void SetBranch(ASLSetting root, bool value)
+    {
+        foreach (ASLSetting setting in Branch(root))
+        {
+            setting.Value = value;
+            _custom_settings_state[setting.Id] = value;
+        }
+
+        RefreshCustomSettingCheckBoxes();
+    }
+
+    private void ResetBranch(ASLSetting root)
+    {
+        foreach (ASLSetting setting in Branch(root))
+        {
+            setting.Value = setting.DefaultValue;
+            _custom_settings_state[setting.Id] = setting.Value;
+        }
+
+        RefreshCustomSettingCheckBoxes();
+    }
+
+    private void SetCustomSettingValue(ASLSetting setting, bool value)
+    {
+        setting.Value = value;
+        _custom_settings_state[setting.Id] = value;
+        RefreshCustomSettingCheckBoxes();
+    }
+
+    private IEnumerable<ASLSetting> Branch(ASLSetting root)
+    {
+        yield return root;
+
+        if (_current_asl_settings is null)
+        {
+            yield break;
+        }
+
+        foreach (ASLSetting child in _current_asl_settings.OrderedSettings.Where(setting => setting.Parent == root.Id))
+        {
+            foreach (ASLSetting descendant in Branch(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    private bool IsCustomSettingInteractive(ASLSetting setting)
+    {
+        if (_current_asl_settings is null)
+        {
+            return true;
+        }
+
+        string parentId = setting.Parent;
+        while (parentId != null)
+        {
+            if (!_current_asl_settings.Settings.TryGetValue(parentId, out ASLSetting parent))
+            {
+                return true;
+            }
+
+            if (!parent.Value)
+            {
+                return false;
+            }
+
+            parentId = parent.Parent;
+        }
+
+        return true;
+    }
+
+    private void RefreshSettingsControls()
+    {
+        if (_basicSettingsPanel != null)
+        {
+            _basicSettingsPanel.Children.Clear();
+            AddBasicSettingControls(_basicSettingsPanel);
+        }
+
+        if (_customSettingsPanel != null)
+        {
+            _customSettingsPanel.Children.Clear();
+            AddCustomSettingControls(_customSettingsPanel);
+        }
+    }
+
+    private void RefreshCustomSettingCheckBoxes()
+    {
+        if (_current_asl_settings is null)
+        {
+            return;
+        }
+
+        _refreshing_custom_controls = true;
+        try
+        {
+            foreach (ASLSetting setting in _current_asl_settings.OrderedSettings)
+            {
+                if (_customCheckBoxes.TryGetValue(setting.Id, out CheckBox checkBox))
+                {
+                    checkBox.IsChecked = setting.Value;
+                }
+            }
+        }
+        finally
+        {
+            _refreshing_custom_controls = false;
+        }
+
+        RefreshCustomSettingEnabledStates();
+    }
+
+    private void RefreshCustomSettingEnabledStates()
+    {
+        if (_current_asl_settings is null)
+        {
+            return;
+        }
+
+        foreach (ASLSetting setting in _current_asl_settings.OrderedSettings)
+        {
+            if (_customCheckBoxes.TryGetValue(setting.Id, out CheckBox checkBox))
+            {
+                bool enabled = IsCustomSettingInteractive(setting);
+                checkBox.IsEnabled = enabled;
+                checkBox.Opacity = enabled ? 1.0 : 0.45;
+            }
+        }
+    }
+
+    private void SetCheckBoxState(CheckBox checkBox, bool value)
+    {
+        _refreshing_custom_controls = true;
+        try
+        {
+            checkBox.IsChecked = value;
+        }
+        finally
+        {
+            _refreshing_custom_controls = false;
+        }
+
+        RefreshCustomSettingEnabledStates();
+    }
+
+    private void ApplyCustomSettingsStateToCurrentSettings()
+    {
+        if (_current_asl_settings is null)
+        {
+            return;
+        }
+
+        foreach (ASLSetting setting in _current_asl_settings.OrderedSettings)
+        {
+            if (_custom_settings_state.TryGetValue(setting.Id, out bool value))
+            {
+                setting.Value = value;
+            }
+        }
+    }
+
+    private void ExpandTree()
+    {
+        foreach (TreeViewItem item in _customTreeItems.Values)
+        {
+            item.IsExpanded = true;
+        }
+    }
+
+    private void CollapseTree()
+    {
+        foreach (TreeViewItem item in _customTreeItems.Values)
+        {
+            item.IsExpanded = false;
+        }
+    }
+
+    private void CollapseTreeToSelection(ASLSetting setting)
+    {
+        CollapseTree();
+
+        string id = setting.Id;
+        while (id != null && _current_asl_settings?.Settings.TryGetValue(id, out ASLSetting current) == true)
+        {
+            if (_customTreeItems.TryGetValue(current.Id, out TreeViewItem item))
+            {
+                item.IsExpanded = true;
+            }
+
+            id = current.Parent;
+        }
+    }
+
+    private void ExpandBranch(ASLSetting setting)
+    {
+        foreach (ASLSetting branchSetting in Branch(setting))
+        {
+            if (_customTreeItems.TryGetValue(branchSetting.Id, out TreeViewItem item))
+            {
+                item.IsExpanded = true;
+            }
+        }
+    }
+
+    private void CollapseBranch(ASLSetting setting)
+    {
+        foreach (ASLSetting branchSetting in Branch(setting))
+        {
+            if (_customTreeItems.TryGetValue(branchSetting.Id, out TreeViewItem item))
+            {
+                item.IsExpanded = false;
+            }
+        }
+    }
+
+    private async Task BrowseScript(TextBox scriptPathBox, Control ownerControl)
+    {
+        TopLevel top = TopLevel.GetTopLevel(ownerControl);
+        if (top is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<IStorageFile> files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select Script",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Auto Splitter Scripts")
+                {
+                    Patterns = ["*.asl"],
+                },
+                FilePickerFileTypes.All,
+            ],
+        });
+
+        if (files?.FirstOrDefault()?.Path?.LocalPath is not { Length: > 0 } path)
+        {
+            return;
+        }
+
+        ScriptPath = path;
+        scriptPathBox.Text = path;
+    }
+
+    private sealed class ActionCommand : ICommand
+    {
+        private readonly Action _action;
+
+        public ActionCommand(Action action)
+        {
+            _action = action;
+        }
+
+        public event EventHandler CanExecuteChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool CanExecute(object parameter) => true;
+
+        public void Execute(object parameter)
+        {
+            _action();
         }
     }
 }

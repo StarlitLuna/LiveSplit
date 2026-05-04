@@ -6,6 +6,12 @@ using LiveSplit.UI.Components;
 
 namespace LiveSplit.Avalonia;
 
+public enum RaceMenuAction
+{
+    JoinRace,
+    OpenViewer,
+}
+
 public static class RaceMenuFormatter
 {
     public static string FormatOpenRaceTitle(IRaceInfo race)
@@ -18,6 +24,26 @@ public static class RaceMenuFormatter
     public static string FormatOpenRaceAction(RaceJoinCapability capability)
     {
         return capability == RaceJoinCapability.OpenViewer ? "Open Viewer" : "Join Race";
+    }
+
+    public static string FormatCreateRaceAction(RaceJoinCapability capability)
+    {
+        return capability == RaceJoinCapability.OpenViewer ? "New Race in Browser..." : "New Race...";
+    }
+
+    public static RaceMenuAction ResolveRaceAction(RaceProviderAPI provider, IRaceInfo race, bool isInProgress)
+    {
+        if (provider?.JoinCapability != RaceJoinCapability.JoinRace || provider.JoinRace is null)
+        {
+            return RaceMenuAction.OpenViewer;
+        }
+
+        if (isInProgress && race?.IsParticipant(provider.Username) != true)
+        {
+            return RaceMenuAction.OpenViewer;
+        }
+
+        return RaceMenuAction.JoinRace;
     }
 
     public static string FormatInProgressRaceTitle(IRaceInfo race, DateTime utcNow)

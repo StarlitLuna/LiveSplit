@@ -8,6 +8,8 @@ using System.Drawing.Text;
 using System.Numerics;
 using System.Xml;
 
+using global::Avalonia.Controls;
+
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
 using LiveSplit.Model.RunFactories;
@@ -15,6 +17,8 @@ using LiveSplit.Options.SettingsFactories;
 using LiveSplit.UI;
 using LiveSplit.UI.Components;
 using LiveSplit.UI.Drawing;
+
+using SkiaSharp;
 
 using Xunit;
 
@@ -107,6 +111,52 @@ public class VideoComponentMust
     }
 
     [Fact]
+    public void SettingsControlUsesMasterVideoPickerAndVerticalHeightSlider()
+    {
+        LiveSplitState state = CreateState();
+        var component = new VideoComponent(state, new FakeVideoPlayer());
+
+        Control control = component.GetSettingsControl(LayoutMode.Vertical);
+
+        Assert.NotNull(FindNamed<TextBox>(control, "VideoPathTextBox"));
+        Assert.NotNull(FindNamed<Button>(control, "BrowseVideoButton"));
+        Assert.NotNull(FindNamed<TextBox>(control, "OffsetTextBox"));
+        Assert.NotNull(FindNamed<Slider>(control, "HeightSlider"));
+        Assert.Null(FindNamed<Slider>(control, "WidthSlider"));
+    }
+
+    [Fact]
+    public void SettingsControlUsesMasterVideoPickerAndHorizontalWidthSlider()
+    {
+        LiveSplitState state = CreateState();
+        var component = new VideoComponent(state, new FakeVideoPlayer());
+
+        Control control = component.GetSettingsControl(LayoutMode.Horizontal);
+
+        Assert.NotNull(FindNamed<TextBox>(control, "VideoPathTextBox"));
+        Assert.NotNull(FindNamed<Button>(control, "BrowseVideoButton"));
+        Assert.NotNull(FindNamed<TextBox>(control, "OffsetTextBox"));
+        Assert.NotNull(FindNamed<Slider>(control, "WidthSlider"));
+        Assert.Null(FindNamed<Slider>(control, "HeightSlider"));
+    }
+
+    [Fact]
+    public void SettingsControlUpdatesPathOffsetAndModeSpecificSize()
+    {
+        LiveSplitState state = CreateState();
+        var component = new VideoComponent(state, new FakeVideoPlayer());
+        Control control = component.GetSettingsControl(LayoutMode.Vertical);
+
+        FindNamed<TextBox>(control, "VideoPathTextBox")!.Text = @"C:\runs\video.mp4";
+        FindNamed<TextBox>(control, "OffsetTextBox")!.Text = "0:00:05.000";
+        FindNamed<Slider>(control, "HeightSlider")!.Value = 240;
+
+        Assert.Equal(@"C:\runs\video.mp4", component.Settings.VideoPath);
+        Assert.Equal(TimeSpan.FromSeconds(5), component.Settings.Offset);
+        Assert.Equal(240, component.Settings.Height);
+    }
+
+    [Fact]
     public void ConvertReceivedLibVlcFrameIntoSharedDrawingImage()
     {
         IDrawingFactory previousFactory = null;
@@ -151,6 +201,9 @@ public class VideoComponentMust
             Assert.True(
                 factory.LoadedBytes.Take(4).SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47 }),
                 "Expected the received video frame to be encoded through the PNG image path.");
+            using SKBitmap decoded = SKBitmap.Decode(factory.LoadedBytes);
+            Assert.Equal(new SKColor(0x30, 0x20, 0x10, 0xFF), decoded.GetPixel(0, 0));
+            Assert.Equal(new SKColor(0x60, 0x50, 0x40, 0xFF), decoded.GetPixel(1, 0));
         }
         finally
         {
@@ -176,6 +229,62 @@ public class VideoComponentMust
             CurrentComparison = Run.PersonalBestComparisonName,
             CurrentTimingMethod = TimingMethod.RealTime
         };
+    }
+
+    private static T FindNamed<T>(Control root, string name)
+        where T : Control
+    {
+        if (root is T typed && root.Name == name)
+        {
+            return typed;
+        }
+
+        if (root is Decorator decorator && decorator.Child is Control decoratorChild)
+        {
+            T found = FindNamed<T>(decoratorChild, name);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        if (root is ContentControl contentControl && contentControl.Content is Control content)
+        {
+            T found = FindNamed<T>(content, name);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        if (root is Panel panel)
+        {
+            foreach (Control child in panel.Children.OfType<Control>())
+            {
+                T found = FindNamed<T>(child, name);
+                if (found is not null)
+                {
+                    return found;
+                }
+            }
+        }
+
+        if (root is ItemsControl itemsControl)
+        {
+            foreach (object item in itemsControl.Items)
+            {
+                if (item is Control itemControl)
+                {
+                    T found = FindNamed<T>(itemControl, name);
+                    if (found is not null)
+                    {
+                        return found;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     private sealed class FakeVideoPlayer : IVideoPlayer, IVideoFrameSource
@@ -287,6 +396,9 @@ public class VideoComponentMust
 
         public void DrawImageWithOpacity(IImage image, Rectangle destRect, Rectangle srcRect, float opacity, float blurSigma = 0f)
             => DrawImage(image, destRect, srcRect);
+
+        public void DrawImageWithOpacity(IImage image, RectangleF destRect, RectangleF srcRect, float opacity, float blurSigma = 0f)
+            => DrawImage(image, destRect);
 
         public void DrawString(string text, IFont font, IBrush brush, RectangleF bounds, ITextFormat format)
             => throw new NotSupportedException();

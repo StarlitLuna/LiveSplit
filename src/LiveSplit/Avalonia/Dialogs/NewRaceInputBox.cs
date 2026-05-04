@@ -21,6 +21,7 @@ public sealed class NewRaceInputBox : Window
         Title = "New Race";
         Width = 420;
         Height = 240;
+        DialogTheme.ApplyWindow(this);
         CanResize = false;
 
         var gameBox = new TextBox { Text = initialGame };
@@ -62,7 +63,7 @@ public sealed class NewRaceInputBox : Window
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Spacing = 8,
                     Margin = new Thickness(0, 12, 0, 0),
-                    Children = { cancel, ok },
+                    Children = { ok, cancel },
                 },
             },
         };

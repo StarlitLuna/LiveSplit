@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using global::Avalonia;
@@ -15,22 +17,20 @@ using global::Avalonia.Platform.Storage;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
+using LiveSplit.Model.RunFactories;
 using LiveSplit.TimeFormatters;
 using LiveSplit.UI;
 using LiveSplit.UI.Components;
+using LiveSplit.Web.Share;
 
 using SkiaSharp;
 
 namespace LiveSplit.Avalonia.Dialogs;
 
 /// <summary>
-/// Tabbed Avalonia editor for an <see cref="IRun"/>. Mirrors the surface of the original
-/// WinForms RunEditorDialog for local split, history, comparison, and metadata editing. Tabs:
-///   • Edit       — segment list (add/remove/rename/reorder/double-click rename)
-///   • Real Time  — split + segment + best-segment + custom-comparison times for RealTime
-///   • Game Time  — same grid for GameTime
-///   • History    — attempt log; remove single attempt or clear all
-///   • Variables  — speedrun.com (read-only) + user custom variables
+/// Avalonia editor for an <see cref="IRun"/>. Mirrors the original WinForms RunEditorDialog
+/// layout with Real Time, Game Time, and Additional Info pages plus command-rail actions for
+/// segment, comparison, history, autosplitter, and metadata editing.
 ///
 /// Edits run against a clone of the input run; <see cref="OkClicked"/> swaps it back into
 /// <see cref="LiveSplitState.Run"/> on Apply, Cancel discards.
@@ -54,9 +54,9 @@ public sealed class RunEditorDialog : Window
     private readonly Image _iconImage;
     private readonly TextBlock _iconHint;
     private readonly CheckBox _linkedLayoutCheckBox;
-    private readonly TextBox _layoutPathBox;
-    private readonly TextBox _platformBox;
-    private readonly TextBox _regionBox;
+    private readonly ComboBox _layoutPathBox;
+    private readonly ComboBox _platformBox;
+    private readonly ComboBox _regionBox;
     private readonly CheckBox _emulatorCheckBox;
 
     private readonly ListBox _segmentsList;
@@ -64,6 +64,7 @@ public sealed class RunEditorDialog : Window
     private readonly StackPanel _gameTimeRows;
     private readonly DataGrid _historyGrid;
     private readonly StackPanel _variablesPanel;
+    private readonly List<ComboBox> _comparisonSelectors = [];
 
     private TextBlock _autoSplitterDescription;
     private Button _autoSplitterActivateBtn;
@@ -81,17 +82,18 @@ public sealed class RunEditorDialog : Window
         _originalAutoSplitterSettings = _original.AutoSplitterSettings;
 
         Title = "Edit Splits";
-        Width = 880;
-        Height = 640;
+        Width = RunEditorDialogLayoutSpec.Master.InitialClientWidth;
+        Height = RunEditorDialogLayoutSpec.Master.InitialClientHeight;
+        MinWidth = RunEditorDialogLayoutSpec.Master.MinimumWindowWidth;
+        MinHeight = RunEditorDialogLayoutSpec.Master.MinimumWindowHeight;
+        DialogTheme.ApplyWindow(this);
         CanResize = true;
 
-        // Header (game icon + name/category/offset/attempt fields)
         _iconImage = new Image
         {
-            Width = 64,
-            Height = 64,
+            Width = 120,
+            Height = 120,
             Stretch = Stretch.Uniform,
-            VerticalAlignment = VerticalAlignment.Top,
         };
         _iconHint = new TextBlock
         {
@@ -100,37 +102,51 @@ public sealed class RunEditorDialog : Window
             Foreground = Brushes.Gray,
             HorizontalAlignment = HorizontalAlignment.Center,
         };
-        var iconPanel = new StackPanel
-        {
-            Spacing = 4,
-            Width = 80,
-            Children = { _iconImage, _iconHint },
-        };
         var iconBorder = new Border
         {
             BorderBrush = Brushes.Gray,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(4),
-            Margin = new Thickness(20, 20, 12, 8),
-            Child = iconPanel,
+            Width = 120,
+            Height = 120,
+            Margin = new Thickness(10),
+            Child = _iconImage,
             Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
         };
         iconBorder.PointerReleased += async (_, _) => await PickIcon();
         var iconContextMenu = new ContextMenu();
+        var setIconItem = new MenuItem { Header = "Set Icon..." };
+        setIconItem.Click += async (_, _) => await PickIcon();
+        var downloadBoxArtItem = new MenuItem { Header = "Download Box Art" };
+        downloadBoxArtItem.Click += async (_, _) => await DownloadSpeedrunComGameIcon(boxArt: true);
+        var downloadIconItem = new MenuItem { Header = "Download Icon" };
+        downloadIconItem.Click += async (_, _) => await DownloadSpeedrunComGameIcon(boxArt: false);
+        var openFromUrlItem = new MenuItem { Header = "Open from URL..." };
+        openFromUrlItem.Click += async (_, _) => await OpenGameIconFromUrl();
         var removeItem = new MenuItem { Header = "Remove Icon" };
         removeItem.Click += (_, _) => { Run.GameIconPng = null; Run.GameIcon = null; UpdateIconPreview(); Run.HasChanged = true; };
+        iconContextMenu.Items.Add(setIconItem);
+        iconContextMenu.Items.Add(downloadBoxArtItem);
+        iconContextMenu.Items.Add(downloadIconItem);
+        iconContextMenu.Items.Add(openFromUrlItem);
         iconContextMenu.Items.Add(removeItem);
         iconBorder.ContextMenu = iconContextMenu;
 
         _gameBox = new TextBox { Text = Run.GameName ?? "" };
         _categoryBox = new TextBox { Text = Run.CategoryName ?? "" };
         _offsetBox = new TextBox { Text = TimeFormatter.Format(Run.Offset) };
-        _linkedLayoutCheckBox = new CheckBox { Content = "Use linked layout", IsChecked = !string.IsNullOrEmpty(Run.LayoutPath) };
-        _layoutPathBox = new TextBox { Text = RunEditorDialogModel.DisplayLayoutPath(Run.LayoutPath), Width = 360 };
+        _linkedLayoutCheckBox = new CheckBox { Content = "Use Layout", IsChecked = !string.IsNullOrEmpty(Run.LayoutPath) };
+        string displayedLayoutPath = RunEditorDialogModel.DisplayLayoutPath(Run.LayoutPath);
+        _layoutPathBox = new ComboBox
+        {
+            ItemsSource = BuildLayoutChoices(displayedLayoutPath),
+            SelectedItem = displayedLayoutPath,
+            Width = 245,
+        };
         _linkedLayoutCheckBox.IsCheckedChanged += (_, _) => UpdateLayoutControls();
         UpdateLayoutControls();
-        _platformBox = new TextBox { Text = Run.Metadata.PlatformName ?? string.Empty, Width = 180 };
-        _regionBox = new TextBox { Text = Run.Metadata.RegionName ?? string.Empty, Width = 180 };
+        _platformBox = BuildMetadataChoiceBox();
+        _regionBox = BuildMetadataChoiceBox();
+        RefreshMetadataChoiceBoxes();
         _emulatorCheckBox = new CheckBox { Content = "Uses Emulator", IsChecked = Run.Metadata.UsesEmulator };
         _attemptBox = new NumericUpDown
         {
@@ -141,77 +157,112 @@ public sealed class RunEditorDialog : Window
             HorizontalAlignment = HorizontalAlignment.Left,
         };
 
-        var headerFields = new StackPanel
-        {
-            Spacing = 6,
-            Margin = new Thickness(0, 20, 20, 8),
-            Children =
-            {
-                LabeledRow("Game:", _gameBox),
-                LabeledRow("Category:", _categoryBox),
-                LabeledRow("Offset:", _offsetBox),
-                LabeledRow("Attempt Count:", _attemptBox),
-                BuildLayoutRow(),
-            },
-        };
-
-        var headerGrid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-        };
-        Grid.SetColumn(iconBorder, 0);
-        Grid.SetColumn(headerFields, 1);
-        headerGrid.Children.Add(iconBorder);
-        headerGrid.Children.Add(headerFields);
-
-        // Tabs
         _segmentsList = BuildSegmentsList();
         _realTimeRows = new StackPanel { Spacing = 2 };
         _gameTimeRows = new StackPanel { Spacing = 2 };
         _historyGrid = BuildHistoryGrid();
         _variablesPanel = new StackPanel { Spacing = 8, Margin = new Thickness(20) };
 
-        var tabs = new TabControl
+        var root = BuildMasterRootGrid();
+        Grid.SetColumn(iconBorder, 0);
+        Grid.SetRow(iconBorder, 1);
+        Grid.SetRowSpan(iconBorder, 4);
+        root.Children.Add(iconBorder);
+
+        AddToRoot(root, Label("Game Name:"), 1, 1, 3);
+        AddToRoot(root, _gameBox, 4, 1, 5);
+        AddToRoot(root, Label("Run Category:"), 1, 2, 3);
+        AddToRoot(root, _categoryBox, 4, 2, 5);
+        AddToRoot(root, Label("Start Timer at:"), 1, 3, 3);
+        AddToRoot(root, _offsetBox, 4, 3, 2);
+        AddToRoot(root, Label("Attempts:"), 6, 3, 2);
+        AddToRoot(root, _attemptBox, 8, 3, 2);
+
+        var autoSplitterDescription = BuildAutoSplitterDescription();
+        AddToRoot(root, autoSplitterDescription, 1, 4, 4);
+        AddToRoot(root, BuildAutoSplitterButtonPanel(), 5, 4, 3);
+        AddToRoot(root, _linkedLayoutCheckBox, 4, 5);
+        AddToRoot(root, BuildLayoutRow(), 5, 5, 3);
+
+        var insertAboveBtn = RailButton("Insert Above");
+        insertAboveBtn.Click += async (_, _) => await InsertSegment(above: true);
+        var insertBelowBtn = RailButton("Insert Below");
+        insertBelowBtn.Click += async (_, _) => await InsertSegment(above: false);
+        var removeSegmentBtn = RailButton("Remove Segment");
+        removeSegmentBtn.Click += (_, _) => RemoveSegment();
+        var moveUpBtn = RailButton("Move Up");
+        moveUpBtn.Click += (_, _) => MoveSegment(-1);
+        var moveDownBtn = RailButton("Move Down");
+        moveDownBtn.Click += (_, _) => MoveSegment(1);
+        var addComparisonBtn = RailButton("Add Comparison");
+        addComparisonBtn.Click += async (_, _) => await AddCustomComparison();
+        var importComparisonBtn = RailButton("Import Comparison...");
+        AttachImportComparisonMenu(importComparisonBtn);
+        var otherBtn = RailButton("Other...");
+        AttachOtherMenu(otherBtn);
+        AddToRoot(root, insertAboveBtn, 0, 7);
+        AddToRoot(root, insertBelowBtn, 0, 8);
+        AddToRoot(root, removeSegmentBtn, 0, 9);
+        AddToRoot(root, moveUpBtn, 0, 10);
+        AddToRoot(root, moveDownBtn, 0, 11);
+        AddToRoot(root, addComparisonBtn, 0, 12);
+        AddToRoot(root, importComparisonBtn, 0, 13);
+        AddToRoot(root, otherBtn, 0, 14);
+
+        var runGrid = new ContentControl
         {
-            Margin = new Thickness(20, 0, 20, 8),
+            Content = BuildTimingTab(TimingMethod.RealTime, _realTimeRows),
+        };
+        Grid.SetColumn(runGrid, 1);
+        Grid.SetRow(runGrid, 7);
+        Grid.SetColumnSpan(runGrid, 9);
+        Grid.SetRowSpan(runGrid, 8);
+        root.Children.Add(runGrid);
+
+        var tabStrip = new TabControl
+        {
             Items =
             {
-                new TabItem { Header = "Edit", Content = BuildEditTab() },
-                new TabItem { Header = "Real Time", Content = BuildTimingTab(TimingMethod.RealTime, _realTimeRows) },
-                new TabItem { Header = "Game Time", Content = BuildTimingTab(TimingMethod.GameTime, _gameTimeRows) },
-                new TabItem { Header = "History", Content = BuildHistoryTab() },
-                new TabItem { Header = "Variables", Content = BuildVariablesTab() },
-                new TabItem { Header = "Auto Splitter", Content = BuildAutoSplitterTab() },
+                new TabItem { Header = "Real Time" },
+                new TabItem { Header = "Game Time" },
+                new TabItem { Header = "Additional Info" },
             },
+            SelectedIndex = 0,
         };
+        tabStrip.SelectionChanged += (_, _) =>
+        {
+            runGrid.Content = tabStrip.SelectedIndex switch
+            {
+                1 => BuildTimingTab(TimingMethod.GameTime, _gameTimeRows),
+                2 => BuildVariablesTab(),
+                _ => BuildTimingTab(TimingMethod.RealTime, _realTimeRows),
+            };
+        };
+        Grid.SetColumn(tabStrip, 1);
+        Grid.SetRow(tabStrip, 6);
+        Grid.SetColumnSpan(tabStrip, 9);
+        root.Children.Add(tabStrip);
 
-        // Game-name → autosplitter lookup mirrors the original WinForms cbxGameName_TextChanged:
+        // Game-name to autosplitter lookup mirrors the original WinForms cbxGameName_TextChanged:
         // create the matching AutoSplitter from AutoSplitterFactory and auto-activate when the
         // game appears in Settings.ActiveAutoSplitters.
         _gameBox.TextChanged += (_, _) => RefreshAutoSplitterFromGameName();
         RefreshAutoSplitterFromGameName();
 
-        // Footer
-        var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
+        var ok = new Button { Content = "OK", Width = 75, IsDefault = true };
         ok.Click += (_, _) => OkClicked();
-        var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var cancel = new Button { Content = "Cancel", Width = 75, IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
         cancel.Click += (_, _) => CancelAndClose();
-
-        var footer = new StackPanel
+        var footer = new Grid
         {
-            Orientation = Orientation.Horizontal,
+            ColumnDefinitions = new ColumnDefinitions("*,*"),
             HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 0, 20, 16),
-            Children = { cancel, ok },
         };
-
-        var root = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(headerGrid, Dock.Top);
-        DockPanel.SetDock(footer, Dock.Bottom);
-        root.Children.Add(headerGrid);
-        root.Children.Add(footer);
-        root.Children.Add(tabs);
+        Grid.SetColumn(ok, 0);
+        Grid.SetColumn(cancel, 1);
+        footer.Children.Add(ok);
+        footer.Children.Add(cancel);
+        AddToRoot(root, footer, 6, 15, 4);
         Content = root;
 
         Closed += (_, _) =>
@@ -250,8 +301,16 @@ public sealed class RunEditorDialog : Window
     private void OkClicked()
     {
         // Apply header edits to the clone.
-        Run.GameName = _gameBox.Text ?? string.Empty;
-        Run.CategoryName = _categoryBox.Text ?? string.Empty;
+        if (Run is Run editedRunForNames)
+        {
+            RunEditorDialogModel.SetGameName(editedRunForNames, _gameBox.Text ?? string.Empty);
+            RunEditorDialogModel.SetCategoryName(editedRunForNames, _categoryBox.Text ?? string.Empty);
+        }
+        else
+        {
+            Run.GameName = _gameBox.Text ?? string.Empty;
+            Run.CategoryName = _categoryBox.Text ?? string.Empty;
+        }
 
         try
         {
@@ -270,13 +329,13 @@ public sealed class RunEditorDialog : Window
         RunEditorDialogModel.SetLinkedLayout(
             Run,
             _linkedLayoutCheckBox.IsChecked == true,
-            _layoutPathBox.Text);
+            SelectedLayoutPath());
         if (Run is Run editedRunForMetadata)
         {
             RunEditorDialogModel.SetAdditionalInfo(
                 editedRunForMetadata,
-                _platformBox.Text,
-                _regionBox.Text,
+                SelectedMetadataChoice(_platformBox),
+                SelectedMetadataChoice(_regionBox),
                 _emulatorCheckBox.IsChecked == true);
         }
 
@@ -316,29 +375,56 @@ public sealed class RunEditorDialog : Window
         _original.AutoSplitterSettings = _originalAutoSplitterSettings;
     }
 
+    private static Grid BuildMasterRootGrid()
+        => new()
+        {
+            ColumnDefinitions = new ColumnDefinitions("140,39,62,49,136,65,104,88,*,115"),
+            RowDefinitions = new RowDefinitions("5,35,35,35,35,35,25,29,29,29,29,29,29,29,*,36,20"),
+        };
+
+    private static void AddToRoot(Grid root, Control control, int column, int row, int columnSpan = 1, int rowSpan = 1)
+    {
+        Grid.SetColumn(control, column);
+        Grid.SetRow(control, row);
+        if (columnSpan > 1)
+        {
+            Grid.SetColumnSpan(control, columnSpan);
+        }
+
+        if (rowSpan > 1)
+        {
+            Grid.SetRowSpan(control, rowSpan);
+        }
+
+        root.Children.Add(control);
+    }
+
+    private static TextBlock Label(string text)
+        => new()
+        {
+            Text = text,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+    private static Button RailButton(string text)
+        => new()
+        {
+            Content = text,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Margin = new Thickness(5, 1),
+        };
+
     private Control BuildLayoutRow()
     {
         var browseBtn = new Button { Content = "Browse...", Width = 86 };
         browseBtn.Click += async (_, _) => await PickLayoutPath();
-        var defaultBtn = new Button { Content = "Default", Width = 76 };
-        defaultBtn.Click += (_, _) =>
-        {
-            _linkedLayoutCheckBox.IsChecked = true;
-            _layoutPathBox.Text = string.Empty;
-            UpdateLayoutControls();
-        };
-
-        var pathPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Children = { _layoutPathBox, browseBtn, defaultBtn },
-        };
 
         return new StackPanel
         {
-            Spacing = 4,
-            Children = { _linkedLayoutCheckBox, pathPanel },
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children = { _layoutPathBox, browseBtn },
         };
     }
 
@@ -348,6 +434,20 @@ public sealed class RunEditorDialog : Window
         {
             _layoutPathBox.IsEnabled = _linkedLayoutCheckBox?.IsChecked == true;
         }
+    }
+
+    private string SelectedLayoutPath()
+        => _layoutPathBox.SelectedItem as string ?? string.Empty;
+
+    private static IReadOnlyList<string> BuildLayoutChoices(string selectedPath)
+    {
+        var choices = new List<string> { string.Empty };
+        if (!string.IsNullOrWhiteSpace(selectedPath))
+        {
+            choices.Add(selectedPath);
+        }
+
+        return choices;
     }
 
     private async Task PickLayoutPath()
@@ -366,47 +466,114 @@ public sealed class RunEditorDialog : Window
         if (files?.FirstOrDefault() is { } picked)
         {
             _linkedLayoutCheckBox.IsChecked = true;
-            _layoutPathBox.Text = picked.TryGetLocalPath() ?? picked.Path.LocalPath;
+            string path = picked.TryGetLocalPath() ?? picked.Path.LocalPath;
+            _layoutPathBox.ItemsSource = BuildLayoutChoices(path);
+            _layoutPathBox.SelectedItem = path;
             UpdateLayoutControls();
         }
     }
 
+    private void AttachImportComparisonMenu(Button importComparisonBtn)
+    {
+        var importMenu = new ContextMenu();
+        var fromFile = new MenuItem { Header = "From File..." };
+        fromFile.Click += async (_, _) => await ImportComparisonFromFile();
+        var fromUrl = new MenuItem { Header = "From URL..." };
+        fromUrl.Click += async (_, _) => await ImportComparisonFromUrl();
+        importMenu.Items.Add(fromFile);
+        importMenu.Items.Add(fromUrl);
+        importComparisonBtn.ContextMenu = importMenu;
+        importComparisonBtn.Click += (_, _) => importMenu.Open(importComparisonBtn);
+    }
+
+    private void AttachOtherMenu(Button otherBtn)
+    {
+        var menu = new ContextMenu();
+        var renameSegment = new MenuItem { Header = "Rename Segment" };
+        renameSegment.Click += async (_, _) => await RenameSegment();
+        var renameComparison = new MenuItem { Header = "Rename Comparison" };
+        renameComparison.Click += async (_, _) => await RenameSelectedComparison(EnsureCommandComparisonSelector());
+        var removeComparison = new MenuItem { Header = "Remove Comparison" };
+        removeComparison.Click += (_, _) => RemoveSelectedComparison(EnsureCommandComparisonSelector());
+        var removeAttempt = new MenuItem { Header = "Remove Selected Attempt" };
+        removeAttempt.Click += (_, _) => RemoveSelectedAttempt();
+        var clearHistory = new MenuItem { Header = "Clear History" };
+        clearHistory.Click += (_, _) => ClearHistory();
+        var clearTimes = new MenuItem { Header = "Clear Times" };
+        clearTimes.Click += (_, _) => ClearTimes();
+        var cleanSob = new MenuItem { Header = "Clean Sum of Best" };
+        cleanSob.Click += async (_, _) => await CleanSumOfBest();
+        menu.Items.Add(renameSegment);
+        menu.Items.Add(renameComparison);
+        menu.Items.Add(removeComparison);
+        menu.Items.Add(removeAttempt);
+        menu.Items.Add(clearHistory);
+        menu.Items.Add(clearTimes);
+        menu.Items.Add(cleanSob);
+        otherBtn.ContextMenu = menu;
+        otherBtn.Click += (_, _) => menu.Open(otherBtn);
+    }
+
+    private ComboBox EnsureCommandComparisonSelector()
+    {
+        ComboBox selector = _comparisonSelectors.FirstOrDefault();
+        if (selector is null)
+        {
+            selector = new ComboBox
+            {
+                ItemsSource = EditableComparisons().ToList(),
+                SelectedIndex = 0,
+            };
+            _comparisonSelectors.Add(selector);
+        }
+
+        return selector;
+    }
+
     // ------------------------------------------------------------------------
-    // Auto Splitter tab — activate/deactivate + per-component settings
+    // Auto Splitter tab - activate/deactivate + per-component settings
     // ------------------------------------------------------------------------
 
-    private Control BuildAutoSplitterTab()
+    private TextBlock BuildAutoSplitterDescription()
     {
         _autoSplitterDescription = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 12),
+            VerticalAlignment = VerticalAlignment.Center,
         };
+        return _autoSplitterDescription;
+    }
 
-        _autoSplitterActivateBtn = new Button { Content = "Activate", Width = 120 };
+    private Control BuildAutoSplitterButtonPanel()
+    {
+        _autoSplitterActivateBtn = new Button { Content = "Activate", Width = 86 };
         _autoSplitterActivateBtn.Click += (_, _) => ToggleAutoSplitterActivation();
 
-        _autoSplitterSettingsBtn = new Button { Content = "Settings…", Width = 120 };
+        _autoSplitterSettingsBtn = new Button { Content = "Settings...", Width = 86 };
         _autoSplitterSettingsBtn.Click += async (_, _) => await OpenAutoSplitterSettings();
 
-        _autoSplitterWebsiteBtn = new Button { Content = "Website", Width = 120 };
+        _autoSplitterWebsiteBtn = new Button { Content = "Website", Width = 86 };
         _autoSplitterWebsiteBtn.Click += (_, _) => OpenAutoSplitterWebsite();
 
-        var buttons = new StackPanel
+        RefreshAutoSplitterUI();
+        return new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
             Children = { _autoSplitterActivateBtn, _autoSplitterSettingsBtn, _autoSplitterWebsiteBtn },
         };
+    }
 
+    private Control BuildAutoSplitterTab()
+    {
         var panel = new StackPanel
         {
             Margin = new Thickness(20),
             Spacing = 8,
-            Children = { _autoSplitterDescription, buttons },
+            Children = { BuildAutoSplitterDescription(), BuildAutoSplitterButtonPanel() },
         };
 
-        RefreshAutoSplitterUI();
         return panel;
     }
 
@@ -583,7 +750,7 @@ public sealed class RunEditorDialog : Window
     }
 
     // ------------------------------------------------------------------------
-    // Edit tab — segment list with add/remove/rename/reorder
+    // Edit tab - segment list with add/remove/rename/reorder
     // ------------------------------------------------------------------------
 
     private ListBox BuildSegmentsList()
@@ -640,11 +807,16 @@ public sealed class RunEditorDialog : Window
     }
 
     private async Task AddSegment()
+        => await InsertSegment(above: false);
+
+    private async Task InsertSegment(bool above)
     {
         var prompt = new TextInputDialog("New Segment", "Segment name:");
         if (await prompt.ShowDialogAsync(this) is { } name && !string.IsNullOrWhiteSpace(name))
         {
-            int idx = _segmentsList.SelectedIndex < 0 ? Run.Count : _segmentsList.SelectedIndex + 1;
+            int idx = _segmentsList.SelectedIndex < 0
+                ? Run.Count
+                : _segmentsList.SelectedIndex + (above ? 0 : 1);
             RunEditorDialogModel.InsertSegment(Run, idx, name);
             RefreshSegmentList();
             _segmentsList.SelectedIndex = idx;
@@ -695,34 +867,26 @@ public sealed class RunEditorDialog : Window
     }
 
     // ------------------------------------------------------------------------
-    // Real Time / Game Time tabs — per-segment time matrix
+    // Real Time / Game Time tabs - per-segment time matrix
     // ------------------------------------------------------------------------
 
     private Control BuildTimingTab(TimingMethod method, StackPanel rowsPanel)
     {
-        var addCmpBtn = new Button { Content = "Add Comparison…" };
-        addCmpBtn.Click += async (_, _) => await AddCustomComparison();
-
-        var customComparisonsPanel = new StackPanel
+        var comparisonSelector = new ComboBox
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { addCmpBtn },
+            Width = 180,
+            ItemsSource = EditableComparisons().ToList(),
+            SelectedIndex = 0,
         };
+        _comparisonSelectors.Add(comparisonSelector);
 
-        var rowsScroll = new ScrollViewer
+        return new ScrollViewer
         {
             Content = rowsPanel,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Margin = new Thickness(8),
         };
-
-        var stack = new DockPanel { LastChildFill = true, Margin = new Thickness(8) };
-        DockPanel.SetDock(customComparisonsPanel, Dock.Top);
-        stack.Children.Add(customComparisonsPanel);
-        stack.Children.Add(rowsScroll);
-        return stack;
     }
 
     private void RebuildTimingRows()
@@ -762,6 +926,7 @@ public sealed class RunEditorDialog : Window
             Grid row = MakeTimingRowGrid(comparisons.Count);
 
             var segLabel = new TextBlock { Text = segment.Name, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4) };
+            segLabel.PointerPressed += (_, _) => _segmentsList.SelectedIndex = segIndex;
             Grid.SetColumn(segLabel, 0);
             row.Children.Add(segLabel);
 
@@ -815,6 +980,11 @@ public sealed class RunEditorDialog : Window
 
             target.Children.Add(row);
         }
+
+        if (Run.Count > 0 && (_segmentsList.SelectedIndex < 0 || _segmentsList.SelectedIndex >= Run.Count))
+        {
+            _segmentsList.SelectedIndex = 0;
+        }
     }
 
     private static Grid MakeTimingRowGrid(int comparisonCount)
@@ -850,7 +1020,159 @@ public sealed class RunEditorDialog : Window
         {
             return;
         }
+
+        RefreshComparisonSelectors(name);
         RebuildTimingRows();
+    }
+
+    private async Task ImportComparisonFromFile()
+    {
+        IReadOnlyList<IStorageFile> files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Import Comparison from File",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("LiveSplit Splits") { Patterns = ["*.lss"] },
+                FilePickerFileTypes.All,
+            ],
+        });
+
+        IStorageFile file = files?.FirstOrDefault();
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using Stream stream = await file.OpenReadAsync();
+            IRun imported = LoadRunForComparison(stream, file.Path?.LocalPath ?? string.Empty);
+            await ImportComparisonWithNamePrompt(imported, Path.GetFileNameWithoutExtension(file.Name));
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+            await new MessageDialog("Error", "The selected file was not recognized as a splits file.").ShowDialogAsync(this);
+        }
+    }
+
+    private async Task ImportComparisonFromUrl()
+    {
+        var urlPrompt = new TextInputDialog("Import Comparison from URL", "URL:");
+        string url = await urlPrompt.ShowDialogAsync(this);
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return;
+        }
+
+        try
+        {
+            using var client = new HttpClient();
+            await using Stream stream = await client.GetStreamAsync(url);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            memory.Position = 0;
+            IRun imported = LoadRunForComparison(memory, string.Empty);
+            string defaultName = Uri.TryCreate(url, UriKind.Absolute, out Uri uri)
+                ? Path.GetFileNameWithoutExtension(uri.LocalPath)
+                : string.Empty;
+            await ImportComparisonWithNamePrompt(imported, defaultName);
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+            await new MessageDialog("Error", "The splits file couldn't be downloaded.").ShowDialogAsync(this);
+        }
+    }
+
+    private async Task ImportComparisonWithNamePrompt(IRun imported, string defaultName)
+    {
+        if (imported is null)
+        {
+            return;
+        }
+
+        var namePrompt = new TextInputDialog("Enter Comparison Name", "Name:", defaultName ?? string.Empty);
+        string name = await namePrompt.ShowDialogAsync(this);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        if (!RunEditorDialogModel.TryImportComparisonFromRun(Run, imported, name))
+        {
+            await new MessageDialog("Invalid Comparison Name", "A Comparison with this name already exists or is reserved.").ShowDialogAsync(this);
+            return;
+        }
+
+        RefreshComparisonSelectors(name);
+        RebuildTimingRows();
+    }
+
+    private static IRun LoadRunForComparison(Stream stream, string filePath)
+    {
+        var runFactory = new StandardFormatsRunFactory
+        {
+            Stream = stream,
+            FilePath = filePath,
+        };
+        return runFactory.Create(new StandardComparisonGeneratorsFactory());
+    }
+
+    private async Task RenameSelectedComparison(ComboBox selector)
+    {
+        string oldName = selector?.SelectedItem as string;
+        if (string.IsNullOrEmpty(oldName))
+        {
+            return;
+        }
+
+        var prompt = new TextInputDialog("Rename Comparison", "Comparison Name:", oldName);
+        string newName = await prompt.ShowDialogAsync(this);
+        if (!RunEditorDialogModel.TryRenameComparison(Run, oldName, newName))
+        {
+            return;
+        }
+
+        State.CallComparisonRenamed(new RenameEventArgs
+        {
+            OldName = oldName,
+            NewName = newName,
+        });
+        RefreshComparisonSelectors(newName);
+        RebuildTimingRows();
+    }
+
+    private void RemoveSelectedComparison(ComboBox selector)
+    {
+        string oldName = selector?.SelectedItem as string;
+        if (string.IsNullOrEmpty(oldName) || !RunEditorDialogModel.TryRemoveComparison(Run, oldName))
+        {
+            return;
+        }
+
+        State.CallComparisonRenamed(new RenameEventArgs
+        {
+            OldName = oldName,
+            NewName = "Current Comparison",
+        });
+        RefreshComparisonSelectors();
+        RebuildTimingRows();
+    }
+
+    private IEnumerable<string> EditableComparisons()
+        => Run.CustomComparisons.Where(x => !string.Equals(x, LiveSplit.Model.Run.PersonalBestComparisonName, StringComparison.Ordinal));
+
+    private void RefreshComparisonSelectors(string preferred = null)
+    {
+        foreach (ComboBox selector in _comparisonSelectors)
+        {
+            var comparisons = EditableComparisons().ToList();
+            string selected = preferred ?? (selector.SelectedItem as string);
+            selector.ItemsSource = comparisons;
+            selector.SelectedItem = comparisons.Contains(selected) ? selected : comparisons.FirstOrDefault();
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -976,33 +1298,235 @@ public sealed class RunEditorDialog : Window
         return dock;
     }
 
+    private static ComboBox BuildMetadataChoiceBox()
+        => new()
+        {
+            Width = 180,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+
+    private static string SelectedMetadataChoice(ComboBox box)
+        => box.SelectedItem as string ?? string.Empty;
+
+    private void RefreshMetadataChoiceBoxes()
+    {
+        RefreshMetadataChoiceBox(
+            _platformBox,
+            RunEditorDialogModel.GetPlatformChoiceList(Run.Metadata),
+            Run.Metadata.PlatformName);
+        RefreshMetadataChoiceBox(
+            _regionBox,
+            RunEditorDialogModel.GetRegionChoiceList(Run.Metadata),
+            Run.Metadata.RegionName);
+    }
+
+    private static void RefreshMetadataChoiceBox(ComboBox box, IReadOnlyList<string> choices, string selected)
+    {
+        box.ItemsSource = choices;
+        box.SelectedItem = choices.Contains(selected ?? string.Empty, StringComparer.Ordinal)
+            ? selected ?? string.Empty
+            : string.Empty;
+        box.IsEnabled = choices.Count > 1;
+    }
+
+    private void BuildSpeedrunComVariableControls(Grid metadataGrid)
+    {
+        IDictionary<SpeedrunComSharp.Variable, SpeedrunComSharp.VariableValue> variables;
+        try
+        {
+            variables = Run.Metadata.VariableValues;
+        }
+        catch
+        {
+            variables = new Dictionary<SpeedrunComSharp.Variable, SpeedrunComSharp.VariableValue>();
+        }
+
+        if (variables.Count == 0)
+        {
+            return;
+        }
+
+        int variableIndex = 0;
+        foreach (KeyValuePair<SpeedrunComSharp.Variable, SpeedrunComSharp.VariableValue> entry in variables)
+        {
+            SpeedrunComSharp.Variable variable = entry.Key;
+            if (variable is null)
+            {
+                continue;
+            }
+
+            string current = entry.Value?.Value ?? string.Empty;
+            Control editor = variable.IsUserDefined
+                ? BuildUserDefinedSpeedrunComVariableControl(variable, current)
+                : BuildFixedSpeedrunComVariableControl(variable, current);
+
+            int row = 3 + (variableIndex / 2);
+            int labelColumn = variableIndex % 2 == 0 ? 0 : 3;
+            int editorColumn = variableIndex % 2 == 0 ? 1 : 4;
+            AddMetadataControl(metadataGrid, new TextBlock
+            {
+                Text = variable.Name + ":",
+                VerticalAlignment = VerticalAlignment.Center,
+            }, labelColumn, row);
+            AddMetadataControl(metadataGrid, editor, editorColumn, row);
+            variableIndex++;
+        }
+    }
+
+    private static void AddMetadataControl(Grid metadataGrid, Control control, int column, int row, int columnSpan = 1)
+    {
+        while (metadataGrid.RowDefinitions.Count <= row)
+        {
+            metadataGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        }
+
+        Grid.SetColumn(control, column);
+        Grid.SetRow(control, row);
+        if (columnSpan > 1)
+        {
+            Grid.SetColumnSpan(control, columnSpan);
+        }
+
+        metadataGrid.Children.Add(control);
+    }
+
+    private Control BuildFixedSpeedrunComVariableControl(SpeedrunComSharp.Variable variable, string current)
+    {
+        var choices = RunEditorDialogModel.BuildMetadataChoiceList(variable.Values.Select(x => x.Value), current);
+        var combo = new ComboBox
+        {
+            ItemsSource = choices,
+            SelectedItem = choices.Contains(current, StringComparer.Ordinal) ? current : string.Empty,
+            Width = 240,
+        };
+        combo.SelectionChanged += (_, _) =>
+        {
+            RunEditorDialogModel.SetSpeedrunComVariableValue(
+                Run.Metadata,
+                variable.Name,
+                variable.Values.Select(x => x.Value),
+                variable.IsUserDefined,
+                combo.SelectedItem as string ?? string.Empty);
+        };
+        return combo;
+    }
+
+    private Control BuildUserDefinedSpeedrunComVariableControl(SpeedrunComSharp.Variable variable, string current)
+    {
+        var box = new TextBox
+        {
+            Text = current,
+            Width = 240,
+        };
+        box.TextChanged += (_, _) =>
+        {
+            RunEditorDialogModel.SetSpeedrunComVariableValue(
+                Run.Metadata,
+                variable.Name,
+                variable.Values.Select(x => x.Value),
+                variable.IsUserDefined,
+                box.Text ?? string.Empty);
+        };
+        return box;
+    }
+
+    private static Control BuildSpeedrunComRulesControl(string rules)
+    {
+        var panel = new StackPanel
+        {
+            Spacing = 4,
+        };
+        panel.Children.Add(new TextBox
+        {
+            Text = rules,
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 70,
+        });
+
+        foreach (string link in RunEditorDialogModel.ExtractRulesLinks(rules))
+        {
+            var linkButton = new Button
+            {
+                Content = link,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
+            linkButton.Click += (_, _) => PlatformLauncher.Open(link);
+            panel.Children.Add(linkButton);
+        }
+
+        return panel;
+    }
+
     private void RebuildVariablesPanel()
     {
         _variablesPanel.Children.Clear();
 
-        _variablesPanel.Children.Add(new TextBlock
+        var metadataGrid = new Grid
         {
-            Text = "Additional Info",
-            FontWeight = FontWeight.Bold,
-        });
-        _variablesPanel.Children.Add(LabeledRow("Platform:", _platformBox));
-        _variablesPanel.Children.Add(LabeledRow("Region:", _regionBox));
-        _variablesPanel.Children.Add(_emulatorCheckBox);
+            ColumnDefinitions = new ColumnDefinitions("103,*,20,112,*"),
+            RowDefinitions = new RowDefinitions("Auto,85,Auto,Auto,Auto,Auto,Auto,*,Auto"),
+        };
 
-        // Speedrun.com-bound (read-only)
-        if (Run.Metadata.VariableValueNames.Count > 0)
+        var rulesLabel = Label("Rules:");
+        Grid.SetRow(rulesLabel, 0);
+        metadataGrid.Children.Add(rulesLabel);
+        string rules = RunEditorDialogModel.BuildSpeedrunComRulesText(Run.Metadata);
+        Control rulesBox = BuildSpeedrunComRulesControl(rules);
+        Grid.SetRow(rulesBox, 1);
+        Grid.SetColumnSpan(rulesBox, 5);
+        metadataGrid.Children.Add(rulesBox);
+
+        var platformLabel = Label("Platform:");
+        Grid.SetRow(platformLabel, 2);
+        metadataGrid.Children.Add(platformLabel);
+        AddMetadataControl(metadataGrid, _platformBox, 1, 2);
+        var regionLabel = Label("Region:");
+        Grid.SetColumn(regionLabel, 3);
+        Grid.SetRow(regionLabel, 2);
+        metadataGrid.Children.Add(regionLabel);
+        AddMetadataControl(metadataGrid, _regionBox, 4, 2);
+
+        _emulatorCheckBox.IsVisible = RunEditorDialogModel.ShouldShowEmulatorCheckbox(Run.Metadata);
+        AddMetadataControl(metadataGrid, _emulatorCheckBox, 0, 7, 5);
+
+        SpeedrunComAssociationState association = RunEditorDialogModel.GetSpeedrunComAssociationState(Run.Metadata);
+        var submitRun = new Button
         {
-            _variablesPanel.Children.Add(new TextBlock
+            Content = "Submit Run...",
+            IsEnabled = association.CanSubmit,
+            Width = 140,
+        };
+        submitRun.Click += async (_, _) => await SubmitSpeedrunComRun();
+        var associateRun = new Button
+        {
+            Content = association.AssociateButtonText,
+            Width = 210,
+        };
+        associateRun.Click += async (_, _) =>
+        {
+            if (string.IsNullOrEmpty(Run.Metadata.RunID))
             {
-                Text = "Speedrun.com Variables (read-only)",
-                FontWeight = FontWeight.Bold,
-            });
-
-            foreach (KeyValuePair<string, string> kv in Run.Metadata.VariableValueNames)
-            {
-                _variablesPanel.Children.Add(new TextBlock { Text = $"{kv.Key}: {kv.Value}", Foreground = Brushes.Gray });
+                await AssociateSpeedrunComRun();
             }
-        }
+            else
+            {
+                ShowSpeedrunComRun();
+            }
+        };
+        var buttonPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children = { submitRun, associateRun },
+        };
+        Grid.SetRow(buttonPanel, 8);
+        Grid.SetColumnSpan(buttonPanel, 5);
+        metadataGrid.Children.Add(buttonPanel);
+
+        BuildSpeedrunComVariableControls(metadataGrid);
+        _variablesPanel.Children.Add(metadataGrid);
 
         // Custom (editable)
         _variablesPanel.Children.Add(new TextBlock
@@ -1053,7 +1577,7 @@ public sealed class RunEditorDialog : Window
             });
         }
 
-        var addBtn = new Button { Content = "Add Variable…", Margin = new Thickness(0, 12, 0, 0) };
+        var addBtn = new Button { Content = "Add Variable...", Margin = new Thickness(0, 12, 0, 0) };
         addBtn.Click += async (_, _) => await AddCustomVariable();
         _variablesPanel.Children.Add(addBtn);
     }
@@ -1073,6 +1597,74 @@ public sealed class RunEditorDialog : Window
         Run.Metadata.CustomVariables[name] = new CustomVariable(value ?? string.Empty, isPermanent: true);
         Run.HasChanged = true;
         RebuildVariablesPanel();
+    }
+
+    private async Task AssociateSpeedrunComRun()
+    {
+        var prompt = new TextInputDialog("Enter Speedrun.com URL", "Speedrun.com Run URL:");
+        string url = await prompt.ShowDialogAsync(this);
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return;
+        }
+
+        try
+        {
+            SpeedrunComSharp.Run speedrunComRun = SpeedrunCom.Client.Runs.GetRunFromSiteUri(url);
+            if (speedrunComRun is null)
+            {
+                await new MessageDialog("Invalid URL", "The URL provided is not a valid speedrun.com Run URL.").ShowDialogAsync(this);
+                return;
+            }
+
+            Run.PatchRun(speedrunComRun);
+            RefreshMetadataFieldsFromRun();
+            RebuildVariablesPanel();
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+            await new MessageDialog("Error", "The run could not be associated.").ShowDialogAsync(this);
+        }
+    }
+
+    private void ShowSpeedrunComRun()
+    {
+        try
+        {
+            if (Run.Metadata.Run?.WebLink is { } link)
+            {
+                PlatformLauncher.Open(link.AbsoluteUri);
+            }
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+        }
+    }
+
+    private async Task SubmitSpeedrunComRun()
+    {
+        if (!SpeedrunCom.ValidateRun(Run, out string reason))
+        {
+            await new MessageDialog("Submitting Failed", reason).ShowDialogAsync(this);
+            return;
+        }
+
+        var submitDialog = new SpeedrunComSubmitDialog(Run.Metadata);
+        if (await submitDialog.ShowDialogAsync(this))
+        {
+            RebuildVariablesPanel();
+        }
+    }
+
+    private void RefreshMetadataFieldsFromRun()
+    {
+        _gameBox.Text = Run.GameName ?? string.Empty;
+        _categoryBox.Text = Run.CategoryName ?? string.Empty;
+        RefreshMetadataChoiceBoxes();
+        _emulatorCheckBox.IsChecked = Run.Metadata.UsesEmulator;
+        Run.HasChanged = true;
     }
 
     // ------------------------------------------------------------------------
@@ -1103,28 +1695,86 @@ public sealed class RunEditorDialog : Window
             await using Stream stream = await picked.OpenReadAsync();
             using var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
-            byte[] raw = ms.ToArray();
-
-            // Re-encode as PNG so the saved bytes are decoder-stable across platforms; SkiaSharp
-            // is already a hard dependency, and decoding through SKBitmap dodges the System.Drawing
-            // path that fails on Linux.
-            using SKBitmap decoded = SKBitmap.Decode(raw);
-            if (decoded is null)
+            if (!SetGameIconFromBytes(ms.ToArray()))
             {
                 return;
             }
-
-            using SKImage image = SKImage.FromBitmap(decoded);
-            using SKData encoded = image.Encode(SKEncodedImageFormat.Png, 90);
-            Run.GameIconPng = encoded.ToArray();
-            Run.GameIcon = null; // Force editor + saver to use GameIconPng exclusively.
-            Run.HasChanged = true;
-            UpdateIconPreview();
         }
         catch (Exception ex)
         {
             LiveSplit.Options.Log.Error(ex);
         }
+    }
+
+    private async Task OpenGameIconFromUrl()
+    {
+        var prompt = new TextInputDialog("Open Game Icon from URL", "URL:");
+        string url = await prompt.ShowDialogAsync(this);
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return;
+        }
+
+        try
+        {
+            await SetGameIconFromUri(new Uri(url));
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+            await new MessageDialog("Error", "The Game Icon couldn't be downloaded.").ShowDialogAsync(this);
+        }
+    }
+
+    private async Task DownloadSpeedrunComGameIcon(bool boxArt)
+    {
+        try
+        {
+            Uri uri = boxArt
+                ? Run.Metadata.Game?.Assets?.CoverMedium?.Uri
+                : Run.Metadata.Game?.Assets?.Icon?.Uri;
+            if (uri is not null)
+            {
+                await SetGameIconFromUri(uri);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            LiveSplit.Options.Log.Error(ex);
+        }
+
+        await new MessageDialog(
+            "Error",
+            boxArt ? "Could not download the box art of the game!" : "Could not download the icon of the game!")
+            .ShowDialogAsync(this);
+    }
+
+    private async Task SetGameIconFromUri(Uri uri)
+    {
+        using var client = new HttpClient();
+        byte[] bytes = await client.GetByteArrayAsync(uri);
+        if (!SetGameIconFromBytes(bytes))
+        {
+            await new MessageDialog("Error", "The URL was not recognized as an image.").ShowDialogAsync(this);
+        }
+    }
+
+    private bool SetGameIconFromBytes(byte[] raw)
+    {
+        using SKBitmap decoded = SKBitmap.Decode(raw);
+        if (decoded is null)
+        {
+            return false;
+        }
+
+        using SKImage image = SKImage.FromBitmap(decoded);
+        using SKData encoded = image.Encode(SKEncodedImageFormat.Png, 90);
+        Run.GameIconPng = encoded.ToArray();
+        Run.GameIcon = null;
+        Run.HasChanged = true;
+        UpdateIconPreview();
+        return true;
     }
 
     private void UpdateIconPreview()
@@ -1196,6 +1846,35 @@ public sealed class RunEditorDialog : Window
     }
 }
 
+public readonly record struct SpeedrunComAssociationState(bool CanSubmit, string AssociateButtonText);
+
+internal sealed class RunEditorDialogLayoutSpec
+{
+    public static RunEditorDialogLayoutSpec Master { get; } = new();
+
+    public IReadOnlyList<int> ColumnWidths { get; } = [140, 39, 62, 49, 136, 65, 104, 88, -1, 115];
+    public IReadOnlyList<int> RowHeights { get; } = [5, 35, 35, 35, 35, 35, 25, 29, 29, 29, 29, 29, 29, 29, -1, 36, 20];
+    public IReadOnlyList<string> VisibleTabHeaders { get; } = ["Real Time", "Game Time", "Additional Info"];
+    public IReadOnlyList<string> HeaderLabels { get; } = ["Game Name:", "Run Category:", "Start Timer at:", "Attempts:"];
+    public IReadOnlyList<string> CommandRailLabels { get; } =
+    [
+        "Insert Above",
+        "Insert Below",
+        "Remove Segment",
+        "Move Up",
+        "Move Down",
+        "Add Comparison",
+        "Import Comparison...",
+        "Other...",
+    ];
+    public IReadOnlyList<int> MetadataColumnWidths { get; } = [103, -1, 20, 112, -1];
+
+    public int InitialClientWidth => 684;
+    public int InitialClientHeight => 511;
+    public int MinimumWindowWidth => 700;
+    public int MinimumWindowHeight => 510;
+}
+
 public static class RunEditorDialogModel
 {
     private const string DefaultLayoutPath = "?default";
@@ -1208,7 +1887,6 @@ public static class RunEditorDialogModel
         target.AttemptCount = source.AttemptCount;
         target.GameIcon = source.GameIcon;
         target.GameIconPng = source.GameIconPng;
-        target.AutoSplitter = source.AutoSplitter;
         target.AutoSplitterSettings = source.AutoSplitterSettings;
         target.LayoutPath = source.LayoutPath;
         target.AttemptHistory = new List<Attempt>(source.AttemptHistory);
@@ -1336,6 +2014,36 @@ public static class RunEditorDialogModel
         return true;
     }
 
+    public static bool TryImportComparisonFromRun(IRun target, IRun comparisonRun, string name)
+    {
+        if (target is null || comparisonRun is null || comparisonRun.Count == 0 || !IsValidNewComparisonName(target, name))
+        {
+            return false;
+        }
+
+        target.CustomComparisons.Add(name);
+        int maxMatched = -1;
+        foreach (ISegment segment in comparisonRun)
+        {
+            if (ReferenceEquals(segment, comparisonRun.Last()))
+            {
+                target.Last().Comparisons[name] = comparisonRun.Last().PersonalBestSplitTime;
+                continue;
+            }
+
+            int matchingIndex = FindMatchingSegmentIndex(target, segment, maxMatched + 1);
+            if (matchingIndex >= 0)
+            {
+                target[matchingIndex].Comparisons[name] = segment.PersonalBestSplitTime;
+                maxMatched = matchingIndex;
+            }
+        }
+
+        target.HasChanged = true;
+        target.FixSplits();
+        return true;
+    }
+
     public static void SetLinkedLayout(IRun run, bool linked, string selectedPath)
     {
         run.LayoutPath = linked
@@ -1344,13 +2052,221 @@ public static class RunEditorDialogModel
         run.HasChanged = true;
     }
 
-    public static void SetAdditionalInfo(Run run, string platformName, string regionName, bool usesEmulator)
+    public static void SetGameName(Run run, string gameName)
     {
-        run.Metadata.PlatformName = platformName ?? string.Empty;
-        run.Metadata.RegionName = regionName ?? string.Empty;
-        run.Metadata.UsesEmulator = usesEmulator;
+        gameName ??= string.Empty;
+        if (run.GameName == gameName)
+        {
+            return;
+        }
+
+        run.GameName = gameName;
+        run.Metadata.RunID = null;
         run.HasChanged = true;
     }
+
+    public static void SetCategoryName(Run run, string categoryName)
+    {
+        categoryName ??= string.Empty;
+        if (run.CategoryName == categoryName)
+        {
+            return;
+        }
+
+        run.CategoryName = categoryName;
+        run.Metadata.RunID = null;
+        run.HasChanged = true;
+    }
+
+    public static void SetAdditionalInfo(Run run, string platformName, string regionName, bool usesEmulator)
+    {
+        platformName ??= string.Empty;
+        regionName ??= string.Empty;
+        bool changed = run.Metadata.PlatformName != platformName
+            || run.Metadata.RegionName != regionName
+            || run.Metadata.UsesEmulator != usesEmulator;
+
+        run.Metadata.PlatformName = platformName;
+        run.Metadata.RegionName = regionName;
+        run.Metadata.UsesEmulator = usesEmulator;
+        if (changed)
+        {
+            run.Metadata.RunID = null;
+        }
+
+        run.HasChanged = true;
+    }
+
+    public static bool SetSpeedrunComVariableValue(
+        RunMetadata metadata,
+        string variableName,
+        IEnumerable<string> validValues,
+        bool isUserDefined,
+        string value)
+    {
+        if (metadata is null || string.IsNullOrWhiteSpace(variableName))
+        {
+            return false;
+        }
+
+        string variableValue = null;
+        if (!string.IsNullOrEmpty(value))
+        {
+            IReadOnlyCollection<string> choices = validValues?.ToArray() ?? [];
+            bool knownChoice = choices.Contains(value, StringComparer.Ordinal);
+            if (knownChoice || isUserDefined)
+            {
+                variableValue = value;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        if (variableValue is null)
+        {
+            if (!metadata.VariableValueNames.Remove(variableName))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            metadata.VariableValueNames[variableName] = variableValue;
+        }
+
+        metadata.RunID = null;
+        metadata.LiveSplitRun.HasChanged = true;
+        return true;
+    }
+
+    public static SpeedrunComAssociationState GetSpeedrunComAssociationState(RunMetadata metadata)
+        => string.IsNullOrEmpty(metadata?.RunID)
+            ? new SpeedrunComAssociationState(true, "Associate with Speedrun.com...")
+            : new SpeedrunComAssociationState(false, "Show on Speedrun.com...");
+
+    public static string BuildSpeedrunComRulesText(RunMetadata metadata)
+    {
+        try
+        {
+            SpeedrunComSharp.Game game = metadata?.Game;
+            return game is null
+                ? string.Empty
+                : BuildSpeedrunComRulesText(
+                    game.Ruleset.DefaultTimingMethod,
+                    game.Ruleset.RequiresVideo,
+                    metadata.Category?.Rules ?? string.Empty);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    public static string BuildSpeedrunComRulesText(
+        SpeedrunComSharp.TimingMethod defaultTimingMethod,
+        bool requiresVideo,
+        string categoryRules)
+    {
+        var additionalRules = new List<string>();
+        if (defaultTimingMethod != SpeedrunComSharp.TimingMethod.RealTime)
+        {
+            additionalRules.Add(defaultTimingMethod == SpeedrunComSharp.TimingMethod.RealTimeWithoutLoads
+                ? "are timed without the loading times"
+                : "are timed with the Game Time");
+        }
+
+        if (requiresVideo)
+        {
+            additionalRules.Add("require video proof");
+        }
+
+        var parts = new List<string>();
+        if (additionalRules.Count > 0)
+        {
+            string rulesText = additionalRules.Count == 1
+                ? additionalRules[0]
+                : string.Join(", ", additionalRules.Take(additionalRules.Count - 1)) + " and " + additionalRules.Last();
+            parts.Add($"Runs of this game {rulesText}.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(categoryRules))
+        {
+            parts.Add(categoryRules);
+        }
+
+        return string.Join(Environment.NewLine + Environment.NewLine, parts);
+    }
+
+    public static bool ShouldShowEmulatorCheckbox(RunMetadata metadata)
+    {
+        try
+        {
+            SpeedrunComSharp.Game game = metadata?.Game;
+            return ShouldShowEmulatorCheckbox(gameAvailable: game != null, emulatorsAllowed: game?.Ruleset.EmulatorsAllowed == true);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool ShouldShowEmulatorCheckbox(bool gameAvailable, bool emulatorsAllowed)
+        => gameAvailable && emulatorsAllowed;
+
+    public static IReadOnlyList<string> GetPlatformChoiceList(RunMetadata metadata)
+    {
+        try
+        {
+            return BuildMetadataChoiceList(
+                metadata?.Game?.Platforms.Select(x => x.Name) ?? [],
+                metadata?.PlatformName);
+        }
+        catch
+        {
+            return BuildMetadataChoiceList([], metadata?.PlatformName);
+        }
+    }
+
+    public static IReadOnlyList<string> GetRegionChoiceList(RunMetadata metadata)
+    {
+        try
+        {
+            return BuildMetadataChoiceList(
+                metadata?.Game?.Regions.Select(x => x.Name) ?? [],
+                metadata?.RegionName);
+        }
+        catch
+        {
+            return BuildMetadataChoiceList([], metadata?.RegionName);
+        }
+    }
+
+    public static IReadOnlyList<string> BuildMetadataChoiceList(IEnumerable<string> choices, string currentValue)
+    {
+        var result = new List<string> { string.Empty };
+        foreach (string choice in choices ?? [])
+        {
+            if (!string.IsNullOrEmpty(choice) && !result.Contains(choice, StringComparer.Ordinal))
+            {
+                result.Add(choice);
+            }
+        }
+
+        if (!string.IsNullOrEmpty(currentValue) && !result.Contains(currentValue, StringComparer.Ordinal))
+        {
+            result.Add(currentValue);
+        }
+
+        return result;
+    }
+
+    public static IReadOnlyList<string> ExtractRulesLinks(string rules)
+        => Regex.Matches(rules ?? string.Empty, @"https?://[^\s\]\)""<>]+")
+            .Select(x => x.Value.TrimEnd('.', ',', ';', ':'))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 
     public static void ClearTimes(IRun run)
     {
@@ -1374,6 +2290,22 @@ public static class RunEditorDialogModel
         return !string.IsNullOrWhiteSpace(name)
             && !name.StartsWith("[Race]", StringComparison.Ordinal)
             && !run.Comparisons.Contains(name);
+    }
+
+    private static int FindMatchingSegmentIndex(IRun target, ISegment segment, int startIndex)
+    {
+        for (int i = startIndex; i < target.Count; i++)
+        {
+            if (string.Equals(
+                target[i].Name?.Trim(),
+                segment.Name?.Trim(),
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private static void CopyMetadata(RunMetadata target, RunMetadata source)

@@ -16,9 +16,10 @@ public sealed class TextInputDialog : Window
     public TextInputDialog(string title, string prompt, string initialValue = "")
     {
         Title = title;
-        Width = 380;
-        Height = 180;
+        Width = 396;
+        Height = 150;
         CanResize = false;
+        DialogTheme.ApplyWindow(this);
 
         var box = new TextBox { Text = initialValue ?? string.Empty };
 
@@ -43,7 +44,7 @@ public sealed class TextInputDialog : Window
                     HorizontalAlignment = HorizontalAlignment.Right,
                     Spacing = 8,
                     Margin = new Thickness(0, 12, 0, 0),
-                    Children = { cancel, ok },
+                    Children = { ok, cancel },
                 },
             },
         };

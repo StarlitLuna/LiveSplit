@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="LiveSplit.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="$(LsSrcPath)\LiveSplit.Core\LiveSplit.Core.csproj" Private="false" ExcludeAssets="runtime" />
     <ProjectReference Include="$(LsSrcPath)\UpdateManager\UpdateManager.csproj" Private="false" ExcludeAssets="runtime" />
   </ItemGroup>

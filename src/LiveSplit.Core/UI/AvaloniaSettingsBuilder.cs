@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 using global::Avalonia;
@@ -64,30 +65,32 @@ public static class AvaloniaSettingsBuilder
             return new ScrollViewer { Content = stack };
         }
 
-        foreach (PropertyInfo prop in EnumerateSettingsProperties(settings.GetType()))
+        List<PropertyInfo> properties = EnumerateSettingsProperties(settings.GetType())
+            .Where(prop => prop.CanRead && prop.CanWrite
+                && !ExcludedNames.Contains(prop.Name)
+                && prop.GetIndexParameters().Length == 0)
+            .ToList();
+        Dictionary<string, PropertyInfo> propertiesByName = properties.ToDictionary(
+            prop => prop.Name,
+            StringComparer.OrdinalIgnoreCase);
+        var rowsByPropertyName = new Dictionary<string, Control>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (PropertyInfo prop in properties)
         {
-            if (!prop.CanRead || !prop.CanWrite)
-            {
-                continue;
-            }
-
-            if (ExcludedNames.Contains(prop.Name))
-            {
-                continue;
-            }
-
-            // Skip indexers and properties that need special handling.
-            if (prop.GetIndexParameters().Length > 0)
-            {
-                continue;
-            }
-
             Control row = BuildRowForProperty(settings, prop);
             if (row != null)
             {
+                if (row is not CheckBox && string.IsNullOrEmpty(row.Name))
+                {
+                    row.Name = prop.Name + "Row";
+                }
+
+                rowsByPropertyName[prop.Name] = row;
                 stack.Children.Add(row);
             }
         }
+
+        ApplyOverrideCoupling(properties, propertiesByName, rowsByPropertyName);
 
         return new ScrollViewer
         {
@@ -181,11 +184,92 @@ public static class AvaloniaSettingsBuilder
         bool initial = (bool)prop.GetValue(target)!;
         var cb = new CheckBox
         {
+            Name = prop.Name + "CheckBox",
             Content = Humanize(prop.Name),
             IsChecked = initial,
         };
         cb.IsCheckedChanged += (_, _) => prop.SetValue(target, cb.IsChecked == true);
         return cb;
+    }
+
+    private static void ApplyOverrideCoupling(
+        IEnumerable<PropertyInfo> properties,
+        IReadOnlyDictionary<string, PropertyInfo> propertiesByName,
+        IReadOnlyDictionary<string, Control> rowsByPropertyName)
+    {
+        foreach (PropertyInfo property in properties)
+        {
+            if (!IsOverrideControlledProperty(property))
+            {
+                continue;
+            }
+
+            string overrideName = FindOverridePropertyName(property, propertiesByName);
+            if (overrideName is null
+                || !rowsByPropertyName.TryGetValue(property.Name, out Control controlledRow)
+                || !rowsByPropertyName.TryGetValue(overrideName, out Control overrideRow)
+                || overrideRow is not CheckBox overrideCheckBox)
+            {
+                continue;
+            }
+
+            void UpdateEnabled()
+            {
+                controlledRow.IsEnabled = overrideCheckBox.IsChecked == true;
+            }
+
+            UpdateEnabled();
+            overrideCheckBox.IsCheckedChanged += (_, _) => UpdateEnabled();
+        }
+    }
+
+    private static bool IsOverrideControlledProperty(PropertyInfo property)
+        => property.PropertyType == typeof(System.Drawing.Color)
+            || property.PropertyType == typeof(FontDescriptor);
+
+    private static string FindOverridePropertyName(
+        PropertyInfo property,
+        IReadOnlyDictionary<string, PropertyInfo> propertiesByName)
+    {
+        foreach (string candidate in GetOverrideCandidates(property))
+        {
+            if (propertiesByName.TryGetValue(candidate, out PropertyInfo overrideProperty)
+                && overrideProperty.PropertyType == typeof(bool))
+            {
+                return overrideProperty.Name;
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GetOverrideCandidates(PropertyInfo property)
+    {
+        yield return "Override" + property.Name;
+
+        string name = property.Name;
+        if (property.PropertyType == typeof(FontDescriptor))
+        {
+            yield break;
+        }
+
+        if (name.Contains("Delta", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "OverrideDeltasColor";
+        }
+
+        if (name.Contains("Time", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "OverrideTimeColor";
+            yield return "OverrideTimesColor";
+        }
+
+        if (name.Contains("Text", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Name", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Value", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "OverrideTextColor";
+        }
     }
 
     private static Control BuildEnumCombo(object target, PropertyInfo prop)

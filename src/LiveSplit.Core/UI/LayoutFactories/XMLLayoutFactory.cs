@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.IO;
 using System.Xml;
@@ -94,9 +94,11 @@ public class XMLLayoutFactory : ILayoutFactory
 
         settings.LegacyBackgroundImage = SettingsHelper.GetImageFromElement(element["BackgroundImage"]);
         settings.BackgroundImage = SettingsHelper.GetImageFromElement(element["BackgroundImageData"]);
-        if (settings.BackgroundImage is null && IsCommonEncodedImage(settings.LegacyBackgroundImage))
+        if (settings.BackgroundImage is null)
         {
-            settings.BackgroundImage = settings.LegacyBackgroundImage;
+            settings.BackgroundImage = IsCommonEncodedImage(settings.LegacyBackgroundImage)
+                ? settings.LegacyBackgroundImage
+                : SettingsHelper.TryDecodeLegacyImageToEncodedBytes(settings.LegacyBackgroundImage);
         }
 
         if (settings.TimerFont == null || settings.TimesFont == null || settings.TextFont == null)

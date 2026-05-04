@@ -141,16 +141,26 @@ public sealed class SkiaDrawingContext : IDrawingContext
     public void DrawImage(IImage image, RectangleF destRect)
     {
         var skImage = ((SkiaImage)image).SkImage;
-        _canvas.DrawImage(skImage, ToSk(destRect));
+        using SKPaint paint = CreateImagePaint();
+        _canvas.DrawImage(skImage, ToSk(destRect), paint);
     }
 
     public void DrawImage(IImage image, Rectangle destRect, Rectangle srcRect)
     {
         var skImage = ((SkiaImage)image).SkImage;
-        _canvas.DrawImage(skImage, ToSk(srcRect), ToSk(destRect));
+        using SKPaint paint = CreateImagePaint();
+        _canvas.DrawImage(skImage, ToSk(srcRect), ToSk(destRect), paint);
     }
 
     public void DrawImageWithOpacity(IImage image, Rectangle destRect, Rectangle srcRect, float opacity, float blurSigma = 0f)
+        => DrawImageWithOpacity(
+            image,
+            new RectangleF(destRect.X, destRect.Y, destRect.Width, destRect.Height),
+            new RectangleF(srcRect.X, srcRect.Y, srcRect.Width, srcRect.Height),
+            opacity,
+            blurSigma);
+
+    public void DrawImageWithOpacity(IImage image, RectangleF destRect, RectangleF srcRect, float opacity, float blurSigma = 0f)
     {
         var skImage = ((SkiaImage)image).SkImage;
         SKImageFilter imageFilter = null;
@@ -161,12 +171,7 @@ public sealed class SkiaDrawingContext : IDrawingContext
                 imageFilter = SKImageFilter.CreateBlur(blurSigma, blurSigma);
             }
 
-            using var paint = new SKPaint
-            {
-                Color = new SKColor(255, 255, 255, (byte)(Math.Clamp(opacity, 0f, 1f) * 255)),
-                IsAntialias = IsAntialias,
-                ImageFilter = imageFilter,
-            };
+            using SKPaint paint = CreateImagePaint(Math.Clamp(opacity, 0f, 1f), imageFilter);
             _canvas.DrawImage(skImage, ToSk(srcRect), ToSk(destRect), paint);
         }
         finally
@@ -454,6 +459,20 @@ public sealed class SkiaDrawingContext : IDrawingContext
 
     private static SKRect ToSk(RectangleF r) => SKRect.Create(r.X, r.Y, r.Width, r.Height);
     private static SKRectI ToSk(Rectangle r) => SKRectI.Create(r.X, r.Y, r.Width, r.Height);
+
+    private SKPaint CreateImagePaint(float opacity = 1f, SKImageFilter imageFilter = null)
+        => new()
+        {
+            Color = new SKColor(255, 255, 255, (byte)(Math.Clamp(opacity, 0f, 1f) * 255)),
+            IsAntialias = IsAntialias,
+            ImageFilter = imageFilter,
+            FilterQuality = InterpolationMode switch
+            {
+                InterpolationMode.NearestNeighbor or InterpolationMode.Low => SKFilterQuality.None,
+                InterpolationMode.Bicubic or InterpolationMode.HighQualityBicubic => SKFilterQuality.High,
+                _ => SKFilterQuality.Low,
+            },
+        };
 
     private bool TryDrawSnappedFillRectangle(IBrush brush, RectangleF rect)
     {

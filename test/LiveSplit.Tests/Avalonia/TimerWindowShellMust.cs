@@ -10,6 +10,8 @@ using LiveSplit.Options;
 
 using Xunit;
 
+#pragma warning disable CS0618 // TimerWindow still uses Avalonia's obsolete FileDialog API for master-compatible dialog parity.
+
 namespace LiveSplit.Tests.Avalonia;
 
 public class TimerWindowShellMust
@@ -21,6 +23,22 @@ public class TimerWindowShellMust
 
         Assert.Contains("SystemDecorations=\"None\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Background=\"Black\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelectUniqueWindowTitleLikeMaster()
+    {
+        Assert.Equal(
+            "LiveSplit",
+            TimerWindow.SelectUniqueWindowTitle([]));
+
+        Assert.Equal(
+            "LiveSplit (2)",
+            TimerWindow.SelectUniqueWindowTitle(["LiveSplit", "LiveSplit (1)"]));
+
+        Assert.Equal(
+            "LiveSplit",
+            TimerWindow.SelectUniqueWindowTitle(["LiveSplit (1)"]));
     }
 
     [Fact]
@@ -51,6 +69,220 @@ public class TimerWindowShellMust
     }
 
     [Fact]
+    public void LeftClickOnTimerWindowClosesOpenContextMenuBeforeDragHandling()
+    {
+        Assert.True(TimerWindow.ShouldCloseOpenContextMenuOnPointerPress(contextMenuOpen: true, leftButtonPressed: true));
+        Assert.False(TimerWindow.ShouldCloseOpenContextMenuOnPointerPress(contextMenuOpen: false, leftButtonPressed: true));
+        Assert.False(TimerWindow.ShouldCloseOpenContextMenuOnPointerPress(contextMenuOpen: true, leftButtonPressed: false));
+
+        string source = File.ReadAllText(FindRepoFile("src/LiveSplit/Avalonia/TimerWindow.axaml.cs"));
+        int methodStart = source.IndexOf("private void OnPointerPressed", StringComparison.Ordinal);
+        Assert.True(methodStart >= 0);
+        int methodEnd = source.IndexOf("private void OnPointerMoved", methodStart, StringComparison.Ordinal);
+        Assert.True(methodEnd > methodStart);
+        string method = source[methodStart..methodEnd];
+
+        Assert.True(
+            method.IndexOf("CloseOpenContextMenuForPointerPress(props.IsLeftButtonPressed)", StringComparison.Ordinal)
+            < method.IndexOf("GetResizeEdge(", StringComparison.Ordinal));
+        Assert.True(
+            method.IndexOf("CloseOpenContextMenuForPointerPress(props.IsLeftButtonPressed)", StringComparison.Ordinal)
+            < method.IndexOf("BeginMoveDrag(e)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NativeMousePassThroughTargetsWindowsAndX11Only()
+    {
+        Assert.True(NativeMousePassThrough.SupportsPlatformHandleDescriptor("HWND"));
+        Assert.True(NativeMousePassThrough.SupportsPlatformHandleDescriptor("XID"));
+        Assert.False(NativeMousePassThrough.SupportsPlatformHandleDescriptor("Wayland"));
+        Assert.False(NativeMousePassThrough.SupportsPlatformHandleDescriptor(null));
+    }
+
+    [Fact]
+    public void ApplyNativeMousePassThroughWithManagedHitTesting()
+    {
+        string source = File.ReadAllText(FindRepoFile("src/LiveSplit/Avalonia/TimerWindow.axaml.cs"));
+
+        Assert.Contains("ApplyNativeMousePassThrough(passThrough);", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyNativeMousePassThrough(false);", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RecalculateMousePassThroughWhenForegroundStateChanges()
+    {
+        string source = File.ReadAllText(FindRepoFile("src/LiveSplit/Avalonia/TimerWindow.axaml.cs"));
+
+        Assert.Contains("Activated += (_, _) => ApplyLayoutWindowSettings();", source, StringComparison.Ordinal);
+        Assert.Contains("Deactivated += (_, _) => ApplyLayoutWindowSettings();", source, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(1, 1, global::Avalonia.Controls.WindowEdge.NorthWest)]
+    [InlineData(100, 1, global::Avalonia.Controls.WindowEdge.North)]
+    [InlineData(199, 1, global::Avalonia.Controls.WindowEdge.NorthEast)]
+    [InlineData(1, 50, global::Avalonia.Controls.WindowEdge.West)]
+    [InlineData(199, 50, global::Avalonia.Controls.WindowEdge.East)]
+    [InlineData(1, 99, global::Avalonia.Controls.WindowEdge.SouthWest)]
+    [InlineData(100, 99, global::Avalonia.Controls.WindowEdge.South)]
+    [InlineData(199, 99, global::Avalonia.Controls.WindowEdge.SouthEast)]
+    public void DetectBorderlessResizeHitZonesLikeMaster(double x, double y, global::Avalonia.Controls.WindowEdge expected)
+    {
+        Assert.Equal(expected, TimerWindow.GetResizeEdge(x, y, width: 200, height: 100, allowResizing: true));
+    }
+
+    [Fact]
+    public void IgnoreResizeHitZonesWhenResizingIsDisabledOrPointerIsInterior()
+    {
+        Assert.Null(TimerWindow.GetResizeEdge(50, 50, width: 200, height: 100, allowResizing: true));
+        Assert.Null(TimerWindow.GetResizeEdge(1, 1, width: 200, height: 100, allowResizing: false));
+    }
+
+    [Fact]
+    public void AspectLockedResizePreservesInitialRatioLikeMaster()
+    {
+        Size wideRequest = TimerWindow.ApplyAspectLockedResize(
+            requestedSize: new Size(500, 100),
+            initialAspectRatio: 2.0,
+            shiftPressed: true);
+
+        Assert.Equal(new Size(200, 100), wideRequest);
+
+        Size tallRequest = TimerWindow.ApplyAspectLockedResize(
+            requestedSize: new Size(100, 100),
+            initialAspectRatio: 2.0,
+            shiftPressed: true);
+
+        Assert.Equal(new Size(100, 50), tallRequest);
+        Assert.Equal(
+            new Size(500, 100),
+            TimerWindow.ApplyAspectLockedResize(new Size(500, 100), initialAspectRatio: 2.0, shiftPressed: false));
+    }
+
+    [Fact]
+    public void ManagedCornerResizeAspectLockAnchorsOppositeCornerLikeMaster()
+    {
+        TimerWindow.ManagedResizeResult resized = TimerWindow.CalculateManagedResize(
+            global::Avalonia.Controls.WindowEdge.NorthWest,
+            startPosition: new PixelPoint(100, 100),
+            startSize: new Size(200, 100),
+            pointerDelta: new Vector(-100, -20),
+            shiftPressed: true);
+
+        Assert.Equal(new Size(240, 120), resized.Size);
+        Assert.Equal(new PixelPoint(60, 80), resized.Position);
+    }
+
+    [Fact]
+    public void ManagedSideResizeDoesNotAspectLockLikeMaster()
+    {
+        TimerWindow.ManagedResizeResult resized = TimerWindow.CalculateManagedResize(
+            global::Avalonia.Controls.WindowEdge.East,
+            startPosition: new PixelPoint(100, 100),
+            startSize: new Size(200, 100),
+            pointerDelta: new Vector(80, 40),
+            shiftPressed: true);
+
+        Assert.Equal(new Size(280, 100), resized.Size);
+        Assert.Equal(new PixelPoint(100, 100), resized.Position);
+    }
+
+    [Fact]
+    public void BorderlessResizeUsesManagedCrossPlatformDragPath()
+    {
+        string source = File.ReadAllText(FindRepoFile("src/LiveSplit/Avalonia/TimerWindow.axaml.cs"));
+
+        Assert.Contains("BeginManagedResizeDrag(resizeEdge.Value", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("BeginResizeDrag(resizeEdge.Value", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MaintainMinimumLayoutSizeLikeMaster()
+    {
+        Assert.Equal(
+            new Size(50, 50),
+            TimerWindow.MaintainMinimumLayoutSize(
+                currentSize: new Size(50, 100),
+                overallSize: 100,
+                minimumCrossSize: 100,
+                verticalLayout: true));
+
+        Assert.Equal(
+            new Size(50, 50),
+            TimerWindow.MaintainMinimumLayoutSize(
+                currentSize: new Size(100, 50),
+                overallSize: 100,
+                minimumCrossSize: 100,
+                verticalLayout: false));
+    }
+
+    [Fact]
+    public void DispatchMouseWheelScrollsSplitsLikeMaster()
+    {
+        var model = new TimerModel();
+        int scrollUpCount = 0;
+        int scrollDownCount = 0;
+        model.OnScrollUp += (_, _) => scrollUpCount++;
+        model.OnScrollDown += (_, _) => scrollDownCount++;
+
+        Assert.True(TimerWindow.DispatchMouseWheel(model, 1));
+        Assert.True(TimerWindow.DispatchMouseWheel(model, -1));
+        Assert.False(TimerWindow.DispatchMouseWheel(model, 0));
+
+        Assert.Equal(1, scrollUpCount);
+        Assert.Equal(1, scrollDownCount);
+    }
+
+    [Theory]
+    [InlineData("run.lss", ".lss", true)]
+    [InlineData("run.LSS", ".lss", true)]
+    [InlineData("run.txt", ".lss", false)]
+    [InlineData("", ".lss", false)]
+    public void ValidateSaveFileExtensionLikeMaster(string path, string extension, bool expected)
+    {
+        Assert.Equal(expected, TimerWindow.HasSaveExtension(path, extension));
+    }
+
+    [Fact]
+    public void ExposeMasterLoadAndSaveFailureMessages()
+    {
+        Assert.Equal(
+            "The selected file was not recognized as a splits file.",
+            TimerWindow.RunLoadFailureMessage());
+        Assert.Equal(
+            "The selected file was not recognized as a layout file. (bad xml)",
+            TimerWindow.LayoutLoadFailureMessage(new InvalidDataException("bad xml")));
+        Assert.Equal("Splits could not be saved!", TimerWindow.SplitsSaveFailureMessage());
+        Assert.Equal("Layout could not be saved!", TimerWindow.LayoutSaveFailureMessage());
+    }
+
+    [Fact]
+    public void BuildOpenFileDialogWithRecentDirectory()
+    {
+        var dialog = TimerWindow.BuildOpenFileDialog(
+            "Open Splits",
+            [new global::Avalonia.Controls.FileDialogFilter { Name = "LiveSplit Splits", Extensions = { "lss" } }],
+            @"C:\runs\Example.lss");
+
+        Assert.Equal("Open Splits", dialog.Title);
+        Assert.Equal(@"C:\runs", dialog.Directory);
+    }
+
+    [Fact]
+    public void BuildSaveFileDialogWithDefaultExtensionAndSuggestedFileName()
+    {
+        var dialog = TimerWindow.BuildSaveFileDialog(
+            "Save Splits",
+            "lss",
+            [new global::Avalonia.Controls.FileDialogFilter { Name = "LiveSplit Splits", Extensions = { "lss" } }],
+            "Example Game - Any%.lss");
+
+        Assert.Equal("Save Splits", dialog.Title);
+        Assert.Equal("lss", dialog.DefaultExtension);
+        Assert.Equal("Example Game - Any%.lss", dialog.InitialFileName);
+    }
+
+    [Fact]
     public void ClampSavedLayoutPositionInsideAvailableScreenBounds()
     {
         var screen = new PixelRect(0, 0, 500, 400);
@@ -72,6 +304,22 @@ public class TimerWindowShellMust
                 ServerStartupType.PreviousState,
                 runningServerState: ServerStateType.TCP,
                 savedServerState: ServerStateType.Off));
+    }
+
+    [Fact]
+    public void CaptureRunningServerStateBeforeStoppingServerForSettingsRestart()
+    {
+        Assert.Equal(
+            ServerStateType.Websocket,
+            TimerWindow.CaptureServerStateForSettingsRestart(
+                commandServerState: ServerStateType.Websocket,
+                settingsServerState: ServerStateType.Off));
+
+        Assert.Equal(
+            ServerStateType.TCP,
+            TimerWindow.CaptureServerStateForSettingsRestart(
+                commandServerState: ServerStateType.Off,
+                settingsServerState: ServerStateType.TCP));
     }
 
     [Fact]
@@ -152,6 +400,31 @@ public class TimerWindowShellMust
 
         settings.WarnOnReset = false;
         Assert.False(TimerWindow.ShouldPromptToUpdateTimesOnReset(state, inTimerOnlyMode: false));
+    }
+
+    [Fact]
+    public void DialogModalStateTemporarilyClearsAlwaysOnTop()
+    {
+        string source = File.ReadAllText(FindRepoFile("src/LiveSplit/Avalonia/TimerWindow.axaml.cs"));
+
+        Assert.Contains("bool restoreTopmost = Topmost;", source, StringComparison.Ordinal);
+        Assert.Contains("Topmost = false;", source, StringComparison.Ordinal);
+        Assert.Contains("Topmost = restoreTopmost;", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AcceptedLayoutEditorChangesReapplyWindowSizeAndSettings()
+    {
+        string source = File.ReadAllText(FindRepoFile("src/LiveSplit/Avalonia/TimerWindow.axaml.cs"));
+
+        int methodStart = source.IndexOf("private async Task OpenEditLayout()", StringComparison.Ordinal);
+        Assert.True(methodStart >= 0);
+        int methodEnd = source.IndexOf("private async Task OpenLayoutSettings()", methodStart, StringComparison.Ordinal);
+        Assert.True(methodEnd > methodStart);
+        string method = source[methodStart..methodEnd];
+
+        Assert.Contains("ApplyLayoutSize();", method, StringComparison.Ordinal);
+        Assert.Contains("ApplyLayoutWindowSettings();", method, StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relativePath)

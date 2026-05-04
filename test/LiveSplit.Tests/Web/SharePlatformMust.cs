@@ -132,6 +132,9 @@ public class SharePlatformMust
                       <setting name="TwitterFormatRunning" serializeAs="String">
                         <value>legacy running $delta</value>
                       </setting>
+                      <setting name="TwitchFormat" serializeAs="String">
+                        <value>legacy twitch $stream</value>
+                      </setting>
                     </LiveSplit.Web.Share.ShareSettings>
                   </userSettings>
                 </configuration>
@@ -143,7 +146,7 @@ public class SharePlatformMust
 
             Assert.Equal("legacy completed $title", loaded.TwitterCompletedFormat);
             Assert.Equal("legacy running $delta", loaded.TwitterRunningFormat);
-            Assert.Equal(ShareTemplateSettings.DefaultTwitchFormatText, loaded.TwitchFormat);
+            Assert.Equal("legacy twitch $stream", loaded.TwitchFormat);
         }
         finally
         {

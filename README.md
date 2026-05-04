@@ -97,8 +97,8 @@ You need three toolchains on the build host:
    ```
    Rust builds `liblivesplit_core.so` and `libasr_capi.so`, which the .NET app loads at runtime.
 3. **Build essentials** - a C toolchain, `pkg-config`, `git`, and `curl`.
-   - Fedora/RHEL: `sudo dnf install @development-tools dotnet-sdk-8.0 cargo pkgconf-pkg-config git curl`
-   - Other distros: install equivalent .NET 8, Rust/Cargo, C compiler, `pkg-config`, `git`, and `curl` packages.
+   - Fedora/RHEL: `sudo dnf install @development-tools dotnet-sdk-8.0 cargo pkgconf-pkg-config git curl vlc-libs vlc-plugin-ffmpeg`
+   - Other distros: install equivalent .NET 8, Rust/Cargo, C compiler, `pkg-config`, `git`, `curl`, and LibVLC packages.
 
 The Linux port builds from source vendored in this repository; no submodule checkout is required. The native Rust crates live in:
 
@@ -120,7 +120,7 @@ dotnet bin/release/LiveSplit.dll
 
 ### Packaging: Flatpak
 
-Flatpak is the supported cross-distro Linux package. The manifest at [org.livesplit.LiveSplit.yml](org.livesplit.LiveSplit.yml) builds the native Rust libraries and runs `dotnet publish` inside the Flatpak SDK using the `dotnet8` and `rust-stable` SDK extensions. Sound and Video use LibVLC, so the Flatpak runtime must include VLC/LibVLC libraries before those components can play media inside the sandbox.
+Flatpak is the supported cross-distro Linux package. The manifest at [org.livesplit.LiveSplit.yml](org.livesplit.LiveSplit.yml) builds LibVLC, builds the native Rust libraries, and runs `dotnet publish` inside the Flatpak SDK using the `dotnet8` and `rust-stable` SDK extensions.
 
 #### One-time setup
 
@@ -158,7 +158,8 @@ Fedora RPM packaging is built natively on Fedora and targets `linux-x64`. The au
 
 ```sh
 sudo dnf install @development-tools dotnet-sdk-8.0 cargo rpm-build \
-    rpmdevtools desktop-file-utils pkgconf-pkg-config git tar gzip
+    rpmdevtools desktop-file-utils pkgconf-pkg-config git tar gzip \
+    vlc-devel vlc-libs vlc-plugin-ffmpeg
 
 bash scripts/package-fedora-rpm.sh
 sudo dnf install dist/rpm/livesplit-*.rpm

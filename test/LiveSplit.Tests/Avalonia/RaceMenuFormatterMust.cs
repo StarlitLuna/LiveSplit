@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 using LiveSplit.Avalonia;
 using LiveSplit.Model;
+using LiveSplit.Racetime;
 using LiveSplit.UI.Components;
 using LiveSplit.Web.SRL;
 
@@ -40,6 +41,38 @@ public class RaceMenuFormatterMust
     }
 
     [Fact]
+    public void MarkRacetimeBrowserFallbackAsOpenViewer()
+    {
+        Assert.Equal(RaceJoinCapability.OpenViewer, new RacetimeAPI().JoinCapability);
+    }
+
+    [Theory]
+    [InlineData(RaceJoinCapability.JoinRace, "New Race...")]
+    [InlineData(RaceJoinCapability.OpenViewer, "New Race in Browser...")]
+    public void FormatCreateRaceActionFromProviderCapability(RaceJoinCapability capability, string expected)
+    {
+        Assert.Equal(expected, RaceMenuFormatter.FormatCreateRaceAction(capability));
+    }
+
+    [Fact]
+    public void ResolveInProgressRaceParticipantAsJoinForJoinCapableProvider()
+    {
+        var provider = new FakeRaceProvider(RaceJoinCapability.JoinRace, "runner");
+        var race = new FakeRaceInfo { ParticipantUsername = "runner" };
+
+        Assert.Equal(RaceMenuAction.JoinRace, RaceMenuFormatter.ResolveRaceAction(provider, race, isInProgress: true));
+    }
+
+    [Fact]
+    public void ResolveInProgressRaceNonParticipantAsViewerForJoinCapableProvider()
+    {
+        var provider = new FakeRaceProvider(RaceJoinCapability.JoinRace, "runner");
+        var race = new FakeRaceInfo { ParticipantUsername = "other-runner" };
+
+        Assert.Equal(RaceMenuAction.OpenViewer, RaceMenuFormatter.ResolveRaceAction(provider, race, isInProgress: true));
+    }
+
+    [Fact]
     public void FormatInProgressRaceTitleWithElapsedTimeAndFinishCount()
     {
         var race = new FakeRaceInfo
@@ -68,7 +101,27 @@ public class RaceMenuFormatterMust
         public int NumEntrants { get; set; }
         public int Starttime { get; set; }
         public int State { get; set; }
+        public string ParticipantUsername { get; set; }
 
-        public bool IsParticipant(string username) => false;
+        public bool IsParticipant(string username) => username == ParticipantUsername;
+    }
+
+    private sealed class FakeRaceProvider : RaceProviderAPI
+    {
+        private readonly RaceJoinCapability _joinCapability;
+        private readonly string _username;
+
+        public FakeRaceProvider(RaceJoinCapability joinCapability, string username)
+        {
+            _joinCapability = joinCapability;
+            _username = username;
+            JoinRace = (_, _) => { };
+        }
+
+        public override string ProviderName => "Fake";
+        public override string Username => _username;
+        public override RaceJoinCapability JoinCapability => _joinCapability;
+        public override IEnumerable<IRaceInfo> GetRaces() => [];
+        public override void RefreshRacesListAsync() { }
     }
 }

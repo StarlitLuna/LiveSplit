@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading.Tasks;
 
 using global::Avalonia;
@@ -18,75 +17,83 @@ public sealed class RaceProviderManagingDialog : Window
     private readonly RaceProviderSettingsEditorModel _model;
     private readonly TaskCompletionSource<bool> _result = new();
     private readonly ListBox _providerList;
-    private readonly CheckBox _enabledBox;
-    private readonly TextBlock _providerTitle;
-    private readonly Button _websiteButton;
-    private readonly Button _rulesButton;
+    private readonly TextBlock _websiteLabel;
+    private readonly TextBlock _rulesLabel;
+    private readonly Button _websiteLink;
+    private readonly Button _rulesLink;
     private readonly ContentControl _settingsHost;
 
     public RaceProviderManagingDialog(IList<RaceProviderSettings> settings)
     {
         _model = new RaceProviderSettingsEditorModel(settings);
 
-        Title = "Race Providers";
-        Width = 640;
-        Height = 460;
-        MinWidth = 520;
-        MinHeight = 360;
+        Title = "Manage Racing Services";
+        Width = 450;
+        Height = 260;
+        MinWidth = 450;
+        MinHeight = 230;
+        DialogTheme.ApplyWindow(this);
 
         _providerList = new ListBox
         {
-            ItemsSource = _model.WorkingSettings.Select(x => x.DisplayName).ToList(),
-            Width = 200
+            Width = 144,
+            Margin = new Thickness(3)
         };
         _providerList.SelectionChanged += (_, _) => RefreshSelectedProvider();
-
-        _providerTitle = new TextBlock
+        for (int index = 0; index < _model.WorkingSettings.Count; index++)
         {
-            FontWeight = FontWeight.Bold,
-            FontSize = 16
-        };
+            RaceProviderSettings provider = _model.WorkingSettings[index];
+            var providerBox = new CheckBox
+            {
+                Content = provider.DisplayName,
+                IsChecked = provider.Enabled,
+                Tag = index,
+                Margin = new Thickness(2)
+            };
+            providerBox.IsCheckedChanged += (_, _) =>
+            {
+                if (providerBox.Tag is int providerIndex)
+                {
+                    _model.SetEnabled(providerIndex, providerBox.IsChecked == true);
+                }
+            };
+            _providerList.Items.Add(providerBox);
+        }
 
-        _enabledBox = new CheckBox { Content = "Enabled" };
-        _enabledBox.IsCheckedChanged += (_, _) =>
-        {
-            _model.SetEnabled(_providerList.SelectedIndex, _enabledBox.IsChecked == true);
-        };
-
-        _websiteButton = new Button { Content = "Website" };
-        _websiteButton.Click += (_, _) => OpenLink(SelectedProvider?.WebsiteLink);
-        _rulesButton = new Button { Content = "Rules" };
-        _rulesButton.Click += (_, _) => OpenLink(SelectedProvider?.RulesLink);
+        _websiteLabel = DialogLabel("Website:");
+        _rulesLabel = DialogLabel("Rules:");
+        _websiteLink = LinkButton();
+        _websiteLink.Click += (_, _) => OpenLink(SelectedProvider?.WebsiteLink);
+        _rulesLink = LinkButton();
+        _rulesLink.Click += (_, _) => OpenLink(SelectedProvider?.RulesLink);
 
         _settingsHost = new ContentControl();
 
-        var providerActions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children = { _enabledBox, _websiteButton, _rulesButton }
-        };
-
-        var details = new StackPanel
-        {
-            Margin = new Thickness(12),
-            Spacing = 10,
-            Children =
-            {
-                _providerTitle,
-                providerActions,
-                _settingsHost
-            }
-        };
-
         var body = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("220,*")
+            ColumnDefinitions = new ColumnDefinitions("150,*"),
+            RowDefinitions = new RowDefinitions("40,*,32")
         };
         Grid.SetColumn(_providerList, 0);
-        Grid.SetColumn(details, 1);
+        Grid.SetRowSpan(_providerList, 3);
         body.Children.Add(_providerList);
-        body.Children.Add(details);
+
+        var links = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            RowDefinitions = new RowDefinitions("*,*"),
+            Margin = new Thickness(3)
+        };
+        AddLinkRow(links, _websiteLabel, _websiteLink, 0);
+        AddLinkRow(links, _rulesLabel, _rulesLink, 1);
+        Grid.SetColumn(links, 1);
+        Grid.SetRow(links, 0);
+        body.Children.Add(links);
+
+        _settingsHost.Margin = new Thickness(3);
+        Grid.SetColumn(_settingsHost, 1);
+        Grid.SetRow(_settingsHost, 1);
+        body.Children.Add(_settingsHost);
 
         var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
         ok.Click += (_, _) =>
@@ -107,15 +114,13 @@ public sealed class RaceProviderManagingDialog : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8,
-            Margin = new Thickness(0, 0, 12, 12),
-            Children = { cancel, ok }
+            Margin = new Thickness(0, 3, 3, 3),
+            Children = { ok, cancel }
         };
-
-        var root = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        root.Children.Add(buttons);
-        root.Children.Add(body);
-        Content = root;
+        Grid.SetColumn(buttons, 1);
+        Grid.SetRow(buttons, 2);
+        body.Children.Add(buttons);
+        Content = body;
 
         if (_model.WorkingSettings.Count > 0)
         {
@@ -165,20 +170,62 @@ public sealed class RaceProviderManagingDialog : Window
         RaceProviderSettings settings = SelectedProvider;
         if (settings is null)
         {
-            _providerTitle.Text = "No race providers are available.";
-            _enabledBox.IsEnabled = false;
-            _websiteButton.IsEnabled = false;
-            _rulesButton.IsEnabled = false;
+            _websiteLabel.IsVisible = false;
+            _rulesLabel.IsVisible = false;
+            _websiteLink.IsVisible = false;
+            _rulesLink.IsVisible = false;
             _settingsHost.Content = null;
             return;
         }
 
-        _providerTitle.Text = settings.DisplayName;
-        _enabledBox.IsEnabled = true;
-        _enabledBox.IsChecked = settings.Enabled;
-        _websiteButton.IsEnabled = !string.IsNullOrEmpty(settings.WebsiteLink);
-        _rulesButton.IsEnabled = !string.IsNullOrEmpty(settings.RulesLink);
+        ConfigureLink(_websiteLabel, _websiteLink, settings.WebsiteLink);
+        ConfigureLink(_rulesLabel, _rulesLink, settings.RulesLink);
         _settingsHost.Content = settings.GetSettingsControl();
+    }
+
+    private static TextBlock DialogLabel(string text)
+    {
+        var label = new TextBlock
+        {
+            Text = text,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 4, 0)
+        };
+        DialogTheme.Apply(label);
+        return label;
+    }
+
+    private static Button LinkButton()
+    {
+        return new Button
+        {
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = DialogTheme.LinkBrush,
+            Padding = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+    }
+
+    private static void AddLinkRow(Grid grid, TextBlock label, Button link, int row)
+    {
+        Grid.SetColumn(label, 0);
+        Grid.SetRow(label, row);
+        Grid.SetColumn(link, 1);
+        Grid.SetRow(link, row);
+        grid.Children.Add(label);
+        grid.Children.Add(link);
+    }
+
+    private static void ConfigureLink(TextBlock label, Button link, string url)
+    {
+        bool visible = !string.IsNullOrEmpty(url);
+        label.IsVisible = visible;
+        link.IsVisible = visible;
+        link.Content = url ?? string.Empty;
     }
 
     private static void OpenLink(string url)

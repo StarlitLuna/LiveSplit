@@ -127,6 +127,9 @@ jobs:
             rpmdevtools \
             desktop-file-utils \
             pkgconf-pkg-config \
+            vlc-devel \
+            vlc-libs \
+            vlc-plugin-ffmpeg \
             git \
             tar \
             gzip

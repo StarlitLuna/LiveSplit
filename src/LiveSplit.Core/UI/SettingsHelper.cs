@@ -5,6 +5,8 @@ using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Xml;
 
+using LiveSplit.UI.Drawing;
+
 namespace LiveSplit.UI;
 
 public class SettingsHelper
@@ -170,6 +172,33 @@ public class SettingsHelper
 
         return TryReadBase64(element.InnerText);
     }
+
+#pragma warning disable SYSLIB0011
+    public static byte[] TryDecodeLegacyImageToEncodedBytes(byte[] data)
+    {
+        if (data is null || data.Length == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = new MemoryStream(data);
+            if (new BinaryFormatter().Deserialize(stream) is Image image)
+            {
+                using (image)
+                {
+                    return image.ToPngBytes();
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return null;
+    }
+#pragma warning restore SYSLIB0011
 
     private static byte[] TryReadBase64(string value)
     {

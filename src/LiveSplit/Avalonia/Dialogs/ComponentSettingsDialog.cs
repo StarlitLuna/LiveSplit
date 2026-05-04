@@ -22,7 +22,7 @@ public sealed class ComponentSettingsDialog : Window
     private readonly XmlNode _snapshot;
     private readonly TaskCompletionSource<bool> _result = new();
 
-    public ComponentSettingsDialog(IComponent component)
+    public ComponentSettingsDialog(IComponent component, LayoutMode mode = LayoutMode.Vertical)
     {
         _component = component;
         _snapshot = component.GetSettings(new XmlDocument());
@@ -30,9 +30,9 @@ public sealed class ComponentSettingsDialog : Window
         Title = component.ComponentName + " Settings";
         Width = 540;
         Height = 600;
+        DialogTheme.ApplyWindow(this);
 
-        Control settingsControl = component.GetSettingsControl(LayoutMode.Vertical)
-            ?? AvaloniaSettingsBuilder.Build(component, component.ComponentName);
+        Control settingsControl = CreateSettingsControl(component, mode);
 
         var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
         ok.Click += (_, _) => { _result.TrySetResult(true); Close(); };
@@ -50,7 +50,7 @@ public sealed class ComponentSettingsDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8,
             Margin = new Thickness(0, 0, 12, 12),
-            Children = { cancel, ok },
+            Children = { ok, cancel },
         };
 
         var root = new DockPanel { LastChildFill = true };
@@ -70,6 +70,10 @@ public sealed class ComponentSettingsDialog : Window
             }
         };
     }
+
+    internal static Control CreateSettingsControl(IComponent component, LayoutMode mode)
+        => component.GetSettingsControl(mode)
+            ?? AvaloniaSettingsBuilder.Build(component, component.ComponentName);
 
     /// <summary>
     /// Show the dialog modally over <paramref name="owner"/> and return whether the user

@@ -98,7 +98,8 @@ public sealed class ShareTemplateSettingsStore
 
             string completed = ReadLegacySetting(shareSettings, "TwitterFormat");
             string running = ReadLegacySetting(shareSettings, "TwitterFormatRunning");
-            if (string.IsNullOrEmpty(completed) && string.IsNullOrEmpty(running))
+            string twitch = ReadLegacySetting(shareSettings, "TwitchFormat");
+            if (string.IsNullOrEmpty(completed) && string.IsNullOrEmpty(running) && string.IsNullOrEmpty(twitch))
             {
                 return null;
             }
@@ -111,7 +112,9 @@ public sealed class ShareTemplateSettingsStore
                 TwitterRunningFormat = string.IsNullOrEmpty(running)
                     ? ShareTemplateSettings.DefaultTwitterRunningFormat
                     : running,
-                TwitchFormat = ShareTemplateSettings.DefaultTwitchFormatText,
+                TwitchFormat = string.IsNullOrEmpty(twitch)
+                    ? ShareTemplateSettings.DefaultTwitchFormatText
+                    : twitch,
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)

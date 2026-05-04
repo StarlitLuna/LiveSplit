@@ -20,17 +20,26 @@ public sealed class EditHistoryDialog : Window
         History = history.Reverse().ToList();
 
         Title = "Edit History";
-        Width = 440;
-        Height = 500;
+        Width = 390;
+        Height = 270;
+        MinWidth = 300;
+        MinHeight = 258;
+        DialogTheme.ApplyWindow(this);
 
         _list = new ListBox
         {
             SelectionMode = SelectionMode.Multiple,
             ItemsSource = History.Where(x => !string.IsNullOrEmpty(x)).ToList(),
-            Margin = new Thickness(12),
+            Margin = new Thickness(7),
         };
 
-        var remove = new Button { Content = "Remove", Margin = new Thickness(4) };
+        var remove = new Button
+        {
+            Content = "Remove Selected",
+            Width = 120,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 0, 7, 4),
+        };
         remove.Click += (_, _) =>
         {
             var selected = _list.SelectedItems.Cast<string>().ToList();
@@ -57,8 +66,8 @@ public sealed class EditHistoryDialog : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8,
-            Margin = new Thickness(0, 0, 12, 12),
-            Children = { cancel, ok },
+            Margin = new Thickness(0, 0, 7, 7),
+            Children = { ok, cancel },
         };
 
         var root = new DockPanel { LastChildFill = true };

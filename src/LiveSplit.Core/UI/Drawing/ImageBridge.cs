@@ -12,7 +12,7 @@ namespace LiveSplit.UI.Drawing;
 /// </summary>
 public static class ImageBridge
 {
-    public static IImage ToIImage(this Image src)
+    public static byte[] ToPngBytes(this Image src)
     {
         if (src is null)
         {
@@ -21,6 +21,18 @@ public static class ImageBridge
 
         using var ms = new MemoryStream();
         src.Save(ms, ImageFormat.Png);
+        return ms.ToArray();
+    }
+
+    public static IImage ToIImage(this Image src)
+    {
+        byte[] png = src.ToPngBytes();
+        if (png is null)
+        {
+            return null;
+        }
+
+        using var ms = new MemoryStream(png);
         ms.Position = 0;
         return DrawingApi.Factory.LoadImage(ms);
     }

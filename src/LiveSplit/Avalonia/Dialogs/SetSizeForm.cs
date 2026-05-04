@@ -19,19 +19,20 @@ public sealed class SetSizeForm : Window
     private NumericUpDown _widthBox;
     private NumericUpDown _heightBox;
     private CheckBox _keepRatio;
-    private double _oldWidth;
-    private double _oldHeight;
+    private readonly double _originalWidth;
+    private readonly double _originalHeight;
     private bool _suppressFeedback;
 
     public SetSizeForm(Window target)
     {
         _target = target;
-        _oldWidth = target.Width;
-        _oldHeight = target.Height;
+        _originalWidth = target.Width;
+        _originalHeight = target.Height;
 
         Title = "Set Size";
         Width = 320;
         Height = 220;
+        DialogTheme.ApplyWindow(this);
         CanResize = false;
 
         _widthBox = new NumericUpDown { Minimum = 1, Maximum = 9999, Value = (decimal)target.Width };
@@ -58,8 +59,7 @@ public sealed class SetSizeForm : Window
         var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
         cancel.Click += (_, _) =>
         {
-            _target.Width = _oldWidth;
-            _target.Height = _oldHeight;
+            RestoreOriginalSize();
             _result.TrySetResult(false);
             Close();
         };
@@ -70,7 +70,7 @@ public sealed class SetSizeForm : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Spacing = 8,
             Margin = new Thickness(0, 0, 12, 12),
-            Children = { cancel, ok },
+            Children = { ok, cancel },
         };
 
         var root = new DockPanel { LastChildFill = true };
@@ -83,8 +83,7 @@ public sealed class SetSizeForm : Window
         {
             if (!_result.Task.IsCompleted)
             {
-                _target.Width = _oldWidth;
-                _target.Height = _oldHeight;
+                RestoreOriginalSize();
                 _result.TrySetResult(false);
             }
         };
@@ -99,23 +98,20 @@ public sealed class SetSizeForm : Window
 
         double newWidth = (double)e.NewValue.Value;
         _target.Width = newWidth;
-        if (_keepRatio.IsChecked == true && _oldWidth > 0)
+        if (_keepRatio.IsChecked == true && _originalWidth > 0)
         {
             _suppressFeedback = true;
             try
             {
-                double newHeight = Math.Round(_target.Height * newWidth / _oldWidth);
+                double newHeight = Math.Round(_originalHeight * newWidth / _originalWidth);
                 _heightBox.Value = (decimal)newHeight;
                 _target.Height = newHeight;
-                _oldHeight = newHeight;
             }
             finally
             {
                 _suppressFeedback = false;
             }
         }
-
-        _oldWidth = newWidth;
     }
 
     private void OnHeightChanged(object sender, NumericUpDownValueChangedEventArgs e)
@@ -127,23 +123,26 @@ public sealed class SetSizeForm : Window
 
         double newHeight = (double)e.NewValue.Value;
         _target.Height = newHeight;
-        if (_keepRatio.IsChecked == true && _oldHeight > 0)
+        if (_keepRatio.IsChecked == true && _originalHeight > 0)
         {
             _suppressFeedback = true;
             try
             {
-                double newWidth = Math.Round(_target.Width * newHeight / _oldHeight);
+                double newWidth = Math.Round(_originalWidth * newHeight / _originalHeight);
                 _widthBox.Value = (decimal)newWidth;
                 _target.Width = newWidth;
-                _oldWidth = newWidth;
             }
             finally
             {
                 _suppressFeedback = false;
             }
         }
+    }
 
-        _oldHeight = newHeight;
+    private void RestoreOriginalSize()
+    {
+        _target.Width = _originalWidth;
+        _target.Height = _originalHeight;
     }
 
     private static void Add(Grid grid, Control control, int row, int col)

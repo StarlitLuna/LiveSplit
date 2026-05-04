@@ -14,6 +14,9 @@ using LiveSplit.Options;
 
 using SkiaSharp;
 
+using DrawingInterpolationMode = System.Drawing.Drawing2D.InterpolationMode;
+using NumericsMatrix = System.Numerics.Matrix3x2;
+
 namespace LiveSplit.Avalonia;
 
 /// <summary>
@@ -165,15 +168,18 @@ public sealed class SkiaRenderControl : Control
             return false;
         }
 
+        ctx.TranslateTransform(-0.5f, -0.5f);
         ctx.ScaleTransform(scale, scale);
 
         float drawWidth = mode == LayoutMode.Vertical ? layoutWidth / scale : overallSize;
         float drawHeight = mode == LayoutMode.Vertical ? overallSize : layoutHeight / scale;
 
-        ctx.TranslateTransform(-0.5f, -0.5f);
         host.Renderer.Render(ctx, state, drawWidth, drawHeight, mode);
         return true;
     }
+
+    internal static NumericsMatrix GetMasterLayoutTransform(float scale)
+        => NumericsMatrix.CreateScale(scale) * NumericsMatrix.CreateTranslation(-0.5f, -0.5f);
 
     internal static void DrawLayoutBackground(IDrawingContext ctx, LiveSplit.Options.LayoutSettings settings, float width, float height)
     {
@@ -200,10 +206,21 @@ public sealed class SkiaRenderControl : Control
                     return;
                 }
 
-                var dest = new System.Drawing.Rectangle(0, 0, (int)System.Math.Ceiling(width), (int)System.Math.Ceiling(height));
-                var src = CalculateCoverSourceRect(image.Width, image.Height, width, height);
+                var dest = new System.Drawing.RectangleF(0f, 0f, width, height);
+                var src = CalculateCoverSourceRectF(image.Width, image.Height, width, height);
                 float blurSigma = System.Math.Max(0f, settings.ImageBlur * 10f);
-                ctx.DrawImageWithOpacity(image, dest, src, opacity, blurSigma);
+                DrawingInterpolationMode previousInterpolation = ctx.InterpolationMode;
+                try
+                {
+#pragma warning disable CA1416 // The System.Drawing enum value is consumed by our cross-platform Skia abstraction only.
+                    ctx.InterpolationMode = DrawingInterpolationMode.HighQualityBicubic;
+#pragma warning restore CA1416
+                    ctx.DrawImageWithOpacity(image, dest, src, opacity, blurSigma);
+                }
+                finally
+                {
+                    ctx.InterpolationMode = previousInterpolation;
+                }
 
                 break;
             }
@@ -239,23 +256,29 @@ public sealed class SkiaRenderControl : Control
 
     internal static System.Drawing.Rectangle CalculateCoverSourceRect(int imageWidth, int imageHeight, float targetWidth, float targetHeight)
     {
+        System.Drawing.RectangleF source = CalculateCoverSourceRectF(imageWidth, imageHeight, targetWidth, targetHeight);
+        return System.Drawing.Rectangle.Round(source);
+    }
+
+    internal static System.Drawing.RectangleF CalculateCoverSourceRectF(int imageWidth, int imageHeight, float targetWidth, float targetHeight)
+    {
         if (imageWidth <= 0 || imageHeight <= 0 || targetWidth <= 0f || targetHeight <= 0f)
         {
-            return System.Drawing.Rectangle.Empty;
+            return System.Drawing.RectangleF.Empty;
         }
 
         float imageAspect = imageWidth / (float)imageHeight;
         float targetAspect = targetWidth / targetHeight;
         if (imageAspect > targetAspect)
         {
-            int sourceWidth = System.Math.Max(1, (int)System.Math.Round(imageHeight * targetAspect));
-            int sourceX = (imageWidth - sourceWidth) / 2;
-            return new System.Drawing.Rectangle(sourceX, 0, sourceWidth, imageHeight);
+            float sourceWidth = System.Math.Max(1f, imageHeight * targetAspect);
+            float sourceX = (imageWidth - sourceWidth) / 2f;
+            return new System.Drawing.RectangleF(sourceX, 0f, sourceWidth, imageHeight);
         }
 
-        int sourceHeight = System.Math.Max(1, (int)System.Math.Round(imageWidth / targetAspect));
-        int sourceY = (imageHeight - sourceHeight) / 2;
-        return new System.Drawing.Rectangle(0, sourceY, imageWidth, sourceHeight);
+        float sourceHeight = System.Math.Max(1f, imageWidth / targetAspect);
+        float sourceY = (imageHeight - sourceHeight) / 2f;
+        return new System.Drawing.RectangleF(0f, sourceY, imageWidth, sourceHeight);
     }
 
     internal static void ApplyMasterRenderSettings(IDrawingContext ctx, LayoutSettings settings)

@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Xml;
+
+using global::Avalonia.Controls;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
@@ -144,6 +147,70 @@ public class SoundComponentMust
         Assert.True(player.Disposed);
     }
 
+    [Fact]
+    public void SettingsControlUsesMasterSoundPathBrowseRowsAndVolumeSliders()
+    {
+        var component = new SoundComponent(CreateState(), new FakeSoundPlayer());
+        Control control = component.GetSettingsControl(LayoutMode.Vertical);
+
+        Assert.Equal(14, Descendants<Button>(control).Count(x => Equals(x.Content, "Browse...")));
+        Assert.Equal(15, Descendants<Slider>(control).Count());
+        Assert.NotNull(FindNamed<ComboBox>(control, "OutputDeviceComboBox"));
+        Assert.NotNull(FindNamed<TextBox>(control, "StartTimerPathTextBox"));
+        Assert.NotNull(FindNamed<Slider>(control, "StartTimerVolumeSlider"));
+    }
+
+    [Fact]
+    public void SettingsControlListsAvailableOutputDevices()
+    {
+        var player = new FakeSoundPlayer(
+        [
+            LibVlcSoundPlayer.DefaultOutputDevice,
+            new SoundOutputDevice("Headphones", "headphones-id"),
+        ]);
+        var component = new SoundComponent(CreateState(), player);
+        Control control = component.GetSettingsControl(LayoutMode.Vertical);
+
+        var outputDeviceBox = FindNamed<ComboBox>(control, "OutputDeviceComboBox")!;
+
+        Assert.Equal(["Default", "Headphones"], outputDeviceBox.Items.Cast<string>().ToArray());
+    }
+
+    [Fact]
+    public void SettingsControlUpdatesPathVolumeAndOutputDevice()
+    {
+        var component = new SoundComponent(CreateState(), new FakeSoundPlayer());
+        Control control = component.GetSettingsControl(LayoutMode.Vertical);
+
+        FindNamed<TextBox>(control, "StartTimerPathTextBox")!.Text = "start.wav";
+        FindNamed<Slider>(control, "StartTimerVolumeSlider")!.Value = 45;
+        FindNamed<ComboBox>(control, "OutputDeviceComboBox")!.SelectedIndex = 0;
+
+        var document = new XmlDocument();
+        var loaded = new SoundSettings();
+        loaded.SetSettings(component.GetSettings(document));
+
+        Assert.Equal("start.wav", loaded.StartTimer);
+        Assert.Equal(45, loaded.StartTimerVolume);
+        Assert.Equal(0, loaded.OutputDevice);
+    }
+
+    [Fact]
+    public void LibVlcOutputDeviceSelectionUsesSavedDeviceIndex()
+    {
+        SoundOutputDevice[] devices =
+        [
+            LibVlcSoundPlayer.DefaultOutputDevice,
+            new("Headphones", "headphones-id"),
+            new("Speakers", "speakers-id"),
+        ];
+
+        Assert.Null(LibVlcSoundPlayer.SelectOutputDeviceIdentifier(devices, 0));
+        Assert.Equal("headphones-id", LibVlcSoundPlayer.SelectOutputDeviceIdentifier(devices, 1));
+        Assert.Equal("speakers-id", LibVlcSoundPlayer.SelectOutputDeviceIdentifier(devices, 2));
+        Assert.Null(LibVlcSoundPlayer.SelectOutputDeviceIdentifier(devices, 3));
+    }
+
     private static LiveSplitState CreateState()
     {
         IRun run = new StandardRunFactory().Create(new StandardComparisonGeneratorsFactory());
@@ -159,11 +226,80 @@ public class SoundComponentMust
         };
     }
 
+    private static T FindNamed<T>(Control root, string name)
+        where T : Control
+        => Descendants<T>(root).FirstOrDefault(x => x.Name == name);
+
+    private static IEnumerable<T> Descendants<T>(Control root)
+        where T : Control
+    {
+        if (root is T typed)
+        {
+            yield return typed;
+        }
+
+        if (root is Decorator decorator && decorator.Child is Control decoratorChild)
+        {
+            foreach (T child in Descendants<T>(decoratorChild))
+            {
+                yield return child;
+            }
+        }
+
+        if (root is ContentControl contentControl && contentControl.Content is Control content)
+        {
+            foreach (T child in Descendants<T>(content))
+            {
+                yield return child;
+            }
+        }
+
+        if (root is Panel panel)
+        {
+            foreach (Control child in panel.Children.OfType<Control>())
+            {
+                foreach (T grandchild in Descendants<T>(child))
+                {
+                    yield return grandchild;
+                }
+            }
+        }
+
+        if (root is ItemsControl itemsControl)
+        {
+            foreach (object item in itemsControl.Items)
+            {
+                if (item is Control itemControl)
+                {
+                    foreach (T child in Descendants<T>(itemControl))
+                    {
+                        yield return child;
+                    }
+                }
+            }
+        }
+    }
+
     private sealed class FakeSoundPlayer : ISoundPlayer
     {
+        private readonly IReadOnlyList<SoundOutputDevice> _outputDevices;
+
+        public FakeSoundPlayer()
+            : this([LibVlcSoundPlayer.DefaultOutputDevice])
+        {
+        }
+
+        public FakeSoundPlayer(IReadOnlyList<SoundOutputDevice> outputDevices)
+        {
+            _outputDevices = outputDevices;
+        }
+
         public List<(string Path, int Volume, int OutputDevice)> Played { get; } = [];
         public bool Stopped { get; private set; }
         public bool Disposed { get; private set; }
+
+        public IReadOnlyList<SoundOutputDevice> GetOutputDevices()
+            => _outputDevices;
 
         public void Play(string path, int volume, int outputDevice)
         {

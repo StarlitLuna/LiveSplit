@@ -121,6 +121,32 @@ public class AvaloniaTimerHostPersistenceMust
     }
 
     [Fact]
+    public void FailedRunLoadExposesLastOperationExceptionForUiErrorParity()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.lss");
+        string settingsBackup = BackupSettingsFile();
+        File.WriteAllText(path, "not a splits file");
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+
+            Assert.False(host.LoadRun(path));
+            Assert.NotNull(host.LastOperationException);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+            TryDelete(path);
+        }
+    }
+
+    [Fact]
     public void UpdateLayoutPositionTracksWindowPositionWithoutDirtyingLayout()
     {
         DrawingApi.Register(new SkiaDrawingFactory());
@@ -551,6 +577,374 @@ public class AvaloniaTimerHostPersistenceMust
         }
     }
 
+    [Fact]
+    public void StartupUsesFirstHotkeyProfileEvenWhenDefaultProfileExists()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            ISettings settings = new LiveSplit.Options.SettingsFactories.StandardSettingsFactory().Create();
+            settings.HotkeyProfiles.Clear();
+            settings.HotkeyProfiles["Alt"] = new HotkeyProfile
+            {
+                SplitKey = new KeyOrButton(Key.NumPad4),
+                DoubleTapPrevention = false,
+            };
+            settings.HotkeyProfiles[HotkeyProfile.DefaultHotkeyProfileName] = new HotkeyProfile
+            {
+                SplitKey = new KeyOrButton(Key.NumPad1),
+                DoubleTapPrevention = true,
+            };
+            SaveSettings(settings);
+
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+
+            Assert.Equal("Alt", host.State.CurrentHotkeyProfile);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
+    [Fact]
+    public void StartupTreatsEmptyRecentSplitsEntryAsTimerOnlySentinel()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+        string olderSplitsPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.lss");
+
+        try
+        {
+            var run = new Run(new StandardComparisonGeneratorsFactory())
+            {
+                GameName = "Older Run",
+            };
+            run.AddSegment("Finish");
+            using (FileStream stream = File.Open(olderSplitsPath, FileMode.Create, FileAccess.Write))
+            {
+                new XMLRunSaver().Save(run, stream);
+            }
+
+            ISettings settings = new LiveSplit.Options.SettingsFactories.StandardSettingsFactory().Create();
+            settings.AddToRecentSplits(olderSplitsPath, run, TimingMethod.GameTime, HotkeyProfile.DefaultHotkeyProfileName);
+            settings.AddToRecentSplits(string.Empty, null, TimingMethod.RealTime, HotkeyProfile.DefaultHotkeyProfileName);
+            SaveSettings(settings);
+
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+
+            Assert.True(host.InTimerOnlyMode);
+            Assert.NotEqual(olderSplitsPath, host.State.Run.FilePath);
+            Assert.NotEqual("Older Run", host.State.Run.GameName);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+            TryDelete(olderSplitsPath);
+        }
+    }
+
+    [Fact]
+    public void StartupTreatsEmptyRecentLayoutEntryAsTimerOnlySentinel()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+        string olderLayoutPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.lsl");
+
+        try
+        {
+            var run = new Run(new StandardComparisonGeneratorsFactory());
+            run.AddSegment("Finish");
+            ISettings settings = new LiveSplit.Options.SettingsFactories.StandardSettingsFactory().Create();
+            var layoutSettings = new LiveSplit.Options.SettingsFactories.StandardLayoutSettingsFactory().Create();
+            var state = new LiveSplitState(run, null, new Layout(), layoutSettings, settings);
+            ILayout layout = new StandardLayoutFactory().Create(state);
+            layout.Mode = LayoutMode.Vertical;
+            layout.VerticalWidth = 321;
+            layout.VerticalHeight = 123;
+            using (FileStream stream = File.Open(olderLayoutPath, FileMode.Create, FileAccess.Write))
+            {
+                new XMLLayoutSaver().Save(layout, stream);
+            }
+
+            settings.AddToRecentLayouts(olderLayoutPath);
+            settings.AddToRecentLayouts(string.Empty);
+            SaveSettings(settings);
+
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+
+            Assert.True(host.InTimerOnlyMode);
+            Assert.NotEqual(olderLayoutPath, host.State.Layout.FilePath);
+            Assert.Equal("Timer", Assert.Single(host.State.Layout.LayoutComponents).Component.ComponentName);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+            TryDelete(olderLayoutPath);
+        }
+    }
+
+    [Fact]
+    public void ApplySettingsPreservesCurrentComparisonWhenItStillExists()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            host.State.Run.CustomComparisons.Add("Route A");
+            host.State.CurrentComparison = "Route A";
+            ISettings settings = (ISettings)host.State.Settings.Clone();
+            settings.LastComparison = Run.PersonalBestComparisonName;
+
+            host.ApplySettings(settings, host.State.CurrentHotkeyProfile);
+
+            Assert.Equal("Route A", host.State.CurrentComparison);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
+    [Fact]
+    public void LoadingRunFiresManualModificationEvent()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+        string splitsPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.lss");
+
+        try
+        {
+            var run = new Run(new StandardComparisonGeneratorsFactory());
+            run.AddSegment("Finish");
+            using (FileStream stream = File.Open(splitsPath, FileMode.Create, FileAccess.Write))
+            {
+                new XMLRunSaver().Save(run, stream);
+            }
+
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            int eventCount = 0;
+            host.State.RunManuallyModified += (_, _) => eventCount++;
+
+            Assert.True(host.LoadRun(splitsPath));
+
+            Assert.Equal(1, eventCount);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+            TryDelete(splitsPath);
+        }
+    }
+
+    [Fact]
+    public void RunEditorAcceptedChangesFireManualModificationAndRegenerateComparisons()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            var generator = new TrackingComparisonGenerator(host.State.Run);
+            host.State.Run.ComparisonGenerators.Add(generator);
+            int eventCount = 0;
+            host.State.RunManuallyModified += (_, _) => eventCount++;
+
+            host.ApplyRunEditorAcceptedChanges();
+
+            Assert.Equal(1, eventCount);
+            Assert.Equal(1, generator.GenerateCount);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
+    [Fact]
+    public void RunEditorAcceptedChangesApplyLinkedLayout()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+        string layoutPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.lsl");
+
+        try
+        {
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+            ILayout linkedLayout = new StandardLayoutFactory().Create(host.State);
+            linkedLayout.VerticalWidth = 321;
+            using (FileStream stream = File.Open(layoutPath, FileMode.Create, FileAccess.Write))
+            {
+                new XMLLayoutSaver().Save(linkedLayout, stream);
+            }
+
+            host.State.Run.LayoutPath = layoutPath;
+
+            host.ApplyRunEditorAcceptedChanges();
+
+            Assert.Equal(layoutPath, host.State.Layout.FilePath);
+            Assert.Equal(321, host.State.Layout.VerticalWidth);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+            TryDelete(layoutPath);
+        }
+    }
+
+    [Fact]
+    public void RunEditorAcceptedChangesRecreatesActiveAutoSplitterAndAppliesMatchingSettings()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            int resolverCalls = 0;
+            var component = new AutoSplitterTrackingComponent();
+            AutoSplitter Resolver(string game)
+            {
+                resolverCalls++;
+                return game == "Edited Game"
+                    ? new AutoSplitter
+                    {
+                        Component = component,
+                        Games = ["Edited Game"],
+                        URLs = ["http://example.com/edited.dll"],
+                    }
+                    : null;
+            }
+
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: true,
+                persistOnDispose: false,
+                autoSplitterResolver: Resolver);
+            resolverCalls = 0;
+            host.State.Run.GameName = "Edited Game";
+            host.State.Settings.ActiveAutoSplitters.Add("Edited Game");
+            host.State.Run.AutoSplitterSettings = CreateAutoSplitterSettings("Edited Game", "42");
+
+            host.ApplyRunEditorAcceptedChanges();
+
+            Assert.Equal(1, resolverCalls);
+            Assert.Same(component, host.State.Run.AutoSplitter.Component);
+            Assert.Equal(1, component.SetSettingsCount);
+            Assert.Equal("42", component.SettingValue);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
+    [Fact]
+    public void ImportingRunFromStreamLeavesItUnsavedDirtyAndOutOfRecents()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            var run = new Run(new StandardComparisonGeneratorsFactory())
+            {
+                GameName = "Imported Run",
+            };
+            run.AddSegment("Finish");
+            using var stream = new MemoryStream();
+            new XMLRunSaver().Save(run, stream);
+            stream.Position = 0;
+
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+
+            Assert.True(host.LoadRunFromStream(stream));
+
+            Assert.Null(host.State.Run.FilePath);
+            Assert.True(host.State.Run.HasChanged);
+            Assert.DoesNotContain(host.State.Settings.RecentSplits, x => x.GameName == "Imported Run");
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
+    [Fact]
+    public void ImportingLayoutFromStreamLeavesItUnsavedDirtyAndOutOfRecents()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        EnsureComponentFolder();
+        string settingsBackup = BackupSettingsFile();
+
+        try
+        {
+            var run = new Run(new StandardComparisonGeneratorsFactory());
+            run.AddSegment("Finish");
+            ISettings settings = new LiveSplit.Options.SettingsFactories.StandardSettingsFactory().Create();
+            var layoutSettings = new LiveSplit.Options.SettingsFactories.StandardLayoutSettingsFactory().Create();
+            var state = new LiveSplitState(run, null, new Layout(), layoutSettings, settings);
+            ILayout layout = new StandardLayoutFactory().Create(state);
+            layout.VerticalWidth = 333;
+            using var stream = new MemoryStream();
+            new XMLLayoutSaver().Save(layout, stream);
+            stream.Position = 0;
+
+            using var host = new AvaloniaTimerHost(
+                static () => { },
+                startBackgroundServices: false,
+                persistOnDispose: false);
+
+            Assert.True(host.LoadLayoutFromStream(stream));
+
+            Assert.Null(host.State.Layout.FilePath);
+            Assert.True(host.State.Layout.HasChanged);
+            Assert.Equal(333, host.State.Layout.VerticalWidth);
+            Assert.DoesNotContain(host.State.Settings.RecentLayouts, x => x == host.State.Layout.FilePath);
+        }
+        finally
+        {
+            RestoreSettingsFile(settingsBackup);
+        }
+    }
+
     private static void TryDelete(string path)
     {
         try
@@ -631,6 +1025,12 @@ public class AvaloniaTimerHostPersistenceMust
         File.WriteAllText(path, backup);
     }
 
+    private static void SaveSettings(ISettings settings)
+    {
+        using FileStream stream = File.Open(UserDataPaths.SettingsFile, FileMode.Create, FileAccess.Write);
+        new LiveSplit.Options.SettingsSavers.XMLSettingsSaver().Save(settings, stream);
+    }
+
     private static int GetRefreshDelay(int refreshRate)
     {
         MethodInfo method = typeof(AvaloniaTimerHost).GetMethod(
@@ -668,5 +1068,60 @@ public class AvaloniaTimerHostPersistenceMust
         public void SetSettings(System.Xml.XmlNode settings) { }
         public void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode) { }
         public void Dispose() => Disposed = true;
+    }
+
+    private sealed class TrackingComparisonGenerator : IComparisonGenerator
+    {
+        public TrackingComparisonGenerator(IRun run)
+        {
+            Run = run;
+        }
+
+        public int GenerateCount { get; private set; }
+        public IRun Run { get; set; }
+        public string Name => "Tracking Generator";
+
+        public void Generate(ISettings settings)
+        {
+            GenerateCount++;
+        }
+    }
+
+    private static System.Xml.XmlElement CreateAutoSplitterSettings(string gameName, string value)
+    {
+        var document = new System.Xml.XmlDocument();
+        System.Xml.XmlElement element = document.CreateElement("AutoSplitterSettings");
+        element.SetAttribute("gameName", gameName);
+        System.Xml.XmlElement valueElement = document.CreateElement("Value");
+        valueElement.InnerText = value;
+        element.AppendChild(valueElement);
+        return element;
+    }
+
+    private sealed class AutoSplitterTrackingComponent : IComponent
+    {
+        public int SetSettingsCount { get; private set; }
+        public string SettingValue { get; private set; }
+        public string ComponentName => "Auto Splitter Tracking";
+        public float HorizontalWidth => 1;
+        public float MinimumHeight => 1;
+        public float VerticalHeight => 1;
+        public float MinimumWidth => 1;
+        public float PaddingTop => 0;
+        public float PaddingBottom => 0;
+        public float PaddingLeft => 0;
+        public float PaddingRight => 0;
+        public System.Collections.Generic.IDictionary<string, Action> ContextMenuControls => null;
+        public void DrawHorizontal(IDrawingContext ctx, LiveSplitState state, float height) { }
+        public void DrawVertical(IDrawingContext ctx, LiveSplitState state, float width) { }
+        public System.Xml.XmlNode GetSettings(System.Xml.XmlDocument document) => document.CreateElement("Settings");
+        public void SetSettings(System.Xml.XmlNode settings)
+        {
+            SetSettingsCount++;
+            SettingValue = settings?["Value"]?.InnerText;
+        }
+
+        public void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode) { }
+        public void Dispose() { }
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 
@@ -96,6 +97,15 @@ public class SettingsDialogMust
         Assert.Equal("60", FormatRefreshRate(settings));
     }
 
+    [Fact]
+    public void KeepGamepadHotkeySettingEditableLikeMaster()
+    {
+        string source = File.ReadAllText(FindRepoFile("src/LiveSplit/Avalonia/Dialogs/SettingsDialog.cs"));
+
+        Assert.DoesNotContain("allowGamepads.IsEnabled = false", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("allowGamepads.SetTextBrush(DialogTheme.DisabledTextBrush)", source, StringComparison.Ordinal);
+    }
+
     private static object LayoutSpec()
     {
         Type type = Type.GetType("LiveSplit.Avalonia.Dialogs.SettingsDialogLayoutSpec, LiveSplit");
@@ -133,5 +143,22 @@ public class SettingsDialogMust
         MethodInfo method = type.GetMethod("FormatRefreshRate", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
         Assert.NotNull(method);
         return Assert.IsType<string>(method.Invoke(null, new object[] { settings }));
+    }
+
+    private static string FindRepoFile(string relativePath)
+    {
+        DirectoryInfo directory = new(AppContext.BaseDirectory);
+        while (directory != null)
+        {
+            string candidate = Path.Combine(directory.FullName, relativePath);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(relativePath);
     }
 }

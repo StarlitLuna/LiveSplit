@@ -17,7 +17,8 @@ public class Twitter : IRunUploadPlatform
     public static Twitter Instance => _Instance;
     public ISettings Settings { get; set; }
     public string PlatformName => "X (Twitter)";
-    public string Description => "X (Twitter) opens a browser compose window for sharing the run.";
+    public string Description =>
+        "X (Twitter) opens a browser compose window and copies a screenshot of LiveSplit to the clipboard.";
 
     public bool VerifyLogin()
     {

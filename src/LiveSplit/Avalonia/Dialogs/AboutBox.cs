@@ -15,9 +15,10 @@ public sealed class AboutBox : Window
     public AboutBox()
     {
         Title = "About LiveSplit";
-        Width = 480;
-        Height = 360;
+        Width = 340;
+        Height = 390;
         CanResize = false;
+        DialogTheme.ApplyWindow(this);
 
         string product = AssemblyTitle;
         if (Git.Branch is not null and not "master" and not "HEAD")
@@ -27,40 +28,87 @@ public sealed class AboutBox : Window
 
         var stack = new StackPanel
         {
-            Margin = new Thickness(20),
-            Spacing = 8,
+            Margin = new Thickness(18),
+            Spacing = 7,
             Children =
             {
-                new TextBlock { Text = product, FontSize = 22, FontWeight = FontWeight.Bold },
-                new TextBlock { Text = $"Version {Git.Version ?? "Unknown"}" },
-                new TextBlock { Text = AssemblyCopyright ?? string.Empty },
-                new TextBlock { Text = AssemblyDescription ?? string.Empty, TextWrapping = TextWrapping.Wrap },
+                new TextBlock { Text = product, FontSize = 18, FontWeight = FontWeight.Bold },
             },
         };
 
-        var websiteBtn = new Button { Content = "livesplit.org" };
-        websiteBtn.Click += (_, _) => OpenUrl("https://livesplit.org");
+        var versionBtn = CreateLinkButton(Git.Version ?? "Unknown Version");
+        versionBtn.Click += (_, _) =>
+        {
+            if (Git.RevisionUri != null)
+            {
+                OpenUrl(Git.RevisionUri.AbsoluteUri);
+            }
+        };
+        stack.Children.Add(versionBtn);
+
+        var websiteBtn = CreateLinkButton("livesplit.org");
+        websiteBtn.Click += (_, _) => OpenUrl("http://livesplit.org");
         stack.Children.Add(websiteBtn);
 
-        var closeBtn = new Button
+        stack.Children.Add(new TextBlock { Text = "Made by:", Margin = new Thickness(0, 8, 0, 0) });
+
+        var cryZeBtn = CreateLinkButton("CryZe");
+        cryZeBtn.Click += (_, _) => OpenUrl("http://twitter.com/CryZe107");
+        stack.Children.Add(cryZeBtn);
+
+        var wooferBtn = CreateLinkButton("wooferzfg");
+        wooferBtn.Click += (_, _) => OpenUrl("http://twitter.com/wooferzfg");
+        stack.Children.Add(wooferBtn);
+
+        stack.Children.Add(new TextBlock
         {
-            Content = "Close",
+            Text = "We've put a lot of work into LiveSplit. If you like the program, please consider donating.",
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(0, 14, 0, 4),
+        });
+
+        var donateButton = new Button
+        {
+            Content = "Donate",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MinWidth = 120,
+        };
+        donateButton.Click += (_, _) => OpenUrl("https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=R3Z2LGPKRNBNJ");
+        stack.Children.Add(donateButton);
+
+        var okButton = new Button
+        {
+            Content = "OK",
             HorizontalAlignment = HorizontalAlignment.Right,
             Width = 80,
             Margin = new Thickness(0, 12, 0, 0),
+            IsDefault = true,
+            IsCancel = true,
         };
-        closeBtn.Click += (_, _) => Close();
-        stack.Children.Add(closeBtn);
+        okButton.Click += (_, _) => Close();
+        stack.Children.Add(okButton);
 
         Content = stack;
     }
+
+    private static Button CreateLinkButton(string text)
+        => new()
+        {
+            Content = text,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(0, 2),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = DialogTheme.LinkBrush,
+        };
 
     private static void OpenUrl(string url)
     {
         try
         {
             // ProcessStartInfo with UseShellExecute=true is needed on .NET 8+ to launch URLs
-            // through the OS — it routes to the default browser.
+            // through the OS; it routes to the default browser.
             Process.Start(new ProcessStartInfo
             {
                 FileName = url,

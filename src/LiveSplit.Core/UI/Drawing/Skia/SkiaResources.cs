@@ -1,6 +1,9 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 
 using SkiaSharp;
 
@@ -128,7 +131,7 @@ internal sealed class SkiaFont : IFont
         Unit = unit;
 
         SKFontStyle skStyle = MapStyle(style);
-        Typeface = SKTypeface.FromFamilyName(familyName, skStyle) ?? SKTypeface.Default;
+        Typeface = ResolveTypeface(familyName, skStyle);
         // Convert size — GDI+ "Point" defaults to 1/72 inch; Skia measures in pixels. Most
         // LiveSplit layouts use GraphicsUnit.Pixel already, so size maps directly. For Point-sized
         // fonts we approximate at 96 DPI until the context provides a real DpiY at draw time.
@@ -136,6 +139,63 @@ internal sealed class SkiaFont : IFont
         Font = new SKFont(Typeface, pixelSize);
         (_ascent, _descent) = GetGdiCompatibleCellMetrics(Typeface, Font);
     }
+
+    internal static string ResolveLiveSplitFallbackResourceName(string familyName)
+    {
+        string normalized = NormalizeFamilyName(familyName);
+        return normalized switch
+        {
+            "calibri" or "centurygothic" => "LiveSplit.Fonts.Timer.ttf",
+            "segoeui" or "arial" => "LiveSplit.Fonts.FiraSans-Regular.ttf",
+            _ => null,
+        };
+    }
+
+    private static SKTypeface ResolveTypeface(string familyName, SKFontStyle style)
+    {
+        SKTypeface typeface = SKTypeface.FromFamilyName(familyName, style);
+        if (TypefaceMatchesRequestedFamily(typeface, familyName))
+        {
+            return typeface;
+        }
+
+        string fallbackResource = ResolveLiveSplitFallbackResourceName(familyName);
+        if (fallbackResource != null)
+        {
+            SKTypeface fallback = LoadEmbeddedTypeface(fallbackResource);
+            if (fallback != null)
+            {
+                typeface?.Dispose();
+                return fallback;
+            }
+        }
+
+        return typeface ?? SKTypeface.Default;
+    }
+
+    private static SKTypeface LoadEmbeddedTypeface(string resourceName)
+    {
+        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
+        return stream is null ? null : SKTypeface.FromStream(stream);
+    }
+
+    private static bool TypefaceMatchesRequestedFamily(SKTypeface typeface, string requestedFamilyName)
+    {
+        if (typeface is null)
+        {
+            return false;
+        }
+
+        string requested = NormalizeFamilyName(requestedFamilyName);
+        string resolved = NormalizeFamilyName(typeface.FamilyName);
+        return requested.Length > 0 && requested == resolved;
+    }
+
+    private static string NormalizeFamilyName(string familyName)
+        => new((familyName ?? string.Empty)
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToLowerInvariant)
+            .ToArray());
 
     internal static bool TryReadGdiCellMetrics(byte[] os2Table, int unitsPerEm, float pixelSize, out float ascent, out float descent)
     {

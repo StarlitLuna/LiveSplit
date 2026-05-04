@@ -57,7 +57,7 @@ public class ASRComponent : LogicComponent
 
     public override Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
-        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(settings, "Component");
+        return settings.BuildSettingsControl();
     }
 
     public override void SetSettings(XmlNode settings)
@@ -83,11 +83,12 @@ public class ASRComponent : LogicComponent
                 if (settings.runtime != null)
                 {
                     settings.runtime.Step();
-
-                    // BuildTree() rendered the runtime's settings into a WinForms TableLayoutPanel
-                    // and was removed for the linux-port — the Avalonia panel reads the settings
-                    // map via reflection instead, so the change-detection refresh is unnecessary
-                    // here.
+                    if (settings.previousMap == null
+                        || settings.previousWidgets == null
+                        || settings.runtime.AreSettingsChanged(settings.previousMap, settings.previousWidgets))
+                    {
+                        settings.RefreshRuntimeSettingsControl();
+                    }
 
                     // Poll the tick rate and modify the update interval if it has been changed
                     double tickRate = settings.runtime.TickRate().TotalMilliseconds;

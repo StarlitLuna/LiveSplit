@@ -5,6 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="LiveSplit.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="LibVLCSharp" Version="3.9.6" />
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.23" />
   </ItemGroup>

@@ -17,9 +17,10 @@ public sealed class AuthenticationDialog : Window
     public AuthenticationDialog()
     {
         Title = "Authentication";
-        Width = 360;
-        Height = 220;
+        Width = 270;
+        Height = 180;
         CanResize = false;
+        DialogTheme.ApplyWindow(this);
 
         var userBox = new TextBox();
         var passBox = new TextBox { PasswordChar = '*' };
@@ -45,27 +46,28 @@ public sealed class AuthenticationDialog : Window
             userBox.Focus();
         };
 
-        Content = new StackPanel
+        var grid = new Grid
         {
-            Margin = new Thickness(20),
-            Spacing = 8,
-            Children =
-            {
-                new TextBlock { Text = "Username:" },
-                userBox,
-                new TextBlock { Text = "Password:" },
-                passBox,
-                rememberBox,
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    Spacing = 8,
-                    Margin = new Thickness(0, 8, 0, 0),
-                    Children = { cancel, ok },
-                },
-            },
+            Margin = new Thickness(7),
+            ColumnDefinitions = new ColumnDefinitions("74,*,81"),
+            RowDefinitions = new RowDefinitions("29,29,*,29"),
         };
+        Add(grid, new TextBlock { Text = "Username:", VerticalAlignment = VerticalAlignment.Center }, 0, 0);
+        Add(grid, userBox, 0, 1, columnSpan: 2);
+        Add(grid, new TextBlock { Text = "Password:", VerticalAlignment = VerticalAlignment.Center }, 1, 0);
+        Add(grid, passBox, 1, 1, columnSpan: 2);
+        Add(grid, rememberBox, 2, 1, columnSpan: 2);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+            Children = { ok, cancel },
+        };
+        Add(grid, buttons, 3, 1, columnSpan: 2);
+
+        Content = grid;
 
         Closed += (_, _) =>
         {
@@ -74,6 +76,18 @@ public sealed class AuthenticationDialog : Window
                 _result.TrySetResult(false);
             }
         };
+    }
+
+    private static void Add(Grid grid, Control control, int row, int column, int columnSpan = 1)
+    {
+        Grid.SetRow(control, row);
+        Grid.SetColumn(control, column);
+        if (columnSpan > 1)
+        {
+            Grid.SetColumnSpan(control, columnSpan);
+        }
+
+        grid.Children.Add(control);
     }
 
     public async Task<bool> ShowDialogAsync(Window owner)

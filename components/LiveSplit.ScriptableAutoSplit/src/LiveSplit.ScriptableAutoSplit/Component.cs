@@ -80,7 +80,7 @@ public class ASLComponent : LogicComponent
 
     public override Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
-        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(_settings, "Component");
+        return _settings.BuildSettingsControl();
     }
 
     public override XmlNode GetSettings(XmlDocument document)

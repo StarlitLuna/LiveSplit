@@ -22,6 +22,8 @@
     <Content Include="runtimes\**\*.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="runtimes\**\*.so" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Resources\DefaultLayout.lsl" />
+    <EmbeddedResource Include="..\..\lib\livesplit-core\src\rendering\font\assets\Timer.ttf" LogicalName="LiveSplit.Fonts.Timer.ttf" />
+    <EmbeddedResource Include="..\..\lib\livesplit-core\src\rendering\font\assets\FiraSans-Regular.ttf" LogicalName="LiveSplit.Fonts.FiraSans-Regular.ttf" />
   </ItemGroup>
 
   <ItemGroup>

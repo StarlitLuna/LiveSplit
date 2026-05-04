@@ -21,7 +21,7 @@ public class SplitsComponent : IComponent
     protected IList<IComponent> Components { get; set; }
     protected IList<SplitComponent> SplitComponents { get; set; }
 
-    protected SplitsSettings Settings { get; set; }
+    public SplitsSettings Settings { get; protected set; }
 
     protected SimpleLabel MeasureTimeLabel { get; set; }
     protected SimpleLabel MeasureDeltaLabel { get; set; }
@@ -384,7 +384,7 @@ public class SplitsComponent : IComponent
     public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         Settings.Mode = mode;
-        return LiveSplit.UI.AvaloniaSettingsBuilder.Build(Settings, "Splits");
+        return SplitsSettingsControl.Build(Settings);
     }
 
     public void SetSettings(System.Xml.XmlNode settings)

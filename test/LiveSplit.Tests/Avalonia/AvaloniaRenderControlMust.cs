@@ -60,6 +60,44 @@ public class AvaloniaRenderControlMust
     }
 
     [Fact]
+    public void CalculateImageBackgroundSourceRectPreservesMasterFractionalCrop()
+    {
+        System.Drawing.RectangleF source = SkiaRenderControl.CalculateCoverSourceRectF(
+            imageWidth: 403,
+            imageHeight: 200,
+            targetWidth: 101,
+            targetHeight: 100);
+
+        Assert.Equal(new System.Drawing.RectangleF(100.5f, 0f, 202f, 200f), source);
+    }
+
+    [Fact]
+    public void ImageBackgroundUsesMasterHighQualitySamplingBlurAndOpacity()
+    {
+        DrawingApi.Register(new SkiaDrawingFactory());
+        var settings = new LayoutSettings
+        {
+            BackgroundType = BackgroundType.Image,
+            BackgroundImage = CreateEncodedImage(),
+            ImageOpacity = 0.65f,
+            ImageBlur = 2.5f,
+        };
+        var ctx = new RecordingDrawingContext
+        {
+            InterpolationMode = InterpolationMode.Bilinear,
+        };
+
+        SkiaRenderControl.DrawLayoutBackground(ctx, settings, 80, 40);
+
+        Assert.Equal(InterpolationMode.HighQualityBicubic, ctx.ImageInterpolationMode);
+        Assert.Equal(InterpolationMode.Bilinear, ctx.InterpolationMode);
+        Assert.Equal(0.65f, ctx.ImageOpacity);
+        Assert.Equal(25f, ctx.ImageBlurSigma);
+        Assert.Equal(new System.Drawing.RectangleF(0f, 0f, 80f, 40f), ctx.ImageDestination);
+        Assert.Equal(new System.Drawing.RectangleF(0f, 25f, 100f, 50f), ctx.ImageSource);
+    }
+
+    [Fact]
     public void UpdateTimerComponentsBeforeSnapshotRendering()
     {
         DrawingApi.Register(new SkiaDrawingFactory());
@@ -313,6 +351,18 @@ public class AvaloniaRenderControlMust
         }
     }
 
+    [Fact]
+    public void MasterHalfPixelOffsetIsAppliedBeforeScaling()
+    {
+        const float scale = 2f;
+        System.Numerics.Matrix3x2 transform = SkiaRenderControl.GetMasterLayoutTransform(scale);
+
+        Assert.Equal(scale, transform.M11);
+        Assert.Equal(scale, transform.M22);
+        Assert.Equal(-0.5f, transform.M31);
+        Assert.Equal(-0.5f, transform.M32);
+    }
+
     private static void AssertSnapshotSize(byte[] png, int width, int height)
     {
         using SKBitmap bitmap = SKBitmap.Decode(png);
@@ -454,6 +504,15 @@ public class AvaloniaRenderControlMust
         }
 
         return false;
+    }
+
+    private static byte[] CreateEncodedImage()
+    {
+        using var bitmap = new SKBitmap(100, 100, SKColorType.Bgra8888, SKAlphaType.Premul);
+        bitmap.Erase(SKColors.Red);
+        using SKImage image = SKImage.FromBitmap(bitmap);
+        using SKData data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
     }
 
     private static byte RenderGdiComposite(System.Drawing.Color background, System.Drawing.Color foreground)
@@ -599,6 +658,68 @@ public class AvaloniaRenderControlMust
         }
         catch
         {
+        }
+    }
+
+    private sealed class RecordingDrawingContext : IDrawingContext
+    {
+        public InterpolationMode ImageInterpolationMode { get; private set; }
+        public float ImageOpacity { get; private set; }
+        public float ImageBlurSigma { get; private set; }
+        public System.Drawing.RectangleF ImageDestination { get; private set; }
+        public System.Drawing.RectangleF ImageSource { get; private set; }
+
+        public SmoothingMode SmoothingMode { get; set; }
+        public System.Drawing.Text.TextRenderingHint TextRenderingHint { get; set; }
+        public InterpolationMode InterpolationMode { get; set; }
+        public CompositingQuality CompositingQuality { get; set; }
+        public CompositingMode CompositingMode { get; set; }
+        public PixelOffsetMode PixelOffsetMode { get; set; }
+        public float DpiX => 96f;
+        public float DpiY => 96f;
+
+        public void DrawImageWithOpacity(IImage image, System.Drawing.RectangleF destRect, System.Drawing.RectangleF srcRect, float opacity, float blurSigma = 0)
+        {
+            ImageInterpolationMode = InterpolationMode;
+            ImageDestination = destRect;
+            ImageSource = srcRect;
+            ImageOpacity = opacity;
+            ImageBlurSigma = blurSigma;
+        }
+
+        public void DrawImageWithOpacity(IImage image, System.Drawing.Rectangle destRect, System.Drawing.Rectangle srcRect, float opacity, float blurSigma = 0)
+            => DrawImageWithOpacity(
+                image,
+                new System.Drawing.RectangleF(destRect.X, destRect.Y, destRect.Width, destRect.Height),
+                new System.Drawing.RectangleF(srcRect.X, srcRect.Y, srcRect.Width, srcRect.Height),
+                opacity,
+                blurSigma);
+
+        public void FillRectangle(IBrush brush, System.Drawing.RectangleF rect) { }
+        public void FillRectangle(IBrush brush, float x, float y, float width, float height) { }
+        public void DrawRectangle(IPen pen, System.Drawing.RectangleF rect) { }
+        public void DrawLine(IPen pen, System.Drawing.PointF p1, System.Drawing.PointF p2) { }
+        public void FillPolygon(IBrush brush, System.Drawing.PointF[] points) { }
+        public void FillEllipse(IBrush brush, float x, float y, float width, float height) { }
+        public void DrawImage(IImage image, System.Drawing.RectangleF destRect) { }
+        public void DrawImage(IImage image, System.Drawing.Rectangle destRect, System.Drawing.Rectangle srcRect) { }
+        public void DrawString(string text, IFont font, IBrush brush, System.Drawing.RectangleF bounds, ITextFormat format) { }
+        public System.Drawing.SizeF MeasureString(string text, IFont font, int maxWidth, ITextFormat format) => System.Drawing.SizeF.Empty;
+        public void FillPath(IBrush brush, IGraphicsPath path) { }
+        public void DrawPath(IPen pen, IGraphicsPath path) { }
+        public void TranslateTransform(float dx, float dy) { }
+        public void ScaleTransform(float sx, float sy) { }
+        public void ResetTransform() { }
+        public System.Numerics.Matrix3x2 GetTransform() => System.Numerics.Matrix3x2.Identity;
+        public void ClearClip() { }
+        public void SetClip(System.Drawing.RectangleF rect) { }
+        public void IntersectClip(System.Drawing.RectangleF rect) { }
+        public bool IsVisible(System.Drawing.RectangleF rect) => true;
+        public IDrawingState Save() => new RecordingState();
+
+        private sealed class RecordingState : IDrawingState
+        {
+            public void Dispose() { }
         }
     }
 }

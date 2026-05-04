@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -143,7 +143,6 @@ public class AutoSplitter : ICloneable
             URLs = new List<string>(URLs),
             Type = Type,
             ShowInLayoutEditor = ShowInLayoutEditor,
-            Component = Component,
             Factory = Factory
         };
     }

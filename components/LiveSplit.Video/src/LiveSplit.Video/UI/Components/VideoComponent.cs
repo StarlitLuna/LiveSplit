@@ -1,8 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Xml;
+
+using global::Avalonia;
+using global::Avalonia.Controls;
+using global::Avalonia.Layout;
+using global::Avalonia.Platform.Storage;
 
 using LibVLCSharp.Shared;
 
@@ -72,7 +80,7 @@ public class VideoComponent : IComponent, IDeactivatableComponent
     public Avalonia.Controls.Control GetSettingsControl(LayoutMode mode)
     {
         Settings.Mode = mode;
-        return AvaloniaSettingsBuilder.Build(Settings, ComponentName);
+        return VideoSettingsControl.Build(Settings);
     }
 
     public XmlNode GetSettings(XmlDocument document)
@@ -171,6 +179,165 @@ public class VideoComponent : IComponent, IDeactivatableComponent
 
         using ISolidBrush brush = DrawingApi.Factory.CreateSolidBrush(Color.Black);
         ctx.FillRectangle(brush, 0, 0, width, height);
+    }
+}
+
+internal static class VideoSettingsControl
+{
+    public static Control Build(VideoSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var videoPathBox = new TextBox
+        {
+            Name = "VideoPathTextBox",
+            Text = settings.VideoPath ?? string.Empty,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        videoPathBox.PropertyChanged += (_, args) =>
+        {
+            if (args.Property == TextBox.TextProperty)
+            {
+                settings.VideoPath = videoPathBox.Text ?? string.Empty;
+            }
+        };
+
+        var browseButton = new Button
+        {
+            Name = "BrowseVideoButton",
+            Content = "Browse...",
+            Width = 75,
+        };
+        browseButton.Click += async (_, _) => await BrowseVideo(settings, videoPathBox, browseButton);
+
+        var offsetBox = new TextBox
+        {
+            Name = "OffsetTextBox",
+            Text = settings.OffsetString,
+            TextAlignment = global::Avalonia.Media.TextAlignment.Right,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        offsetBox.PropertyChanged += (_, args) =>
+        {
+            if (args.Property == TextBox.TextProperty)
+            {
+                settings.OffsetString = offsetBox.Text ?? string.Empty;
+            }
+        };
+        offsetBox.LostFocus += (_, _) => offsetBox.Text = settings.OffsetString;
+
+        Slider sizeSlider = BuildSizeSlider(settings);
+
+        var grid = new Grid
+        {
+            Margin = new Thickness(7),
+            ColumnDefinitions = new ColumnDefinitions("82,*,81"),
+            RowDefinitions = new RowDefinitions("29,29,36"),
+        };
+
+        AddLabel(grid, "Video Path:", row: 0);
+        Grid.SetColumn(videoPathBox, 1);
+        Grid.SetRow(videoPathBox, 0);
+        Grid.SetColumn(browseButton, 2);
+        Grid.SetRow(browseButton, 0);
+        grid.Children.Add(videoPathBox);
+        grid.Children.Add(browseButton);
+
+        AddLabel(grid, "Run Starts At:", row: 1);
+        Grid.SetColumn(offsetBox, 1);
+        Grid.SetColumnSpan(offsetBox, 2);
+        Grid.SetRow(offsetBox, 1);
+        grid.Children.Add(offsetBox);
+
+        AddLabel(grid, settings.Mode == LayoutMode.Horizontal ? "Width:" : "Height:", row: 2);
+        Grid.SetColumn(sizeSlider, 1);
+        Grid.SetColumnSpan(sizeSlider, 2);
+        Grid.SetRow(sizeSlider, 2);
+        grid.Children.Add(sizeSlider);
+
+        return new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            Content = grid,
+        };
+    }
+
+    private static Slider BuildSizeSlider(VideoSettings settings)
+    {
+        bool horizontal = settings.Mode == LayoutMode.Horizontal;
+        var slider = new Slider
+        {
+            Name = horizontal ? "WidthSlider" : "HeightSlider",
+            Minimum = 100,
+            Maximum = horizontal ? 400 : 300,
+            Value = horizontal ? settings.Width : settings.Height,
+            TickFrequency = 1,
+            IsSnapToTickEnabled = true,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        slider.PropertyChanged += (_, args) =>
+        {
+            if (args.Property != global::Avalonia.Controls.Primitives.RangeBase.ValueProperty)
+            {
+                return;
+            }
+
+            if (horizontal)
+            {
+                settings.Width = (float)slider.Value;
+            }
+            else
+            {
+                settings.Height = (float)slider.Value;
+            }
+        };
+
+        return slider;
+    }
+
+    private static void AddLabel(Grid grid, string text, int row)
+    {
+        var label = new TextBlock
+        {
+            Text = text,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(label, 0);
+        Grid.SetRow(label, row);
+        grid.Children.Add(label);
+    }
+
+    private static async Task BrowseVideo(VideoSettings settings, TextBox videoPathBox, Control ownerControl)
+    {
+        TopLevel top = TopLevel.GetTopLevel(ownerControl);
+        if (top is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<IStorageFile> files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select Video",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Video Files")
+                {
+                    Patterns = ["*.avi", "*.mpeg", "*.mpg", "*.mp4", "*.mov", "*.wmv", "*.m4v", "*.flv", "*.mkv", "*.ogg"],
+                },
+                FilePickerFileTypes.All,
+            ],
+        });
+
+        IStorageFile picked = files?.FirstOrDefault();
+        if (picked?.Path?.LocalPath is not { Length: > 0 } path)
+        {
+            return;
+        }
+
+        settings.VideoPath = path;
+        videoPathBox.Text = path;
     }
 }
 

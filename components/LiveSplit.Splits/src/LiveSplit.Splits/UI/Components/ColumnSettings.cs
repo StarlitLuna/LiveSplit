@@ -1,12 +1,32 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using LiveSplit.Localization;
 using LiveSplit.Model;
+using LiveSplit.Model.Comparisons;
 
 namespace LiveSplit.UI.Components;
 
 public class ColumnSettings
 {
+    public static readonly string[] TypeNames =
+    [
+        "Delta",
+        "Split Time",
+        "Delta or Split Time",
+        "Segment Delta",
+        "Segment Time",
+        "Segment Delta or Segment Time",
+        "Custom Variable"
+    ];
+
+    public static readonly string[] TimingMethodNames =
+    [
+        "Current Timing Method",
+        "Real Time",
+        "Game Time"
+    ];
+
     private static string T(string source) => UiLocalizer.Translate(source, LanguageResolver.ResolveCurrentCultureLanguage());
 
     public string ColumnName { get => Data.Name; set => Data.Name = value; }
@@ -34,7 +54,7 @@ public class ColumnSettings
         ColumnsList = columnsList;
     }
 
-    private static string GetColumnType(ColumnType type)
+    public static string GetColumnType(ColumnType type)
     {
         if (type == ColumnType.SplitTime)
         {
@@ -70,9 +90,29 @@ public class ColumnSettings
         }
     }
 
-    private static ColumnType ParseColumnType(string columnType)
+    public static ColumnType ParseColumnType(string columnType)
     {
         return (ColumnType)Enum.Parse(typeof(ColumnType), columnType.Replace(" ", string.Empty));
     }
 
+    public static bool UsesSegmentComparison(ColumnType type)
+        => type is ColumnType.SegmentDelta or ColumnType.SegmentTime or ColumnType.SegmentDeltaorSegmentTime or ColumnType.CustomVariable;
+
+    public static string[] GetComparisons(LiveSplitState state, ColumnType type, string currentComparison)
+    {
+        List<string> comparisons = ["Current Comparison"];
+        comparisons.AddRange(state.Run.Comparisons.Where(x => x != NoneComparisonGenerator.ComparisonName));
+
+        if (UsesSegmentComparison(type))
+        {
+            comparisons.Remove(BestSplitTimesComparisonGenerator.ComparisonName);
+        }
+
+        if (!string.IsNullOrEmpty(currentComparison) && !comparisons.Contains(currentComparison))
+        {
+            comparisons.Add(currentComparison);
+        }
+
+        return comparisons.Distinct().ToArray();
+    }
 }

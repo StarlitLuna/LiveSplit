@@ -39,60 +39,76 @@ public sealed class LayoutEditorDialog : Window
         _snapshot = LayoutSnapshot.Capture(layout);
 
         Title = "Layout Editor";
-        Width = 600;
-        Height = 540;
+        Width = LayoutEditorDialogLayoutSpec.Master.InitialClientWidth;
+        Height = LayoutEditorDialogLayoutSpec.Master.InitialClientHeight;
+        MinWidth = LayoutEditorDialogLayoutSpec.Master.MinimumWindowWidth;
+        MinHeight = LayoutEditorDialogLayoutSpec.Master.MinimumWindowHeight;
+        DialogTheme.ApplyWindow(this);
 
-        _list = new ListBox { ItemsSource = ComponentNames(), Margin = new Thickness(8) };
+        _list = new ListBox
+        {
+            ItemsSource = ComponentNames(),
+            Margin = new Thickness(3, 10, 10, 10),
+        };
+        _list.DoubleTapped += async (_, _) => await EditSelectedSettings();
 
-        var addBtn = new Button { Content = "Add…", Margin = new Thickness(4) };
+        var addBtn = CreateIconButton("+", "Add Component");
+        addBtn.Margin = new Thickness(10, 10, 3, 3);
         addBtn.Click += (_, _) => ShowAddComponentMenu(addBtn);
-        var removeBtn = new Button { Content = "Remove", Margin = new Thickness(4) };
+        var removeBtn = CreateIconButton("-", "Remove Component");
+        removeBtn.Margin = new Thickness(10, 3, 3, 3);
         removeBtn.Click += (_, _) => RemoveSelected();
-        var upBtn = new Button { Content = "Move Up", Margin = new Thickness(4) };
+        var upBtn = CreateIconButton("^", "Move Up");
+        upBtn.Margin = new Thickness(10, 3, 3, 3);
         upBtn.Click += (_, _) => MoveSelected(-1);
-        var downBtn = new Button { Content = "Move Down", Margin = new Thickness(4) };
+        var downBtn = CreateIconButton("v", "Move Down");
+        downBtn.Margin = new Thickness(10, 3, 3, 3);
         downBtn.Click += (_, _) => MoveSelected(1);
-        var settingsBtn = new Button { Content = "Settings…", Margin = new Thickness(4) };
-        settingsBtn.Click += async (_, _) => await EditSelectedSettings();
-        var layoutSettingsBtn = new Button { Content = "Layout Settings…", Margin = new Thickness(4) };
-        layoutSettingsBtn.Click += async (_, _) =>
-        {
-            var dlg = new LayoutSettingsDialog(layout.Settings);
-            await dlg.ShowDialogAsync(this);
-        };
-        var verticalBtn = new Button { Content = "Vertical", Margin = new Thickness(4) };
-        verticalBtn.Click += (_, _) => SetOrientation(LayoutMode.Vertical);
-        var horizontalBtn = new Button { Content = "Horizontal", Margin = new Thickness(4) };
-        horizontalBtn.Click += (_, _) => SetOrientation(LayoutMode.Horizontal);
-        var setSizeBtn = new Button { Content = "Set Sizeâ€¦", Margin = new Thickness(4) };
+        var layoutSettingsBtn = CreateFooterButton("Layout Settings", width: 88);
+        layoutSettingsBtn.Click += async (_, _) => await OpenLayoutSettings();
+        var setSizeBtn = CreateFooterButton("Set Size");
         setSizeBtn.Click += async (_, _) => await SetSize();
-
-        var sideBar = new StackPanel
+        var horizontalRadio = new RadioButton
         {
-            Spacing = 4,
-            Margin = new Thickness(0, 8, 8, 8),
-            Children =
+            Content = "Horizontal",
+            Margin = new Thickness(3, 3, 3, 10),
+            VerticalAlignment = VerticalAlignment.Center,
+            IsChecked = Layout.Mode == LayoutMode.Horizontal,
+        };
+        horizontalRadio.IsCheckedChanged += (_, _) =>
+        {
+            if (horizontalRadio.IsChecked == true)
             {
-                addBtn,
-                removeBtn,
-                upBtn,
-                downBtn,
-                settingsBtn,
-                layoutSettingsBtn,
-                verticalBtn,
-                horizontalBtn,
-                setSizeBtn,
-            },
+                SetOrientation(LayoutMode.Horizontal);
+            }
+        };
+        var verticalRadio = new RadioButton
+        {
+            Content = "Vertical",
+            Margin = new Thickness(3, 3, 3, 10),
+            VerticalAlignment = VerticalAlignment.Center,
+            IsChecked = Layout.Mode != LayoutMode.Horizontal,
+        };
+        verticalRadio.IsCheckedChanged += (_, _) =>
+        {
+            if (verticalRadio.IsChecked == true)
+            {
+                SetOrientation(LayoutMode.Vertical);
+            }
         };
 
-        var ok = new Button { Content = "OK", Width = 80, IsDefault = true };
+        var ok = CreateFooterButton("OK");
+        ok.HorizontalAlignment = HorizontalAlignment.Right;
+        ok.IsDefault = true;
         ok.Click += (_, _) =>
         {
+            _snapshot.DisposeComponentsRemovedFrom(Layout);
             AcceptLayout(Layout);
             _result.TrySetResult(true);
             Close();
         };
-        var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var cancel = CreateFooterButton("Cancel");
+        cancel.IsCancel = true;
         cancel.Click += (_, _) =>
         {
             RestoreOriginalComponents();
@@ -100,28 +116,22 @@ public sealed class LayoutEditorDialog : Window
             Close();
         };
 
-        var buttons = new StackPanel
+        var root = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 0, 12, 12),
-            Children = { cancel, ok },
+            ColumnDefinitions = new ColumnDefinitions("48,94,81,78,74,*,88"),
+            RowDefinitions = new RowDefinitions("48,41,41,41,41,*,36"),
         };
-
-        var center = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-        };
-        Grid.SetColumn(_list, 0);
-        Grid.SetColumn(sideBar, 1);
-        center.Children.Add(_list);
-        center.Children.Add(sideBar);
-
-        var root = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        root.Children.Add(buttons);
-        root.Children.Add(center);
+        Add(root, addBtn, 0, 0);
+        Add(root, removeBtn, 0, 1);
+        Add(root, upBtn, 0, 2);
+        Add(root, downBtn, 0, 3);
+        Add(root, _list, 1, 0, columnSpan: 6, rowSpan: 6);
+        Add(root, layoutSettingsBtn, 1, 6);
+        Add(root, setSizeBtn, 2, 6);
+        Add(root, horizontalRadio, 3, 6);
+        Add(root, verticalRadio, 4, 6);
+        Add(root, ok, 5, 6);
+        Add(root, cancel, 6, 6);
         Content = root;
 
         Closed += (_, _) =>
@@ -135,9 +145,26 @@ public sealed class LayoutEditorDialog : Window
         };
     }
 
+    private static void Add(Grid grid, Control control, int column, int row, int columnSpan = 1, int rowSpan = 1)
+    {
+        Grid.SetColumn(control, column);
+        Grid.SetRow(control, row);
+        if (columnSpan > 1)
+        {
+            Grid.SetColumnSpan(control, columnSpan);
+        }
+
+        if (rowSpan > 1)
+        {
+            Grid.SetRowSpan(control, rowSpan);
+        }
+
+        grid.Children.Add(control);
+    }
+
     private void RestoreOriginalComponents()
     {
-        _snapshot.Apply(Layout);
+        _snapshot.RestoreAfterCancel(Layout);
         Refresh();
     }
 
@@ -154,16 +181,65 @@ public sealed class LayoutEditorDialog : Window
 
     private void Refresh() => _list.ItemsSource = ComponentNames();
 
+    private static Button CreateIconButton(string text, string tooltip)
+    {
+        var button = new Button
+        {
+            Content = text,
+            Width = LayoutEditorDialogLayoutSpec.Master.IconButtonSize,
+            Height = LayoutEditorDialogLayoutSpec.Master.IconButtonSize,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        ToolTip.SetTip(button, tooltip);
+        return button;
+    }
+
+    private static Button CreateFooterButton(string text, int width = 75)
+        => new()
+        {
+            Content = text,
+            Width = width,
+            Height = LayoutEditorDialogLayoutSpec.Master.FooterButtonHeight,
+            Margin = new Thickness(3, 3, 3, 10),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
     private void RemoveSelected()
     {
         int idx = _list.SelectedIndex;
-        if (idx < 0 || idx >= Layout.LayoutComponents.Count)
+        if (!RemoveComponentAt(Layout, idx))
         {
             return;
         }
 
-        Layout.LayoutComponents.RemoveAt(idx);
         Refresh();
+    }
+
+    internal static bool CanRemoveComponent(ILayout layout)
+        => layout?.LayoutComponents?.Count > 1;
+
+    internal static bool RemoveComponentAt(ILayout layout, int index)
+    {
+        if (layout == null
+            || index < 0
+            || index >= layout.LayoutComponents.Count
+            || !CanRemoveComponent(layout))
+        {
+            return false;
+        }
+
+        IComponent component = layout.LayoutComponents[index].Component;
+        if (component is IDeactivatableComponent deactivatable)
+        {
+            deactivatable.Activated = false;
+        }
+
+        layout.LayoutComponents.RemoveAt(index);
+        layout.HasChanged = true;
+        return true;
     }
 
     private void MoveSelected(int direction)
@@ -178,6 +254,7 @@ public sealed class LayoutEditorDialog : Window
         ILayoutComponent moved = Layout.LayoutComponents[idx];
         Layout.LayoutComponents.RemoveAt(idx);
         Layout.LayoutComponents.Insert(newIdx, moved);
+        Layout.HasChanged = true;
         Refresh();
         _list.SelectedIndex = newIdx;
     }
@@ -189,29 +266,69 @@ public sealed class LayoutEditorDialog : Window
             return;
         }
 
-        Layout.Mode = mode;
-        Layout.HasChanged = true;
+        ApplyOrientationSwitch(Layout, mode, EstimateOverallSize(Layout, mode));
+    }
+
+    internal static void ApplyOrientationSwitch(ILayout layout, LayoutMode mode, float overallSize)
+    {
+        if (layout == null || layout.Mode == mode)
+        {
+            return;
+        }
+
+        int currentWidth = layout.Mode == LayoutMode.Vertical
+            ? layout.VerticalWidth
+            : layout.HorizontalWidth;
+        int currentHeight = layout.Mode == LayoutMode.Vertical
+            ? layout.VerticalHeight
+            : layout.HorizontalHeight;
+
+        if (mode == LayoutMode.Vertical)
+        {
+            layout.HorizontalWidth = currentWidth;
+            layout.HorizontalHeight = currentHeight;
+            if (layout.VerticalWidth == LiveSplit.UI.Layout.InvalidSize
+                || layout.VerticalHeight == LiveSplit.UI.Layout.InvalidSize)
+            {
+                layout.VerticalWidth = 300;
+                layout.VerticalHeight = RoundMaster(overallSize);
+            }
+        }
+        else
+        {
+            layout.VerticalWidth = currentWidth;
+            layout.VerticalHeight = currentHeight;
+            if (layout.HorizontalWidth == LiveSplit.UI.Layout.InvalidSize
+                || layout.HorizontalHeight == LiveSplit.UI.Layout.InvalidSize)
+            {
+                layout.HorizontalWidth = RoundMaster(overallSize);
+                layout.HorizontalHeight = 45;
+            }
+        }
+
+        layout.Mode = mode;
+        layout.HasChanged = true;
+    }
+
+    private static int RoundMaster(float value)
+        => (int)(value + 0.5f);
+
+    private static float EstimateOverallSize(ILayout layout, LayoutMode mode)
+    {
+        if (layout?.LayoutComponents is null || layout.LayoutComponents.Count == 0)
+        {
+            return 1f;
+        }
+
+        float total = mode == LayoutMode.Vertical
+            ? layout.LayoutComponents.Sum(x => x.Component.VerticalHeight)
+            : layout.LayoutComponents.Sum(x => x.Component.HorizontalWidth);
+        return Math.Max(total, 1f);
     }
 
     private async Task SetSize()
     {
-        bool vertical = Layout.Mode == LayoutMode.Vertical;
-        var target = new Window
-        {
-            Width = vertical ? Layout.VerticalWidth : Layout.HorizontalWidth,
-            Height = vertical ? Layout.VerticalHeight : Layout.HorizontalHeight,
-        };
-
-        if (target.Width <= 0)
-        {
-            target.Width = Width;
-        }
-
-        if (target.Height <= 0)
-        {
-            target.Height = Height;
-        }
-
+        Window target = Owner as Window ?? CreateSetSizeFallbackWindow(Layout, Width, Height);
         var dlg = new SetSizeForm(target);
         if (await dlg.ShowDialogAsync(this))
         {
@@ -219,12 +336,32 @@ public sealed class LayoutEditorDialog : Window
         }
     }
 
+    private static Window CreateSetSizeFallbackWindow(ILayout layout, double fallbackWidth, double fallbackHeight)
+    {
+        bool vertical = layout?.Mode != LayoutMode.Horizontal;
+        var target = new Window
+        {
+            Width = vertical ? layout?.VerticalWidth ?? 0 : layout?.HorizontalWidth ?? 0,
+            Height = vertical ? layout?.VerticalHeight ?? 0 : layout?.HorizontalHeight ?? 0,
+        };
+
+        if (target.Width <= 0)
+        {
+            target.Width = fallbackWidth;
+        }
+
+        if (target.Height <= 0)
+        {
+            target.Height = fallbackHeight;
+        }
+
+        return target;
+    }
+
     internal static void AcceptLayout(ILayout layout)
     {
-        if (layout != null)
-        {
-            layout.HasChanged = true;
-        }
+        // Master leaves dirty tracking to the individual edit operations. Pressing OK after
+        // inspecting the layout does not make an otherwise clean layout prompt for saving.
     }
 
     internal static void ApplyCurrentModeSize(ILayout layout, int width, int height)
@@ -246,6 +383,15 @@ public sealed class LayoutEditorDialog : Window
         }
 
         layout.HasChanged = true;
+    }
+
+    private async Task OpenLayoutSettings(IComponent selectedComponent = null)
+    {
+        var dlg = new LayoutSettingsDialog(Layout.Settings, Layout, selectedComponent);
+        if (await dlg.ShowDialogAsync(this))
+        {
+            Layout.HasChanged = true;
+        }
     }
 
     /// <summary>
@@ -320,7 +466,7 @@ public sealed class LayoutEditorDialog : Window
         }
 
         flyout.Items.Add(new Separator());
-        var downloadMore = new MenuItem { Header = "Download More…" };
+        var downloadMore = new MenuItem { Header = "Download More..." };
         downloadMore.Click += (_, _) =>
         {
             try
@@ -356,6 +502,7 @@ public sealed class LayoutEditorDialog : Window
                 : factory.Create(State);
             var layoutComponent = new LayoutComponent(factoryKey ?? string.Empty, component);
             Layout.LayoutComponents.Add(layoutComponent);
+            Layout.HasChanged = true;
             Refresh();
             _list.SelectedIndex = Layout.LayoutComponents.Count - 1;
         }
@@ -374,8 +521,7 @@ public sealed class LayoutEditorDialog : Window
         }
 
         IComponent comp = Layout.LayoutComponents[idx].Component;
-        var dlg = new ComponentSettingsDialog(comp);
-        await dlg.ShowDialogAsync(this);
+        await OpenLayoutSettings(comp);
     }
 
     public async Task<bool> ShowDialogAsync(Window owner)
@@ -455,6 +601,52 @@ public sealed class LayoutEditorDialog : Window
                 layout.LayoutComponents.Add(component.Restore());
             }
         }
+
+        public void RestoreAfterCancel(ILayout layout)
+        {
+            if (layout == null)
+            {
+                return;
+            }
+
+            HashSet<IComponent> originalComponents = OriginalComponentSet();
+            HashSet<IComponent> currentComponents = CurrentComponentSet(layout);
+            foreach (IComponent transient in currentComponents.Where(x => !originalComponents.Contains(x)))
+            {
+                transient.Dispose();
+            }
+
+            Apply(layout);
+
+            foreach (IComponent restored in originalComponents.Where(x => !currentComponents.Contains(x)))
+            {
+                if (restored is IDeactivatableComponent deactivatable)
+                {
+                    deactivatable.Activated = true;
+                }
+            }
+        }
+
+        public void DisposeComponentsRemovedFrom(ILayout layout)
+        {
+            HashSet<IComponent> currentComponents = CurrentComponentSet(layout);
+            foreach (IComponent removed in OriginalComponentSet().Where(x => !currentComponents.Contains(x)))
+            {
+                removed.Dispose();
+            }
+        }
+
+        private HashSet<IComponent> OriginalComponentSet()
+            => _components
+                .Select(x => x.Component)
+                .Where(x => x is not null)
+                .ToHashSet();
+
+        private static HashSet<IComponent> CurrentComponentSet(ILayout layout)
+            => layout?.LayoutComponents
+                ?.Select(x => x.Component)
+                .Where(x => x is not null)
+                .ToHashSet() ?? [];
     }
 
     private sealed class ComponentSnapshot
@@ -473,6 +665,8 @@ public sealed class LayoutEditorDialog : Window
         }
 
         public static ComponentSnapshot Capture(ILayoutComponent layoutComponent) => new(layoutComponent);
+
+        public IComponent Component => _component;
 
         public ILayoutComponent Restore()
         {
@@ -507,4 +701,34 @@ public sealed class LayoutEditorDialog : Window
             component.SetSettings(document.DocumentElement);
         }
     }
+}
+
+internal sealed class LayoutEditorDialogLayoutSpec
+{
+    public static LayoutEditorDialogLayoutSpec Master { get; } = new();
+
+    public IReadOnlyList<int> ColumnWidths { get; } = [48, 94, 81, 78, 74, -1, 88];
+    public IReadOnlyList<int> RowHeights { get; } = [48, 41, 41, 41, 41, -1, 36];
+    public IReadOnlyList<string> StructuralOrder { get; } =
+    [
+        "AddIconButton",
+        "RemoveIconButton",
+        "MoveUpIconButton",
+        "MoveDownIconButton",
+        "ComponentList",
+        "LayoutSettingsButton",
+        "SetSizeButton",
+        "HorizontalRadio",
+        "VerticalRadio",
+        "OK",
+        "Cancel",
+    ];
+
+    public int InitialClientWidth => 544;
+    public int InitialClientHeight => 320;
+    public int MinimumWindowWidth => 560;
+    public int MinimumWindowHeight => 306;
+    public int IconButtonSize => 35;
+    public int FooterButtonWidth => 75;
+    public int FooterButtonHeight => 23;
 }

@@ -14,6 +14,7 @@ finish-args:
   - --socket=pulseaudio
   - --device=dri
   - --filesystem=home          # so users can save splits/layouts wherever
+  - --env=VLC_PLUGIN_PATH=/app/lib/vlc/plugins
   # Autosplitter support: --allow=devel lifts the seccomp filter that blocks
   # ptrace / process_vm_readv against host processes. Without it, every attempt
   # to read game memory (ASL or WASM) silently fails with EPERM. The host
@@ -27,6 +28,28 @@ finish-args:
   - --filesystem=xdg-data/Steam:ro
   - --filesystem=/run/media:ro
 modules:
+  - name: libvlc
+    buildsystem: autotools
+    config-opts:
+      - --prefix=/app
+      - --disable-qt
+      - --disable-skins2
+      - --disable-lua
+      - --disable-nls
+      - --disable-dbus
+      - --disable-vlm
+      - --enable-libvlc
+      - --enable-avcodec
+      - --enable-avformat
+      - --enable-swscale
+      - --enable-pulse
+      - --enable-xcb
+      - --enable-wayland
+    sources:
+      - type: archive
+        url: https://download.videolan.org/pub/videolan/vlc/3.0.23/vlc-3.0.23.tar.xz
+        sha256: e891cae6aa3ccda69bf94173d5105cbc55c7a7d9b1d21b9b21666e69eff3e7e0
+
   - name: livesplit
     buildsystem: simple
     build-options:

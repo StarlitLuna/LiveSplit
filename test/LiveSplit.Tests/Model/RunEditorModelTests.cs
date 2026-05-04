@@ -4,6 +4,7 @@ using System.Linq;
 
 using LiveSplit.Model;
 using LiveSplit.Model.Comparisons;
+using LiveSplit.Model.RunFactories;
 using LiveSplit.Model.RunSavers;
 
 using Xunit;
@@ -126,6 +127,25 @@ public class RunEditorModelTests
     }
 
     [Fact]
+    public void GameAndSegmentIconPng_RoundTripThroughStandardFactory()
+    {
+        byte[] gameIcon = TinyPng();
+        byte[] segmentIcon = TinyPng();
+        Run run = NewRun(segmentCount: 1);
+        run.GameIconPng = gameIcon;
+        run[0].IconPng = segmentIcon;
+
+        using var stream = new MemoryStream();
+        new XMLRunSaver().Save(run, stream);
+        stream.Position = 0;
+
+        IRun loaded = new StandardFormatsRunFactory(stream).Create(new StandardComparisonGeneratorsFactory());
+
+        Assert.Equal(gameIcon, loaded.GameIconPng);
+        Assert.Equal(segmentIcon, loaded[0].IconPng);
+    }
+
+    [Fact]
     public void Run_Clone_DeepClonesGameIconPng()
     {
         Run run = NewRun();
@@ -136,4 +156,8 @@ public class RunEditorModelTests
 
         Assert.Equal(1, run.GameIconPng[0]);
     }
+
+    private static byte[] TinyPng()
+        => Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAFAgL/ojzFkgAAAABJRU5ErkJggg==");
 }

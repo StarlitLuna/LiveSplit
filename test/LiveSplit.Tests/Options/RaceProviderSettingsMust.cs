@@ -16,6 +16,7 @@ using Xunit;
 
 namespace LiveSplit.Tests.Options;
 
+[Collection("ComponentManager")]
 public class RaceProviderSettingsMust
 {
     [Fact]
@@ -223,4 +224,9 @@ public class RaceProviderSettingsMust
         {
         }
     }
+}
+
+[CollectionDefinition("ComponentManager", DisableParallelization = true)]
+public sealed class ComponentManagerCollection
+{
 }

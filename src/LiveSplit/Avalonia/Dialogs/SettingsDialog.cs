@@ -9,7 +9,6 @@ using global::Avalonia.Controls;
 using global::Avalonia.Controls.Primitives;
 using global::Avalonia.Layout;
 using global::Avalonia.Media;
-using global::Avalonia.Styling;
 
 using LiveSplit.Model.Input;
 using LiveSplit.Options;
@@ -47,9 +46,7 @@ public sealed class SettingsDialog : Window
         Height = SettingsDialogLayoutSpec.Master.InitialWindowHeight;
         MinWidth = SettingsDialogLayoutSpec.Master.InitialWindowWidth;
         MinHeight = 200;
-        FontSize = 12;
-        RequestedThemeVariant = ThemeVariant.Dark;
-        Background = DialogTheme.WindowBackgroundBrush;
+        DialogTheme.ApplyWindow(this);
 
         _profileBox = new ComboBox
         {
@@ -410,8 +407,6 @@ public sealed class SettingsDialog : Window
 
         var allowGamepads = CompactCheckBox("Allow Gamepads as Hotkeys", profile.AllowGamepadsAsHotkeys, value => profile.AllowGamepadsAsHotkeys = value);
         allowGamepads.Name = "AllowGamepadsHotkeysCheckBox";
-        allowGamepads.IsEnabled = false;
-        allowGamepads.SetTextBrush(DialogTheme.DisabledTextBrush);
 
         var dpiAware = CompactCheckBox("Enable DPI Aware", _settings.EnableDPIAwareness, value => _settings.EnableDPIAwareness = value);
         dpiAware.Name = "EnableDpiAwareCheckBox";
@@ -928,39 +923,6 @@ internal static class SettingsDialogModel
     private static bool TryParseFloat(string text, out float value)
         => float.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value)
             || float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
-}
-
-internal static class DialogTheme
-{
-    public static Color WindowBackgroundColor { get; } = Color.Parse("#202020");
-    public static IBrush WindowBackgroundBrush { get; } = new SolidColorBrush(WindowBackgroundColor);
-    public static IBrush TextBrush { get; } = new SolidColorBrush(Colors.White);
-    public static IBrush DisabledTextBrush { get; } = new SolidColorBrush(Color.Parse("#9A9A9A"));
-    public static IBrush GroupBorderBrush { get; } = new SolidColorBrush(Color.Parse("#3D3D3D"));
-    public static IBrush ControlBackgroundBrush { get; } = new SolidColorBrush(Color.Parse("#2A2A2A"));
-    public static IBrush ButtonBackgroundBrush { get; } = new SolidColorBrush(Color.Parse("#3A3A3A"));
-    public static IBrush ControlBorderBrush { get; } = new SolidColorBrush(Color.Parse("#8A8A8A"));
-    public static IBrush AccentBrush { get; } = new SolidColorBrush(Color.Parse("#0078D4"));
-
-    public static void Apply(Control control)
-    {
-        switch (control)
-        {
-            case TextBlock text:
-                text.Foreground = TextBrush;
-                text.FontSize = 12;
-                break;
-            case ComboBox combo:
-                combo.Foreground = TextBrush;
-                combo.Background = ControlBackgroundBrush;
-                combo.BorderBrush = ControlBorderBrush;
-                combo.BorderThickness = new Thickness(1);
-                combo.FontSize = 12;
-                combo.MinHeight = 0;
-                combo.Margin = new Thickness(SettingsDialogLayoutSpec.Master.ControlHorizontalMargin, 0);
-                break;
-        }
-    }
 }
 
 internal sealed class CompactSettingCheckBox : StackPanel

@@ -4,7 +4,7 @@
 # Prerequisites on Fedora:
 #   sudo dnf install @development-tools dotnet-sdk-8.0 cargo rpm-build \
 #       rpmdevtools desktop-file-utils pkgconf-pkg-config git tar gzip \
-#       vlc-libs vlc-plugin-ffmpeg
+#       vlc-devel vlc-libs vlc-plugin-ffmpeg
 #
 # Usage:
 #   scripts/package-fedora-rpm.sh
